@@ -129,6 +129,19 @@ TEST(Pmr, MoveConstructionPreservesResource) {
     EXPECT_EQ(y, 7);
 }
 
+// Naming the allocator moves a value onto that resource instead.
+TEST(Pmr, AllocatorExtendedMoveConstructionUsesNamedResource) {
+    std::array<std::byte, 256>          buffer_a{};
+    std::array<std::byte, 256>          buffer_b{};
+    std::pmr::monotonic_buffer_resource resource_a(buffer_a.data(), buffer_a.size());
+    std::pmr::monotonic_buffer_resource resource_b(buffer_b.data(), buffer_b.size());
+
+    beman::big_int::pmr::big_int       x(7, &resource_a);
+    const beman::big_int::pmr::big_int y(std::move(x), &resource_b);
+    EXPECT_EQ(y.get_allocator().resource(), &resource_b);
+    EXPECT_EQ(y, 7);
+}
+
 // [allocator propagation on assignment] ========================================
 
 // std::pmr::polymorphic_allocator does not propagate on copy assignment, so the

@@ -200,6 +200,35 @@ consteval bool test_reserve_representation_preserves_value() {
 }
 static_assert(test_reserve_representation_preserves_value());
 
+// ----- allocator-extended copy and move construction -----
+
+consteval bool test_allocator_extended_copy() {
+    const beman::big_int::big_int::allocator_type alloc;
+    const beman::big_int::big_int                 small{-42};
+    beman::big_int::big_int                       big{-1};
+    big <<= 4000;
+
+    const beman::big_int::big_int small_copy{small, alloc};
+    const beman::big_int::big_int big_copy{big, alloc};
+    return small_copy == small && big_copy == big && big_copy.representation().data() != big.representation().data();
+}
+static_assert(test_allocator_extended_copy());
+
+consteval bool test_allocator_extended_move() {
+    // std::allocator is always equal, so the buffer is taken over rather than copied.
+    const beman::big_int::big_int::allocator_type alloc;
+    beman::big_int::big_int                       small{-42};
+    beman::big_int::big_int                       big{-1};
+    big <<= 4000;
+    const beman::big_int::big_int expected = big;
+    const auto* const             data     = big.representation().data();
+
+    const beman::big_int::big_int small_moved{std::move(small), alloc};
+    const beman::big_int::big_int big_moved{std::move(big), alloc};
+    return small_moved == -42 && big_moved == expected && big_moved.representation().data() == data;
+}
+static_assert(test_allocator_extended_move());
+
 // ----- runtime tests -----
 
 // A stateful allocator that propagates on copy and move assignment. Because it
@@ -454,6 +483,129 @@ TEST(Allocation, BinaryOperatorsOnRvalueKeepAllocatorWhenStorageIsReused) {
     EXPECT_EQ((reused() >> 100).get_allocator().id, 1U);
     EXPECT_EQ((reused() * 7).get_allocator().id, 2U);
     EXPECT_EQ((reused() & 7).get_allocator().id, 2U);
+}
+
+// ----- allocator-extended copy and move construction -----
+// `pocca_alloc` compares by `id` and is not always equal, so these tests can
+// hand the constructors an allocator that does or does not match the source's,
+// and arm `fail` on it to show whether the construction allocated at all.
+
+using pocca_alloc_type = pocca_alloc<beman::big_int::uint_multiprecision_t>;
+
+TEST(Allocation, AllocatorExtendedCopyUsesNamedAllocator) {
+    pocca_big_int src{1, pocca_alloc_type{1U}};
+    src <<= 4000;
+    const pocca_big_int small{-7, pocca_alloc_type{1U}};
+
+    const pocca_big_int dst{src, pocca_alloc_type{2U}};
+    const pocca_big_int small_dst{small, pocca_alloc_type{2U}};
+
+    EXPECT_EQ(dst, src);
+    EXPECT_EQ(dst.get_allocator().id, 2U);
+    EXPECT_NE(dst.representation().data(), src.representation().data());
+    EXPECT_EQ(small_dst, small);
+    EXPECT_EQ(small_dst.get_allocator().id, 2U);
+    EXPECT_EQ(src.get_allocator().id, 1U);
+}
+
+TEST(Allocation, AllocatorExtendedCopyDoesNotSelectAllocator) {
+    // The named allocator is used as is: `select_on_container_copy_construction`
+    // would have given id 2 (or 6 had it been applied to the named one).
+    soccc_big_int src{1, soccc_alloc_type{1U}};
+    src <<= 4000;
+
+    const soccc_big_int dst{src, soccc_alloc_type{5U}};
+
+    EXPECT_EQ(dst, src);
+    EXPECT_EQ(dst.get_allocator().id, 5U);
+}
+
+TEST(Allocation, AllocatorExtendedCopyAllocatesThroughNamedAllocator) {
+    // Storage for the copy comes from the named allocator, not the source's.
+    bool          fail = true;
+    pocca_big_int src{1, pocca_alloc_type{1U}};
+    src <<= 4000;
+
+    EXPECT_THROW(const pocca_big_int dst(src, pocca_alloc_type{2U, &fail}), std::bad_alloc);
+}
+
+TEST(Allocation, AllocatorExtendedCopyOfHeapHeldSmallValueStaysInPlace) {
+    // A value that fits in place is copied into place even when the source holds
+    // it on the heap, so the armed allocator is never asked for storage.
+    bool          fail = true;
+    pocca_big_int src{42, pocca_alloc_type{1U}};
+    src.reserve_representation(8);
+
+    const pocca_big_int dst{src, pocca_alloc_type{2U, &fail}};
+
+    EXPECT_EQ(dst, 42);
+    EXPECT_TRUE(is_inplace(dst));
+}
+
+TEST(Allocation, AllocatorExtendedMoveWithEqualAllocatorTakesBuffer) {
+    bool          fail = true; // equal allocators hand the buffer over, so nothing is allocated
+    pocca_big_int src{1, pocca_alloc_type{1U}};
+    src <<= 4000;
+    const pocca_big_int expected = src;
+    const auto* const   data     = src.representation().data();
+
+    const pocca_big_int dst{std::move(src), pocca_alloc_type{1U, &fail}};
+
+    EXPECT_EQ(dst, expected);
+    EXPECT_EQ(dst.representation().data(), data);
+    EXPECT_EQ(dst.get_allocator().id, 1U);
+
+    // The moved-from source no longer owns the buffer and stays usable.
+    src = 5;
+    EXPECT_EQ(src, 5);
+}
+
+TEST(Allocation, AllocatorExtendedMoveWithUnequalAllocatorCopies) {
+    // Allocator 2 cannot free a buffer from allocator 1, so the value is copied
+    // into storage of its own rather than taken over.
+    pocca_big_int src{1, pocca_alloc_type{1U}};
+    src <<= 4000;
+    const pocca_big_int expected = src;
+    const auto* const   data     = src.representation().data();
+
+    const pocca_big_int dst{std::move(src), pocca_alloc_type{2U}};
+
+    EXPECT_EQ(dst, expected);
+    EXPECT_EQ(dst.get_allocator().id, 2U);
+    EXPECT_NE(dst.representation().data(), data);
+    EXPECT_EQ(src.get_allocator().id, 1U);
+}
+
+TEST(Allocation, AllocatorExtendedMoveWithUnequalAllocatorIsStrongWhenAllocationThrows) {
+    bool          fail = true;
+    pocca_big_int src{1, pocca_alloc_type{1U}};
+    src <<= 4000;
+    const pocca_big_int expected = src;
+
+    EXPECT_THROW(const pocca_big_int dst(std::move(src), pocca_alloc_type{2U, &fail}), std::bad_alloc);
+
+    // Strong: the failed construction leaves the source untouched.
+    EXPECT_EQ(src, expected);
+    EXPECT_EQ(src.get_allocator().id, 1U);
+}
+
+TEST(Allocation, AllocatorExtendedMoveOfSmallValueNeverAllocates) {
+    // An in-place value, and one that fits in place although it is held on the
+    // heap, land in place even when the allocators differ.
+    bool          fail = true;
+    pocca_big_int inplace{-7, pocca_alloc_type{1U}};
+    pocca_big_int reserved{42, pocca_alloc_type{1U}};
+    reserved.reserve_representation(8);
+
+    const pocca_big_int from_inplace{std::move(inplace), pocca_alloc_type{2U, &fail}};
+    const pocca_big_int from_reserved{std::move(reserved), pocca_alloc_type{2U, &fail}};
+
+    EXPECT_EQ(from_inplace, -7);
+    EXPECT_TRUE(is_inplace(from_inplace));
+    EXPECT_EQ(from_inplace.get_allocator().id, 2U);
+    EXPECT_EQ(from_reserved, 42);
+    EXPECT_TRUE(is_inplace(from_reserved));
+    EXPECT_EQ(from_reserved.get_allocator().id, 2U);
 }
 
 TEST(Allocation, SizeDefault) {

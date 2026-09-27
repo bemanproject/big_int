@@ -408,6 +408,8 @@ class BEMAN_BIG_INT_TRIVIAL_ABI basic_big_int {
         : m_capacity{0}, m_size_and_sign{1}, m_storage{}, m_alloc{a} {}
     constexpr basic_big_int(const basic_big_int& x);
     constexpr basic_big_int(basic_big_int&& x) noexcept;
+    constexpr basic_big_int(const basic_big_int& x, const std::type_identity_t<Allocator>& a);
+    constexpr basic_big_int(basic_big_int&& x, const std::type_identity_t<Allocator>& a);
 
     // Defined inline: MSVC cannot match out-of-line definitions
     // of constructors with conditional explicit + requires.
@@ -623,6 +625,8 @@ class BEMAN_BIG_INT_TRIVIAL_ABI basic_big_int {
     constexpr void                              free_storage();
     constexpr void                              grow(size_type limbs_needed);
     constexpr void copy_n_to_allocation(const limb_type* p, size_type n, alloc_result out);
+    // Copies the limbs of `x` into a freshly constructed `*this` whose control word already matches `x`.
+    constexpr void copy_limbs_from(const basic_big_int& x);
     constexpr void push_back_limb(limb_type limb);
 
     // We are limited in our shifting to what we can encode into our control block, which is 30 (or 27) bits of limbs
@@ -1072,32 +1076,7 @@ constexpr std::span<uint_multiprecision_t> basic_big_int<b, L, A>::limb_span() n
 
 template <std::size_t b, class L, class A>
 constexpr basic_big_int<b, L, A>::basic_big_int(const basic_big_int& x)
-    : m_capacity{0},
-      m_size_and_sign{x.m_size_and_sign},
-      m_storage{},
-      m_alloc{alloc_traits::select_on_container_copy_construction(x.get_allocator())} {
-    if (x.limb_count() <= inplace_capacity) {
-        if (x.is_representation_inplace()) {
-            for (size_type i = 0; i < inplace_capacity; ++i) {
-                m_storage.limbs[i] = x.m_storage.limbs[i];
-            }
-        } else {
-            // This case can happen if e.g. `x.reserve_representation(100)` was called
-            // but the integer value of `x` fits into inplace storage.
-            for (size_type i = 0; i < x.limb_count(); ++i) {
-                m_storage.limbs[i] = x.m_storage.data[i];
-            }
-            for (size_type i = x.limb_count(); i < inplace_capacity; ++i) {
-                m_storage.limbs[i] = {};
-            }
-        }
-    } else {
-        const alloc_result allocation = alloc_limbs(x.limb_count());
-        copy_n_to_allocation(x.m_storage.data, x.limb_count(), allocation);
-        m_capacity     = static_cast<std::uint32_t>(allocation.count);
-        m_storage.data = allocation.ptr;
-    }
-}
+    : basic_big_int(x, alloc_traits::select_on_container_copy_construction(x.get_allocator())) {}
 
 template <std::size_t b, class L, class A>
 constexpr basic_big_int<b, L, A>::basic_big_int(basic_big_int&& x) noexcept
@@ -1107,6 +1086,29 @@ constexpr basic_big_int<b, L, A>::basic_big_int(basic_big_int&& x) noexcept
             m_storage.limbs[i] = x.m_storage.limbs[i];
         }
     } else {
+        m_storage.data    = x.m_storage.data;
+        x.m_capacity      = 0;
+        x.m_size_and_sign = 1;
+        x.m_storage       = {};
+    }
+}
+
+template <std::size_t b, class L, class A>
+constexpr basic_big_int<b, L, A>::basic_big_int(const basic_big_int& x, const std::type_identity_t<A>& a)
+    : m_capacity{0}, m_size_and_sign{x.m_size_and_sign}, m_storage{}, m_alloc{a} {
+    copy_limbs_from(x);
+}
+
+// Takes over `x`'s buffer only when `a` can free it, i.e. compares equal to
+// `x.get_allocator()`. Otherwise the limbs are copied into storage obtained
+// from `a`, as the allocator-extended copy constructor does, and `x` keeps its value.
+template <std::size_t b, class L, class A>
+constexpr basic_big_int<b, L, A>::basic_big_int(basic_big_int&& x, const std::type_identity_t<A>& a)
+    : m_capacity{0}, m_size_and_sign{x.m_size_and_sign}, m_storage{}, m_alloc{a} {
+    if (x.is_representation_inplace() || !(alloc_traits::is_always_equal::value || m_alloc == x.m_alloc)) {
+        copy_limbs_from(x);
+    } else {
+        m_capacity        = x.m_capacity;
         m_storage.data    = x.m_storage.data;
         x.m_capacity      = 0;
         x.m_size_and_sign = 1;
@@ -3478,6 +3480,32 @@ basic_big_int<b, L, A>::copy_n_to_allocation(const limb_type* const p, const siz
         }
     }
 #endif
+}
+
+// A value that fits in place is stored in place even when `x` holds it on the
+// heap, e.g. after `x.reserve_representation(100)`; only a larger value allocates.
+template <std::size_t b, class L, class A>
+constexpr void basic_big_int<b, L, A>::copy_limbs_from(const basic_big_int& x) {
+    BEMAN_BIG_INT_ASSERT(is_representation_inplace());
+    if (x.limb_count() <= inplace_capacity) {
+        if (x.is_representation_inplace()) {
+            for (size_type i = 0; i < inplace_capacity; ++i) {
+                m_storage.limbs[i] = x.m_storage.limbs[i];
+            }
+        } else {
+            for (size_type i = 0; i < x.limb_count(); ++i) {
+                m_storage.limbs[i] = x.m_storage.data[i];
+            }
+            for (size_type i = x.limb_count(); i < inplace_capacity; ++i) {
+                m_storage.limbs[i] = {};
+            }
+        }
+    } else {
+        const alloc_result allocation = alloc_limbs(x.limb_count());
+        copy_n_to_allocation(x.m_storage.data, x.limb_count(), allocation);
+        m_capacity     = static_cast<std::uint32_t>(allocation.count);
+        m_storage.data = allocation.ptr;
+    }
 }
 
 template <std::size_t b, class L, class A>

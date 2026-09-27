@@ -116,6 +116,8 @@ class basic_big_int {
     constexpr explicit basic_big_int(const Allocator& a) noexcept;
     constexpr basic_big_int(const basic_big_int& x);
     constexpr basic_big_int(basic_big_int&& x) noexcept;
+    constexpr basic_big_int(const basic_big_int& x, const std::type_identity_t<Allocator>& a);
+    constexpr basic_big_int(basic_big_int&& x, const std::type_identity_t<Allocator>& a);
     template <_arbitrary-arithmetic_ T>
         requires(!std::same_as<std::remove_cvref_t<T>, basic_big_int>)
     constexpr explicit(/* see below */) basic_big_int(T&& value) noexcept(/* see below */);
@@ -293,6 +295,49 @@ moving from `x.get_allocator()`.
 
 * *Preconditions:* None.
 * *Postconditions:* `x` is left in a valid state with an unspecified value.
+
+=== Allocator-extended copy constructor
+
+[source,c++]
+----
+constexpr basic_big_int(const basic_big_int& x, const std::type_identity_t<Allocator>& a);
+----
+
+Initializes the integer value to that of `x` and initializes the allocator to
+`a`. Unlike the copy constructor, `select_on_container_copy_construction` is
+not consulted, so this is how a copy is placed on a chosen allocator, such as
+the source's own: `basic_big_int y(x, x.get_allocator());`.
+
+* *Preconditions:* None.
+* *Postconditions:* None.
+* *Throws:* Nothing if the effective width of the integer value of `x` is less than or equal to `inplace_bits`; otherwise, any exception thrown during allocation.
+
+=== Allocator-extended move constructor
+
+[source,c++]
+----
+constexpr basic_big_int(basic_big_int&& x, const std::type_identity_t<Allocator>& a);
+----
+
+Initializes the integer value to that of `x` and initializes the allocator to
+`a`. If `allocator_traits<Allocator>::is_always_equal::value` is `true` or
+`a == x.get_allocator()`, the storage of `x` is taken over as by the move
+constructor. Otherwise `a` cannot deallocate that storage, so the value is
+copied into storage obtained from `a`, as by the allocator-extended copy
+constructor.
+
+* *Preconditions:* None.
+* *Postconditions:* `x` is left in a valid state with an unspecified value.
+* *Throws:* Nothing if the storage of `x` is taken over or the effective width of the integer value of `x` is less than or equal to `inplace_bits`; otherwise, any exception thrown during allocation. If an exception is thrown, `x` is unchanged.
+
+NOTE: Uses-allocator construction calls these two constructors, so an allocator-aware
+container such as `std::pmr::vector` copies or moves each `basic_big_int` element onto
+its own allocator. When the element already uses that allocator, as it does when the
+container reallocates, the move takes over the element's storage instead of allocating.
+Because the allocator parameter is a non-deduced context, class template argument
+deduction takes the type from `x` alone, and `a` may be anything convertible to
+`Allocator`: `basic_big_int y(x, &resource)` deduces the same `pmr::basic_big_int`
+as `x`.
 
 === Converting constructor from an arithmetic type
 

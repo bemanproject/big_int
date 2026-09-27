@@ -318,6 +318,63 @@ TEST(Pmr, MoveConstructionPropagatesResource) {
     EXPECT_EQ(cr.alloc_count(), alloc_count_before_move);
 }
 
+TEST(Pmr, AllocatorExtendedCopyConstructionOntoOtherResource) {
+    counting_resource src_cr;
+    counting_resource dst_cr;
+    pmr_big_int       src{1, &src_cr};
+    src <<= 200;
+    const auto src_alloc_count = src_cr.alloc_count();
+
+    const pmr_big_int copy{src, &dst_cr};
+    EXPECT_EQ(copy.get_allocator().resource(), &dst_cr);
+    EXPECT_EQ(copy, src);
+    EXPECT_EQ(dst_cr.alloc_count(), 1U);
+    EXPECT_EQ(src_cr.alloc_count(), src_alloc_count);
+}
+
+TEST(Pmr, AllocatorExtendedMoveConstructionOnSameResourceTakesBuffer) {
+    counting_resource cr;
+    pmr_big_int       src{1, &cr};
+    src <<= 200;
+    const pmr_big_int expected{src, &cr};
+    const auto        alloc_count_before_move = cr.alloc_count();
+
+    const pmr_big_int moved{std::move(src), &cr};
+    EXPECT_EQ(moved.get_allocator().resource(), &cr);
+    EXPECT_EQ(moved, expected);
+    EXPECT_EQ(cr.alloc_count(), alloc_count_before_move);
+}
+
+TEST(Pmr, AllocatorExtendedMoveConstructionOntoOtherResourceCopies) {
+    // A resource that did not allocate the buffer cannot free it, so the value
+    // is copied onto the named resource instead of being taken over.
+    counting_resource src_cr;
+    counting_resource dst_cr;
+    pmr_big_int       src{1, &src_cr};
+    src <<= 200;
+    const pmr_big_int expected{src, &src_cr};
+
+    const pmr_big_int moved{std::move(src), &dst_cr};
+    EXPECT_EQ(moved.get_allocator().resource(), &dst_cr);
+    EXPECT_EQ(moved, expected);
+    EXPECT_EQ(dst_cr.alloc_count(), 1U);
+}
+
+TEST(Pmr, AllocatorExtendedConstructionDeducesTypeFromValue) {
+    // The allocator parameter is a non-deduced context, so class template
+    // argument deduction takes the type from `x` and converts the resource.
+    counting_resource cr;
+    pmr_big_int       x{7, &cr};
+
+    const beman::big_int::basic_big_int copy(x, &cr);
+    const beman::big_int::basic_big_int moved(std::move(x), &cr);
+    static_assert(std::is_same_v<decltype(copy), const pmr_big_int>);
+    static_assert(std::is_same_v<decltype(moved), const pmr_big_int>);
+    EXPECT_EQ(copy, 7);
+    EXPECT_EQ(moved, 7);
+    EXPECT_EQ(moved.get_allocator().resource(), &cr);
+}
+
 // ----- Resource lifecycle: every allocation is matched by a deallocation -----
 
 TEST(Pmr, ScopeExitDeallocatesAllAllocations) {
@@ -811,6 +868,47 @@ TEST(Pmr, PmrVectorCopyBetweenResources) {
     }
     EXPECT_EQ(dst[0], src[0]);
     EXPECT_EQ(dst[1], src[1]);
+}
+
+TEST(Pmr, PmrVectorMovesElementsWithoutAllocating) {
+    // Uses-allocator construction builds an element as `T(std::move(x), alloc)`.
+    // On the vector's own resource that takes the buffer over, so neither
+    // inserting nor reallocating allocates anything for the elements.
+    counting_resource             cr;
+    std::pmr::vector<pmr_big_int> v{&cr};
+    v.reserve(2);
+    pmr_big_int x{1, &cr};
+    x <<= 200;
+    pmr_big_int y{1, &cr};
+    y <<= 300;
+    const auto alloc_count_before_insert = cr.alloc_count();
+
+    v.push_back(std::move(x));
+    v.push_back(std::move(y));
+    EXPECT_EQ(cr.alloc_count(), alloc_count_before_insert);
+
+    v.reserve(16); // only the new element array is allocated
+    EXPECT_EQ(cr.alloc_count(), alloc_count_before_insert + 1U);
+    EXPECT_EQ(v[0], pmr_big_int{1} << 200);
+    EXPECT_EQ(v[1], pmr_big_int{1} << 300);
+    for (const auto& element : v) {
+        EXPECT_EQ(element.get_allocator().resource(), &cr);
+    }
+}
+
+TEST(Pmr, PmrVectorMoveFromOtherResourceCopiesOntoVectorResource) {
+    counting_resource             vector_cr;
+    counting_resource             value_cr;
+    std::pmr::vector<pmr_big_int> v{&vector_cr};
+    v.reserve(1);
+    pmr_big_int x{1, &value_cr};
+    x <<= 200;
+    const auto alloc_count_before_insert = vector_cr.alloc_count();
+
+    v.push_back(std::move(x));
+    EXPECT_EQ(v[0].get_allocator().resource(), &vector_cr);
+    EXPECT_EQ(v[0], pmr_big_int{1} << 200);
+    EXPECT_EQ(vector_cr.alloc_count(), alloc_count_before_insert + 1U);
 }
 
 // ----- Specialized resource types -----
