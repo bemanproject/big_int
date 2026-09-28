@@ -66,9 +66,8 @@ inline bool bmi2_adx_kernels_actually_run() noexcept {
         beman::big_int::uint_multiprecision_t sq_out[4] = {0, 0, 0, 0};
         ::beman_big_int_square_long_runtime_bmi2_adx(sq_out, a, 2);
         return true;
-    } __except (GetExceptionCode() == static_cast<DWORD>(EXCEPTION_ILLEGAL_INSTRUCTION)
-                    ? EXCEPTION_EXECUTE_HANDLER
-                    : EXCEPTION_CONTINUE_SEARCH) {
+    } __except (GetExceptionCode() == static_cast<DWORD>(EXCEPTION_ILLEGAL_INSTRUCTION) ? EXCEPTION_EXECUTE_HANDLER
+                                                                                        : EXCEPTION_CONTINUE_SEARCH) {
         return false;
     }
 }

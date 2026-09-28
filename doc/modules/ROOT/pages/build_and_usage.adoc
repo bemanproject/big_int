@@ -111,7 +111,8 @@ cmake --preset gcc-release -DBEMAN_BIG_INT_X86_64_BMI2_ADX=ON
 Broadwell or newer, AMD Zen or newer): running it on an older CPU, or an `AUTO`
 build compiled with `-march=` flags targeting a newer CPU than it then runs on,
 crashes with an illegal instruction. MSVC needs `ON` to opt in, since it never
-defines `__BMI2__` or `__ADX__` itself.
+defines `__BMI2__` or `__ADX__` itself. x64 emulation on Windows on ARM
+reports these features but may not execute them.
 ====
 
 AVX2 was evaluated for these kernels and is not used: 64-bit-limb schoolbook

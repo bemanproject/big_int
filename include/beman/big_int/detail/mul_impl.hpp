@@ -135,7 +135,8 @@ inline constexpr std::size_t square_long_cutoff = 4;
 // Minimum number of limbs for Karatsuba to be worthwhile
 // Directly from Boost, and reconfirmed as correct on x86_64 and the portable kernel.
 // `karatsuba_fallback` (the recursion leaf size) stays at 40 everywhere: larger
-// leaves measured slower end to end on AArch64 too.
+// leaves measured slower end to end on AArch64 and with the x86_64 BMI2/ADX
+// kernels too.
 #if defined(BEMAN_BIG_INT_ARCH_AARCH64)
 // Tuned end to end (x * y through big_int, M4 Max) with the 2-row AArch64
 // schoolbook kernel; 96-112 is a noisy transition zone.
@@ -145,11 +146,7 @@ inline constexpr std::size_t karatsuba_cutoff = 47;
 #else
 inline constexpr std::size_t karatsuba_cutoff = 48;
 #endif
-#if defined(BEMAN_BIG_INT_ARCH_X86_64) && BEMAN_BIG_INT_X86_64_BMI2_ADX
 inline constexpr std::size_t karatsuba_fallback = 40;
-#else
-inline constexpr std::size_t karatsuba_fallback = 40;
-#endif
 
 // Heuristic estimate of scratch space needed for Karatsuba multiplication.
 // One Karatsuba level uses ~2*s limbs (t1=2n+2, t2=t3=n+1 with n=s/2+1). The

@@ -41,9 +41,9 @@ constexpr limb        top_bit     = limb{1} << (std::numeric_limits<limb>::digit
 constexpr limb adversarial_values[] = {limb{0}, limb{1}, limb_max, top_bit, top_bit - 1, limb_max - 1};
 
 void fill_adversarial(std::vector<limb>& v, std::mt19937_64& rng) {
-    constexpr int                        choice_count = static_cast<int>(std::size(adversarial_values)) + 1;
-    std::uniform_int_distribution<int>   choice(0, choice_count - 1);
-    std::uniform_int_distribution<limb>  dist;
+    constexpr int                       choice_count = static_cast<int>(std::size(adversarial_values)) + 1;
+    std::uniform_int_distribution<int>  choice(0, choice_count - 1);
+    std::uniform_int_distribution<limb> dist;
     for (limb& x : v) {
         const int c = choice(rng);
         x           = (c == choice_count - 1) ? dist(rng) : adversarial_values[static_cast<std::size_t>(c)];
