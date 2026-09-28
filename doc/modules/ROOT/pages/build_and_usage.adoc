@@ -87,6 +87,37 @@ yourself, or results may be silently incorrect. The default integer path has no
 such requirement.
 ====
 
+[#build_and_usage_bmi2_adx]
+=== Optional: x86-64 BMI2/ADX schoolbook kernels
+
+On x86-64, the schoolbook multiply and square kernels are always built in two
+forms: a generic baseline and one using `mulx` (BMI2) and `adcx`/`adox` (ADX).
+Which one the library calls is chosen at compile time, with no runtime
+dispatch. When you compile with flags that define both `__BMI2__` and
+`__ADX__` (for example `-march=native`, or `-march=broadwell` or newer, or
+`-march=znver1` or newer), the BMI2/ADX kernels are selected automatically.
+
+You can also select explicitly with the CMake option
+`BEMAN_BIG_INT_X86_64_BMI2_ADX` (default `AUTO`, also accepting `ON`/`OFF`):
+
+[source,bash]
+----
+cmake --preset gcc-release -DBEMAN_BIG_INT_X86_64_BMI2_ADX=ON
+----
+
+[IMPORTANT]
+====
+`ON` always builds a binary that requires a CPU with both BMI2 and ADX (Intel
+Broadwell or newer, AMD Zen or newer): running it on an older CPU, or an `AUTO`
+build compiled with `-march=` flags targeting a newer CPU than it then runs on,
+crashes with an illegal instruction. MSVC needs `ON` to opt in, since it never
+defines `__BMI2__` or `__ADX__` itself.
+====
+
+AVX2 was evaluated for these kernels and is not used: 64-bit-limb schoolbook
+multiplication needs a 64x64->128-bit widening multiply, which AVX2 has no
+vector instruction for.
+
 [#build_and_usage_modules]
 === Optional: the pass:[C++] named module
 
