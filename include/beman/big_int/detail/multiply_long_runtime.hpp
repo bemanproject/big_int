@@ -6,14 +6,43 @@
 
 #include <beman/big_int/detail/wide_ops.hpp>
 
+#if defined(BEMAN_BIG_INT_ARCH_X86_64)
+
+// Compile-time selection between the two x86-64 kernels (config.hpp resolves
+// BEMAN_BIG_INT_X86_64_BMI2_ADX), so there is no runtime dispatch cost.
+extern "C" void beman_big_int_multiply_long_runtime_generic(beman::big_int::uint_multiprecision_t*       p_result,
+                                                            const beman::big_int::uint_multiprecision_t* p_a,
+                                                            const std::size_t                            len_a,
+                                                            const beman::big_int::uint_multiprecision_t* p_b,
+                                                            const std::size_t len_b) noexcept;
+extern "C" void beman_big_int_multiply_long_runtime_bmi2_adx(beman::big_int::uint_multiprecision_t*       p_result,
+                                                             const beman::big_int::uint_multiprecision_t* p_a,
+                                                             const std::size_t                            len_a,
+                                                             const beman::big_int::uint_multiprecision_t* p_b,
+                                                             const std::size_t len_b) noexcept;
+
+inline void beman_big_int_multiply_long_runtime(beman::big_int::uint_multiprecision_t*       p_result,
+                                                const beman::big_int::uint_multiprecision_t* p_a,
+                                                const std::size_t                            len_a,
+                                                const beman::big_int::uint_multiprecision_t* p_b,
+                                                const std::size_t                            len_b) noexcept {
+    #if BEMAN_BIG_INT_X86_64_BMI2_ADX
+    beman_big_int_multiply_long_runtime_bmi2_adx(p_result, p_a, len_a, p_b, len_b);
+    #else
+    beman_big_int_multiply_long_runtime_generic(p_result, p_a, len_a, p_b, len_b);
+    #endif
+}
+
+#else
+
 BEMAN_BIG_INT_ASM_LINKAGE void beman_big_int_multiply_long_runtime(beman::big_int::uint_multiprecision_t* p_result,
                                                                    const beman::big_int::uint_multiprecision_t* p_a,
                                                                    const std::size_t                            len_a,
                                                                    const beman::big_int::uint_multiprecision_t* p_b,
                                                                    const std::size_t len_b) noexcept
-#if defined(BEMAN_BIG_INT_HAS_ASM_KERNELS)
+    #if defined(BEMAN_BIG_INT_HAS_ASM_KERNELS)
     ;
-#else
+    #else
 {
     if (len_a == 0 || len_b == 0) {
         return;
@@ -45,6 +74,8 @@ BEMAN_BIG_INT_ASM_LINKAGE void beman_big_int_multiply_long_runtime(beman::big_in
     }
 }
 
-#endif // !defined(BEMAN_BIG_INT_HAS_ASM_KERNELS)
+    #endif // !defined(BEMAN_BIG_INT_HAS_ASM_KERNELS)
+
+#endif // defined(BEMAN_BIG_INT_ARCH_X86_64)
 
 #endif // BEMAN_BIG_INT_MULTIPLY_LONG_RUNTIME_HPP
