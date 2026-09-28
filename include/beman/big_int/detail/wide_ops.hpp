@@ -341,7 +341,9 @@ template <signed_or_unsigned T>
     return {.value = value, .overflow = overflow};
 #else
     if constexpr (std::is_unsigned_v<T>) {
-        return {.value = static_cast<T>(x + y), .overflow = x + y < x};
+        // Compare the truncated sum: types narrower than int promote, so x + y itself never wraps.
+        const T value = static_cast<T>(x + y);
+        return {.value = value, .overflow = value < x};
     } else {
         const auto wide  = static_cast<wider_t<T>>(x) + static_cast<wider_t<T>>(y);
         const auto value = static_cast<T>(wide);

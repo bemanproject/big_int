@@ -23,6 +23,7 @@
 
 #include <beman/big_int.hpp>
 #include <beman/big_int/detail/mul_impl.hpp>
+#include <beman/big_int/detail/multiply_long_runtime.hpp>
 #include <beman/big_int/detail/square_long_runtime.hpp>
 
 #include <gtest/gtest.h>
@@ -107,6 +108,22 @@ double run_long_at(const std::size_t limbs, const unsigned trials) {
            const std::span<const uint_t> a,
            const std::span<const uint_t> b,
            scratch_for_test&) { ::beman::big_int::detail::multiply_long(r.first(a.size() + b.size()), a, b); });
+}
+
+// The runtime multiplication basecase (the assembly kernel (x86_64/AArch64)
+// or its portable fallback): what multiply_long_runtime_dispatch and the
+// Karatsuba/Toom-Cook tiers actually run below their cutoffs.
+double run_multiply_long_runtime_at(const std::size_t limbs, const unsigned trials) {
+    return measure_algorithm(limbs,
+                             trials,
+                             /*scratch_size=*/0,
+                             [](const std::span<uint_t>       r,
+                                const std::span<const uint_t> a,
+                                const std::span<const uint_t> b,
+                                scratch_for_test&) {
+                                 ::beman_big_int_multiply_long_runtime(
+                                     r.data(), a.data(), a.size(), b.data(), b.size());
+                             });
 }
 
 double run_karatsuba_at(const std::size_t limbs, const unsigned trials) {
@@ -361,6 +378,7 @@ struct algorithm_runner {
 
 constexpr algorithm_runner algorithms[] = {
     {"schoolbook", 2, 200, run_long_at},
+    {"multiply-long-runtime", 2, 400, run_multiply_long_runtime_at},
     {"karatsuba", 4, 2000, run_karatsuba_at},
     {"toom-cook-3", 300, 10000, run_toom_cook_3_at},
     {"toom-cook-4", 300, 30000, run_toom_cook_4_at},

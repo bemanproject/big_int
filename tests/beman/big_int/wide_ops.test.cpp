@@ -286,6 +286,29 @@ TEST(WideOps, OverflowingAddUint) {
     EXPECT_FALSE(r6.overflow);
 }
 
+// Types narrower than int promote in x + y; the overflow must still be seen
+// (the portable path, used by MSVC on ARM64 and in constant evaluation).
+TEST(WideOps, OverflowingAddNarrowUint) {
+    using beman::big_int::detail::carrying_add;
+    using beman::big_int::detail::overflowing_add;
+
+    static_assert(overflowing_add<std::uint16_t>(0xFFFFu, 1u).overflow);
+    static_assert(overflowing_add<std::uint8_t>(0xFFu, 1u).overflow);
+    static_assert(!overflowing_add<std::uint16_t>(0xFFFEu, 1u).overflow);
+    static_assert(carrying_add<std::uint16_t>(0xFFFFu, 0u, true).carry);
+
+    const auto r1 = overflowing_add<std::uint16_t>(0xFFFFu, 2u);
+    const auto r2 = overflowing_add<std::uint8_t>(0x80u, 0x80u);
+    const auto r3 = carrying_add<std::uint16_t>(0x8000u, 0x8000u, true);
+
+    EXPECT_EQ(r1.value, 1u);
+    EXPECT_TRUE(r1.overflow);
+    EXPECT_EQ(r2.value, 0u);
+    EXPECT_TRUE(r2.overflow);
+    EXPECT_EQ(r3.value, 1u);
+    EXPECT_TRUE(r3.carry);
+}
+
 TEST(WideOps, OverflowingSubInt) {
     using beman::big_int::detail::overflowing_sub;
 

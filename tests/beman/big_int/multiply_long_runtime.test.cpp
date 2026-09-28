@@ -21,7 +21,7 @@ using limb = ::beman::big_int::uint_multiprecision_t;
 constexpr limb        limb_max    = std::numeric_limits<limb>::max();
 constexpr limb        poison      = limb_max / 0xFF * 0xA5; // 0xA5 in every byte
 constexpr std::size_t guard_limbs = 4;
-constexpr std::size_t max_len     = 24;
+constexpr std::size_t max_len     = 40;
 
 // Multiplies a * b into a poisoned buffer framed by guard limbs, checking the
 // product against multiply_long and that nothing outside [0, len_a + len_b) is written.
@@ -145,6 +145,30 @@ TEST(MultiplyLongRuntime, LargeShapes) {
     expect_multiply_matches(random_vec(97), random_vec(160), "large");
     expect_multiply_matches(random_vec(160), random_vec(97), "large");
     expect_multiply_matches(random_vec(200), random_vec(200), "large");
+}
+
+// Extreme aspect ratios: a single row multiplying (or multiplied by) a very
+// long operand, and a few-limbs-by-many-limbs shape that drives the
+// row-pair path's steady loop for a long time on one side while the other
+// side is too short to ever pair.
+TEST(MultiplyLongRuntime, UnbalancedShapes) {
+    std::mt19937_64                     rng{0x1B4E5A7DULL};
+    std::uniform_int_distribution<limb> dist;
+
+    auto random_vec = [&](std::size_t n) {
+        std::vector<limb> v(n);
+        for (limb& x : v) {
+            x = dist(rng);
+        }
+        return v;
+    };
+
+    expect_multiply_matches(random_vec(1), random_vec(700), "unbalanced");
+    expect_multiply_matches(random_vec(700), random_vec(1), "unbalanced");
+    expect_multiply_matches(random_vec(2), random_vec(513), "unbalanced");
+    expect_multiply_matches(random_vec(3), random_vec(500), "unbalanced");
+    expect_multiply_matches(random_vec(47), random_vec(1000), "unbalanced");
+    expect_multiply_matches(random_vec(1000), random_vec(47), "unbalanced");
 }
 
 } // namespace
