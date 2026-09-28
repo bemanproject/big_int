@@ -120,7 +120,9 @@ constexpr void square_long(const std::span<uint_multiprecision_t>       result,
 // products it saves. Tuned end to end on x * x, where the x86_64 assembly
 // basecase wins from 5 limbs and the portable one from 4 (kernel-only timings
 // flatter the assembly down to 2 limbs, which the full dispatch does not bear out).
-#if defined(BEMAN_BIG_INT_ARCH_X86_64)
+#if defined(BEMAN_BIG_INT_ARCH_X86_64) && BEMAN_BIG_INT_X86_64_BMI2_ADX
+inline constexpr std::size_t square_long_cutoff = 10;
+#elif defined(BEMAN_BIG_INT_ARCH_X86_64)
 inline constexpr std::size_t square_long_cutoff = 5;
 #elif defined(BEMAN_BIG_INT_ARCH_AARCH64)
 // Tuned end to end on x * x (M4 Max): cutoffs 3-6 are within noise of each
@@ -138,10 +140,16 @@ inline constexpr std::size_t square_long_cutoff = 4;
 // Tuned end to end (x * y through big_int, M4 Max) with the 2-row AArch64
 // schoolbook kernel; 96-112 is a noisy transition zone.
 inline constexpr std::size_t karatsuba_cutoff = 112;
+#elif defined(BEMAN_BIG_INT_ARCH_X86_64) && BEMAN_BIG_INT_X86_64_BMI2_ADX
+inline constexpr std::size_t karatsuba_cutoff = 47;
 #else
 inline constexpr std::size_t karatsuba_cutoff = 48;
 #endif
+#if defined(BEMAN_BIG_INT_ARCH_X86_64) && BEMAN_BIG_INT_X86_64_BMI2_ADX
 inline constexpr std::size_t karatsuba_fallback = 40;
+#else
+inline constexpr std::size_t karatsuba_fallback = 40;
+#endif
 
 // Heuristic estimate of scratch space needed for Karatsuba multiplication.
 // One Karatsuba level uses ~2*s limbs (t1=2n+2, t2=t3=n+1 with n=s/2+1). The
@@ -184,6 +192,8 @@ void multiply_karatsuba(const std::span<uint_multiprecision_t>       result,
 // Tuned end to end (x * x through big_int, M4 Max) with the 2-row AArch64
 // squaring kernel: a Karatsuba split only wins consistently from ~256 limbs.
 inline constexpr std::size_t square_karatsuba_cutoff = 256;
+#elif defined(BEMAN_BIG_INT_ARCH_X86_64) && BEMAN_BIG_INT_X86_64_BMI2_ADX
+inline constexpr std::size_t square_karatsuba_cutoff = 120;
 #else
 inline constexpr std::size_t square_karatsuba_cutoff = 72;
 #endif
