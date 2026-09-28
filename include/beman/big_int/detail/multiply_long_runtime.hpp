@@ -6,16 +6,19 @@
 
 #include <beman/big_int/detail/wide_ops.hpp>
 
-BEMAN_BIG_INT_ARCH_X86_64_LINKAGE void
-beman_big_int_multiply_long_runtime(beman::big_int::uint_multiprecision_t*       p_result,
-                                    const beman::big_int::uint_multiprecision_t* p_a,
-                                    const std::size_t                            len_a,
-                                    const beman::big_int::uint_multiprecision_t* p_b,
-                                    const std::size_t                            len_b) noexcept
-#if defined(BEMAN_BIG_INT_ARCH_X86_64)
+BEMAN_BIG_INT_ASM_LINKAGE void beman_big_int_multiply_long_runtime(beman::big_int::uint_multiprecision_t* p_result,
+                                                                   const beman::big_int::uint_multiprecision_t* p_a,
+                                                                   const std::size_t                            len_a,
+                                                                   const beman::big_int::uint_multiprecision_t* p_b,
+                                                                   const std::size_t len_b) noexcept
+#if defined(BEMAN_BIG_INT_HAS_ASM_KERNELS)
     ;
 #else
 {
+    if (len_a == 0 || len_b == 0) {
+        return;
+    }
+
     {
         beman::big_int::uint_multiprecision_t carry = 0;
         for (std::size_t j = 0; j < len_b; ++j) {
@@ -42,6 +45,6 @@ beman_big_int_multiply_long_runtime(beman::big_int::uint_multiprecision_t*      
     }
 }
 
-#endif // !defined(BEMAN_BIG_INT_ARCH_X86_64)
+#endif // !defined(BEMAN_BIG_INT_HAS_ASM_KERNELS)
 
 #endif // BEMAN_BIG_INT_MULTIPLY_LONG_RUNTIME_HPP

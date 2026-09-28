@@ -220,14 +220,16 @@ static_assert(increment_negative_is_normalized(64));
 static_assert(increment_negative_is_normalized(128));
 
 // big_int_256 holds four limbs in the in-place buffer, so these never allocate.
-consteval big_int_256 decremented_inplace(unsigned shift) {
-    big_int_256 x{1};
+// Returns bool rather than the value: MSVC 19.44 cannot materialize a consteval
+// big_int result whose active union member is the in-place limb array.
+consteval bool decremented_inplace_is_normalized(unsigned shift) {
+    big_int_256 x = 1;
     x <<= shift;
     --x;
-    return x;
+    return is_normalized(x) && x.size() == shift;
 }
-static_assert(is_normalized(decremented_inplace(128)));
-static_assert(decremented_inplace(192).size() == 192);
+static_assert(decremented_inplace_is_normalized(128));
+static_assert(decremented_inplace_is_normalized(192));
 
 TEST(IncrementDecrement, PrefixDecrementAcrossLimbBoundaryIsNormalized) {
     for (const unsigned shift : {64U, 128U, 192U}) {

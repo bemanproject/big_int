@@ -294,7 +294,7 @@ using int_wide_t = long long;
 } // namespace beman::big_int
 
 // Special architecture assembly long-multiplication optimization ==============
-// It is available for generic x86_64 on GCC/clang/MSVC ========================
+// It is available for generic x86_64 and AArch64 on GCC/clang/MSVC ============
 // The assembly kernels work on 64-bit limbs, so a build forcing 32-bit limbs
 // uses the portable kernels instead. Those have C++ linkage, so they cannot
 // bind to the assembly symbols that CMake still builds into the library.
@@ -305,10 +305,20 @@ using int_wide_t = long long;
     #define BEMAN_BIG_INT_ARCH_X86_64
 #endif
 
-#if defined(BEMAN_BIG_INT_ARCH_X86_64)
-    #define BEMAN_BIG_INT_ARCH_X86_64_LINKAGE extern "C"
+#if (((defined(BEMAN_BIG_INT_GCC) || defined(BEMAN_BIG_INT_CLANG)) && defined(__aarch64__)) || \
+     (defined(BEMAN_BIG_INT_MSVC) && defined(_M_ARM64))) &&                                    \
+    BEMAN_BIG_INT_LIMB_WIDTH == 64
+    #define BEMAN_BIG_INT_ARCH_AARCH64
+#endif
+
+#if defined(BEMAN_BIG_INT_ARCH_X86_64) || defined(BEMAN_BIG_INT_ARCH_AARCH64)
+    #define BEMAN_BIG_INT_HAS_ASM_KERNELS
+#endif
+
+#if defined(BEMAN_BIG_INT_HAS_ASM_KERNELS)
+    #define BEMAN_BIG_INT_ASM_LINKAGE extern "C"
 #else
-    #define BEMAN_BIG_INT_ARCH_X86_64_LINKAGE inline
+    #define BEMAN_BIG_INT_ASM_LINKAGE inline
 #endif
 
 // Integer concepts and traits =================================================

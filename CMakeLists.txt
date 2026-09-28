@@ -89,9 +89,13 @@ add_library(
 add_library(beman::big_int ALIAS beman.big_int)
 target_compile_features(beman.big_int PUBLIC cxx_std_23)
 
-# Only enable assembly and add the assembly source when using GCC or Clang
-# This avoids trying to compile .s files with toolchains that may not support
-# the same assembler syntax or where we don't want the assembly unit.
+# Only enable assembly and add the assembly source when using GCC, Clang, or
+# MSVC on x86_64 or AArch64. This avoids trying to compile .s/.S files with
+# toolchains that may not support the same assembler syntax or where we don't
+# want the assembly unit. The MSVC branches key on
+# CMAKE_CXX_COMPILER_ARCHITECTURE_ID rather than CMAKE_SYSTEM_PROCESSOR: a
+# cross build (e.g. -A ARM64 from an x86_64 host) leaves CMAKE_SYSTEM_PROCESSOR
+# at the host value, which would otherwise pick the wrong MASM files.
 # A build forcing 32-bit limbs (BEMAN_BIG_INT_FORCED_LIMB_WIDTH=32) still
 # assembles these, but never calls them: see detail/config.hpp.
 if(
@@ -109,13 +113,37 @@ if(
             src/multiply_long_runtime_x86_64_generic.s
             src/square_long_runtime_x86_64_generic.s
     )
-elseif(MSVC AND CMAKE_SYSTEM_PROCESSOR MATCHES "x86_64|AMD64|amd64")
+elseif(
+    (
+        CMAKE_CXX_COMPILER_ID STREQUAL "GNU"
+        OR CMAKE_CXX_COMPILER_ID STREQUAL "Clang"
+        OR CMAKE_CXX_COMPILER_ID STREQUAL "AppleClang"
+    )
+    AND (CMAKE_SYSTEM_PROCESSOR MATCHES "aarch64|arm64|ARM64")
+)
+    enable_language(ASM)
+    target_sources(
+        beman.big_int
+        PRIVATE
+            src/multiply_long_runtime_aarch64_generic.S
+            src/square_long_runtime_aarch64_generic.S
+    )
+elseif(MSVC AND CMAKE_CXX_COMPILER_ARCHITECTURE_ID STREQUAL "x64")
     enable_language(ASM_MASM)
     target_sources(
         beman.big_int
         PRIVATE
             src/multiply_long_runtime_x86_64_generic.asm
             src/square_long_runtime_x86_64_generic.asm
+    )
+elseif(MSVC AND CMAKE_CXX_COMPILER_ARCHITECTURE_ID STREQUAL "ARM64")
+    # ASM_MARMASM requires CMake >= 3.26; the project minimum (3.30) already covers it.
+    enable_language(ASM_MARMASM)
+    target_sources(
+        beman.big_int
+        PRIVATE
+            src/multiply_long_runtime_aarch64_generic.asm
+            src/square_long_runtime_aarch64_generic.asm
     )
 endif()
 

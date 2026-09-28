@@ -122,6 +122,10 @@ constexpr void square_long(const std::span<uint_multiprecision_t>       result,
 // flatter the assembly down to 2 limbs, which the full dispatch does not bear out).
 #if defined(BEMAN_BIG_INT_ARCH_X86_64)
 inline constexpr std::size_t square_long_cutoff = 5;
+#elif defined(BEMAN_BIG_INT_ARCH_AARCH64)
+// Tuned end to end on x * x (M4 Max): cutoffs 3-6 are within noise of each
+// other, so the AArch64 assembly keeps the portable value.
+inline constexpr std::size_t square_long_cutoff = 4;
 #else
 inline constexpr std::size_t square_long_cutoff = 4;
 #endif

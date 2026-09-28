@@ -126,7 +126,32 @@ jobs:
           ]
         }
 
+  # Standalone job: the reusable preset-test workflow hardcodes setup-msvc-dev
+  # to arch: x64, so it cannot build/test the AArch64 assembly kernels.
+  msvc-arm64:
+    runs-on: windows-11-arm
+    strategy:
+      fail-fast: false
+      matrix:
+        # ASan on ARM64 is a Visual Studio 2026 preview feature that requires
+        # manually selecting the "MSVC AddressSanitizer" installer component
+        # (https://devblogs.microsoft.com/cppblog/introducing-msvc-addresssanitizer-for-arm64-targets/),
+        # so it is not reliably available through automated MSVC setup on
+        # hosted runners; only the release preset (no MaxSan) runs here.
+        preset: [msvc-release]
+    name: "Preset: ${{ matrix.preset }} on windows-11-arm"
+    steps:
+      - uses: actions/checkout@v6
+      - uses: lukka/get-cmake@latest
+        with:
+          cmakeVersion: 4.3.3
+      - uses: TheMrMilchmann/setup-msvc-dev@v4
+        with:
+          arch: arm64
+      - run: cmake --preset ${{ matrix.preset }} --log-level=VERBOSE
+      - run: cmake --workflow --preset ${{ matrix.preset }}
+
   create-issue-when-fault:
-    needs: [preset-test, build-and-test]
+    needs: [preset-test, build-and-test, msvc-arm64]
     if: failure() && github.event_name == 'schedule'
     uses: bemanproject/infra-workflows/.github/workflows/reusable-beman-create-issue-when-fault.yml@1.7.4

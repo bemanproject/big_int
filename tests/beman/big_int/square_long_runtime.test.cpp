@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 // SPDX-License-Identifier: BSL-1.0
 //
-// Direct tests of beman_big_int_square_long_runtime (the x86_64 assembly
-// kernel, or its portable fallback elsewhere) against multiply_long(a, a).
+// Direct tests of beman_big_int_square_long_runtime (the assembly kernel
+// (x86_64/AArch64), or its portable fallback elsewhere) against multiply_long(a, a).
 
 #include <beman/big_int/detail/mul_impl.hpp>
 #include <beman/big_int/detail/square_long_runtime.hpp>

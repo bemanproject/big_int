@@ -341,7 +341,9 @@ template <signed_or_unsigned T>
     return {.value = value, .overflow = overflow};
 #else
     if constexpr (std::is_unsigned_v<T>) {
-        return {.value = static_cast<T>(x + y), .overflow = x + y < x};
+        // Compare the truncated sum: types narrower than int promote, so x + y itself never wraps.
+        const T value = static_cast<T>(x + y);
+        return {.value = value, .overflow = value < x};
     } else {
         const auto wide  = static_cast<wider_t<T>>(x) + static_cast<wider_t<T>>(y);
         const auto value = static_cast<T>(wide);
@@ -602,7 +604,7 @@ template <unsigned_integer T>
                 // This has happened with GCC-14 in release mode
                 __asm__ volatile("div %[d]" : "=a"(q), "=d"(r) : "a"(x.low_bits), "d"(x.high_bits), [d] "r"(y) : "cc");
                 return {.quotient = q, .remainder = r};
-    #elif defined(_WIN32)
+    #elif defined(_WIN32) && defined(_M_X64)
                 T r;
                 T q = _udiv128(static_cast<T>(x.high_bits), static_cast<T>(x.low_bits), static_cast<T>(y), &r);
                 return {.quotient = static_cast<T>(q), .remainder = static_cast<T>(r)};

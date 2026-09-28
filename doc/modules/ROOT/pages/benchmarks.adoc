@@ -373,7 +373,8 @@ The routine handles `x * x` from 5 limbs up to the Karatsuba squaring
 threshold and the leaves of the Karatsuba squaring recursion, so the
 Toom-Cook squaring tiers built on top of them speed up too. Below 5 limbs,
 `x * x` keeps using the multiplication routine, which is as fast or faster
-there once the whole dispatch is measured. On other architectures, a portable
+there once the whole dispatch is measured. On architectures without a
+hand-coded kernel (anything other than `x86_64` and `AArch64`), a portable
 pass:[C++] version of the same algorithm takes its place.
 
 The table below compares the new routine with the two basecases that squares
@@ -396,6 +397,57 @@ The implementations can be found in
 https://github.com/eisenwave/std-big-int/blob/main/src/square_long_runtime_x86_64_generic.s[square_long_runtime_x86_64_generic.s]
 and
 https://github.com/eisenwave/std-big-int/blob/main/src/square_long_runtime_x86_64_generic.asm[square_long_runtime_x86_64_generic.asm].
+
+[#benchmarks_arch_opts_aarch64]
+=== AArch64
+
+The same basecase routines are available for `AArch64`, written against
+baseline ARMv8.0-A A64 instructions only, with no NEON, SVE, or LSE, so they
+run on any 64-bit Arm core. One
+GNU-syntax file assembles under both Linux ELF (GCC/clang) and Apple Mach-O
+(AppleClang); a companion armasm64 `.asm` file covers MSVC on Windows ARM64.
+Detection happens at compile time, alongside the existing `x86_64` detection.
+
+The table below compares the portable pass:[C++] `multiply_long` against the
+assembly `multiply_long_runtime`, measured per operation on an Apple M4 Max
+(`appleclang-release`).
+
+[cols="1,1,1", options="header"]
+|===
+| limbs | pass:[C++] `multiply_long` [ns] | ASM `multiply_long_runtime` [ns]
+
+| 4     |      7 |      8
+| 8     |     32 |     26
+| 16    |    142 |     75
+| 32    |    412 |    273
+| 64    |   1785 |   1105
+|===
+
+Squaring follows the same design as the `x86_64` routine: it builds the
+off-diagonal triangle once, then doubles it and adds the diagonal squares in a
+single pass. The table below compares the portable pass:[C++] `square_long`,
+the general assembly multiplication called with `a * a`, and the dedicated
+assembly square, all measured the same way on the same machine. As on
+`x86_64`, `x * x` below the squaring cutoff (4 limbs here) uses the
+multiplication routine.
+
+[cols="1,1,1,1", options="header"]
+|===
+| limbs | pass:[C++] `square_long` [ns] | ASM multiply `a * a` [ns] | ASM square [ns]
+
+| 4     |    13 |      8 |     6
+| 8     |    41 |     26 |    20
+| 16    |    98 |     77 |    70
+| 32    |   322 |    268 |   186
+| 64    |  1008 |   1117 |   611
+|===
+
+The implementations can be found in
+https://github.com/eisenwave/std-big-int/blob/main/src/multiply_long_runtime_aarch64_generic.S[multiply_long_runtime_aarch64_generic.S],
+https://github.com/eisenwave/std-big-int/blob/main/src/multiply_long_runtime_aarch64_generic.asm[multiply_long_runtime_aarch64_generic.asm],
+https://github.com/eisenwave/std-big-int/blob/main/src/square_long_runtime_aarch64_generic.S[square_long_runtime_aarch64_generic.S],
+and
+https://github.com/eisenwave/std-big-int/blob/main/src/square_long_runtime_aarch64_generic.asm[square_long_runtime_aarch64_generic.asm].
 
 [#benchmarks_sources]
 == Source programs

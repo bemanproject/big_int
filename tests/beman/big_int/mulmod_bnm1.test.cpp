@@ -153,7 +153,7 @@ TEST(MulmodBnm1, NextSizeProperties) {
 }
 
 TEST(MulmodBnm1, CyclicTierDifferential) {
-    if (detail::width_v<uint_t> != 64) {
+    if constexpr (detail::width_v<uint_t> != 64) {
         GTEST_SKIP() << "the cyclic tier is gated to 64-bit limbs";
     }
     std::mt19937_64 rng{0xb34u};

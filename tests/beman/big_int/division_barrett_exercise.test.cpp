@@ -244,7 +244,7 @@ TEST(DivisionBarrettExercise, DispatchGateBoundaries) {
 }
 
 TEST(DivisionBarrettExercise, CyclicMulmodTier) {
-    if (detail::width_v<uint_t> != 64) {
+    if constexpr (detail::width_v<uint_t> != 64) {
         GTEST_SKIP() << "the cyclic mulmod tier is gated to 64-bit limbs";
     }
     // Divisor sized so the block wrap w = multiply_mod_bnm1_next_size(s + 1)

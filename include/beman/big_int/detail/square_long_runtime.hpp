@@ -9,12 +9,11 @@
 // Schoolbook squaring: p_result[0 .. 2 * len_a) = a^2. Every limb of the
 // product is written, so p_result need not be pre-zeroed; it must not alias p_a.
 // Builds the off-diagonal triangle, then doubles it and adds the diagonal
-// squares in a single pass (the x86_64 assembly follows the same plan).
-BEMAN_BIG_INT_ARCH_X86_64_LINKAGE void
-beman_big_int_square_long_runtime(beman::big_int::uint_multiprecision_t*       p_result,
-                                  const beman::big_int::uint_multiprecision_t* p_a,
-                                  const std::size_t                            len_a) noexcept
-#if defined(BEMAN_BIG_INT_ARCH_X86_64)
+// squares in a single pass (the x86_64/AArch64 assembly follows the same plan).
+BEMAN_BIG_INT_ASM_LINKAGE void beman_big_int_square_long_runtime(beman::big_int::uint_multiprecision_t*       p_result,
+                                                                 const beman::big_int::uint_multiprecision_t* p_a,
+                                                                 const std::size_t len_a) noexcept
+#if defined(BEMAN_BIG_INT_HAS_ASM_KERNELS)
     ;
 #else
 {
@@ -78,6 +77,6 @@ beman_big_int_square_long_runtime(beman::big_int::uint_multiprecision_t*       p
     }
 }
 
-#endif // !defined(BEMAN_BIG_INT_ARCH_X86_64)
+#endif // !defined(BEMAN_BIG_INT_HAS_ASM_KERNELS)
 
 #endif // BEMAN_BIG_INT_SQUARE_LONG_RUNTIME_HPP
