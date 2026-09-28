@@ -4,4 +4,5 @@
 # - ser: IEEE citation format abbreviation for "series"
 # - vEw: From the package-lock.json
 # - statics: Static memory contents
-ignore-words-list = toom,ser,vEw,statics
+# - sme: Arm Scalable Matrix Extension
+ignore-words-list = toom,ser,vEw,statics,sme
