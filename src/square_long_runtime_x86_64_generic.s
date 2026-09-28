@@ -11,8 +11,8 @@
 
 # Schoolbook squaring, baseline x86-64 only (no SSE/AVX, no BMI2/ADX).
 
-.globl beman_big_int_square_long_runtime
-.type beman_big_int_square_long_runtime, @function
+.globl beman_big_int_square_long_runtime_generic
+.type beman_big_int_square_long_runtime_generic, @function
 
 #   rdi -> p_result
 #   rsi -> p_a
@@ -93,7 +93,7 @@
 
 .endm
 
-beman_big_int_square_long_runtime:
+beman_big_int_square_long_runtime_generic:
 .cfi_startproc
 
     push    rbx
@@ -260,4 +260,4 @@ beman_big_int_square_long_runtime:
     ret
 
 .cfi_endproc
-.size beman_big_int_square_long_runtime, .-beman_big_int_square_long_runtime
+.size beman_big_int_square_long_runtime_generic, .-beman_big_int_square_long_runtime_generic

@@ -126,6 +126,37 @@ double run_multiply_long_runtime_at(const std::size_t limbs, const unsigned tria
                              });
 }
 
+#if defined(BEMAN_BIG_INT_ARCH_X86_64)
+// Generic vs BMI2+ADX basecase directly (bypassing the compile-time-selected
+// forwarder), so the sweep can compare them even when the build itself only
+// selects one. Running the bmi2-adx row requires a CPU with BMI2 and ADX.
+double run_multiply_long_runtime_generic_at(const std::size_t limbs, const unsigned trials) {
+    return measure_algorithm(limbs,
+                             trials,
+                             /*scratch_size=*/0,
+                             [](const std::span<uint_t>       r,
+                                const std::span<const uint_t> a,
+                                const std::span<const uint_t> b,
+                                scratch_for_test&) {
+                                 ::beman_big_int_multiply_long_runtime_generic(
+                                     r.data(), a.data(), a.size(), b.data(), b.size());
+                             });
+}
+
+double run_multiply_long_runtime_bmi2_adx_at(const std::size_t limbs, const unsigned trials) {
+    return measure_algorithm(limbs,
+                             trials,
+                             /*scratch_size=*/0,
+                             [](const std::span<uint_t>       r,
+                                const std::span<const uint_t> a,
+                                const std::span<const uint_t> b,
+                                scratch_for_test&) {
+                                 ::beman_big_int_multiply_long_runtime_bmi2_adx(
+                                     r.data(), a.data(), a.size(), b.data(), b.size());
+                             });
+}
+#endif
+
 double run_karatsuba_at(const std::size_t limbs, const unsigned trials) {
     return measure_algorithm(limbs,
                              trials,
@@ -264,6 +295,32 @@ double run_square_long_runtime_at(const std::size_t limbs, const unsigned trials
            scratch_for_test&) { ::beman_big_int_square_long_runtime(r.data(), a.data(), a.size()); });
 }
 
+#if defined(BEMAN_BIG_INT_ARCH_X86_64)
+// Generic vs BMI2+ADX basecase directly, same rationale as the multiply rows
+// above. Running the bmi2-adx row requires a CPU with BMI2 and ADX.
+double run_square_long_runtime_generic_at(const std::size_t limbs, const unsigned trials) {
+    return measure_algorithm(
+        limbs,
+        trials,
+        /*scratch_size=*/0,
+        [](const std::span<uint_t>       r,
+           const std::span<const uint_t> a,
+           const std::span<const uint_t>,
+           scratch_for_test&) { ::beman_big_int_square_long_runtime_generic(r.data(), a.data(), a.size()); });
+}
+
+double run_square_long_runtime_bmi2_adx_at(const std::size_t limbs, const unsigned trials) {
+    return measure_algorithm(
+        limbs,
+        trials,
+        /*scratch_size=*/0,
+        [](const std::span<uint_t>       r,
+           const std::span<const uint_t> a,
+           const std::span<const uint_t>,
+           scratch_for_test&) { ::beman_big_int_square_long_runtime_bmi2_adx(r.data(), a.data(), a.size()); });
+}
+#endif
+
 double run_square_karatsuba_at(const std::size_t limbs, const unsigned trials) {
     // cutoff_override=1 forces at least one Karatsuba splitting level; recursive
     // sub-squares use the default cutoff, as in production.
@@ -379,6 +436,10 @@ struct algorithm_runner {
 constexpr algorithm_runner algorithms[] = {
     {"schoolbook", 2, 200, run_long_at},
     {"multiply-long-runtime", 2, 400, run_multiply_long_runtime_at},
+#if defined(BEMAN_BIG_INT_ARCH_X86_64)
+    {"multiply-long-runtime-generic", 2, 400, run_multiply_long_runtime_generic_at},
+    {"multiply-long-runtime-bmi2-adx", 2, 400, run_multiply_long_runtime_bmi2_adx_at},
+#endif
     {"karatsuba", 4, 2000, run_karatsuba_at},
     {"toom-cook-3", 300, 10000, run_toom_cook_3_at},
     {"toom-cook-4", 300, 30000, run_toom_cook_4_at},
@@ -387,6 +448,10 @@ constexpr algorithm_runner algorithms[] = {
     {"fft", 800, 300000, run_fft_at},
     {"square-long", 4, 400, run_square_long_at},
     {"square-long-runtime", 2, 400, run_square_long_runtime_at},
+#if defined(BEMAN_BIG_INT_ARCH_X86_64)
+    {"square-long-runtime-generic", 2, 400, run_square_long_runtime_generic_at},
+    {"square-long-runtime-bmi2-adx", 2, 400, run_square_long_runtime_bmi2_adx_at},
+#endif
     {"square-karatsuba", 32, 2000, run_square_karatsuba_at},
     {"square-toom-cook-3", 200, 10000, run_square_toom_cook_3_at},
     {"square-toom-cook-4", 300, 30000, run_square_toom_cook_4_at},

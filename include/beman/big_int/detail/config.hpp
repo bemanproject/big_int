@@ -305,6 +305,18 @@ using int_wide_t = long long;
     #define BEMAN_BIG_INT_ARCH_X86_64
 #endif
 
+// Compile-time choice between the generic and BMI2+ADX x86-64 kernels
+#if !defined(BEMAN_BIG_INT_ARCH_X86_64)
+    #undef BEMAN_BIG_INT_X86_64_BMI2_ADX
+    #define BEMAN_BIG_INT_X86_64_BMI2_ADX 0
+#elif !defined(BEMAN_BIG_INT_X86_64_BMI2_ADX)
+    #if defined(__BMI2__) && defined(__ADX__)
+        #define BEMAN_BIG_INT_X86_64_BMI2_ADX 1
+    #else
+        #define BEMAN_BIG_INT_X86_64_BMI2_ADX 0
+    #endif
+#endif
+
 #if (((defined(BEMAN_BIG_INT_GCC) || defined(BEMAN_BIG_INT_CLANG)) && defined(__aarch64__)) || \
      (defined(BEMAN_BIG_INT_MSVC) && defined(_M_ARM64))) &&                                    \
     BEMAN_BIG_INT_LIMB_WIDTH == 64

@@ -51,7 +51,8 @@ jobs:
                     { "stdlibs": ["libstdc++"],
                       "tests": [
                         "Debug.Default", "Release.Default", "Release.TSan",
-                        "Debug.Coverage", "Release.-DBEMAN_BIG_INT_SIMD_MUL=ON"
+                        "Debug.Coverage", "Release.-DBEMAN_BIG_INT_SIMD_MUL=ON",
+                        "Release.-DBEMAN_BIG_INT_X86_64_BMI2_ADX=ON"
                       ]
                     }
                   ]
@@ -77,7 +78,8 @@ jobs:
                     { "stdlibs": ["libstdc++", "libc++"],
                       "tests": [
                         "Debug.Default", "Release.Default", "Release.TSan",
-                        "Release.MaxSan", "Release.-DBEMAN_BIG_INT_SIMD_MUL=ON"
+                        "Release.MaxSan", "Release.-DBEMAN_BIG_INT_SIMD_MUL=ON",
+                        "Release.-DBEMAN_BIG_INT_X86_64_BMI2_ADX=ON"
                       ]
                     }
                   ]
@@ -116,7 +118,8 @@ jobs:
                     { "stdlibs": ["stl"],
                       "tests": [
                         "Debug.Default", "Release.Default", "Release.MaxSan",
-                        "Release.-DBEMAN_BIG_INT_SIMD_MUL=ON"
+                        "Release.-DBEMAN_BIG_INT_SIMD_MUL=ON",
+                        "Release.-DBEMAN_BIG_INT_X86_64_BMI2_ADX=ON"
                       ]
                     }
                   ]

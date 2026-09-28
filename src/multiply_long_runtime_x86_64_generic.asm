@@ -67,7 +67,7 @@ GENERIC_X64_ADDMUL_LIMB MACRO off
 
 ENDM
 
-beman_big_int_multiply_long_runtime PROC
+beman_big_int_multiply_long_runtime_generic PROC
 
     ; Microsoft x64 calling convention:
     ; rcx = p_result, rdx = p_a, r8 = len_a, r9 = p_b
@@ -212,6 +212,6 @@ generic_x64_end:
     pop     rbx
     ret
 
-beman_big_int_multiply_long_runtime ENDP
+beman_big_int_multiply_long_runtime_generic ENDP
 
 END

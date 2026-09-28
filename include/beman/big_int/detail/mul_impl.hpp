@@ -120,7 +120,9 @@ constexpr void square_long(const std::span<uint_multiprecision_t>       result,
 // products it saves. Tuned end to end on x * x, where the x86_64 assembly
 // basecase wins from 5 limbs and the portable one from 4 (kernel-only timings
 // flatter the assembly down to 2 limbs, which the full dispatch does not bear out).
-#if defined(BEMAN_BIG_INT_ARCH_X86_64)
+#if defined(BEMAN_BIG_INT_ARCH_X86_64) && BEMAN_BIG_INT_X86_64_BMI2_ADX
+inline constexpr std::size_t square_long_cutoff = 10;
+#elif defined(BEMAN_BIG_INT_ARCH_X86_64)
 inline constexpr std::size_t square_long_cutoff = 5;
 #elif defined(BEMAN_BIG_INT_ARCH_AARCH64)
 // Tuned end to end on x * x (M4 Max): cutoffs 3-6 are within noise of each
@@ -133,11 +135,14 @@ inline constexpr std::size_t square_long_cutoff = 4;
 // Minimum number of limbs for Karatsuba to be worthwhile
 // Directly from Boost, and reconfirmed as correct on x86_64 and the portable kernel.
 // `karatsuba_fallback` (the recursion leaf size) stays at 40 everywhere: larger
-// leaves measured slower end to end on AArch64 too.
+// leaves measured slower end to end on AArch64 and with the x86_64 BMI2/ADX
+// kernels too.
 #if defined(BEMAN_BIG_INT_ARCH_AARCH64)
 // Tuned end to end (x * y through big_int, M4 Max) with the 2-row AArch64
 // schoolbook kernel; 96-112 is a noisy transition zone.
 inline constexpr std::size_t karatsuba_cutoff = 112;
+#elif defined(BEMAN_BIG_INT_ARCH_X86_64) && BEMAN_BIG_INT_X86_64_BMI2_ADX
+inline constexpr std::size_t karatsuba_cutoff = 47;
 #else
 inline constexpr std::size_t karatsuba_cutoff = 48;
 #endif
@@ -184,6 +189,8 @@ void multiply_karatsuba(const std::span<uint_multiprecision_t>       result,
 // Tuned end to end (x * x through big_int, M4 Max) with the 2-row AArch64
 // squaring kernel: a Karatsuba split only wins consistently from ~256 limbs.
 inline constexpr std::size_t square_karatsuba_cutoff = 256;
+#elif defined(BEMAN_BIG_INT_ARCH_X86_64) && BEMAN_BIG_INT_X86_64_BMI2_ADX
+inline constexpr std::size_t square_karatsuba_cutoff = 120;
 #else
 inline constexpr std::size_t square_karatsuba_cutoff = 72;
 #endif

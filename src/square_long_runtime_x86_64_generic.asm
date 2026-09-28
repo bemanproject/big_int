@@ -91,7 +91,7 @@ ENDM
 
 ; rbx, rsi and rdi are nonvolatile in this convention; the FRAME prologue
 ; records their saves so the function unwinds correctly.
-beman_big_int_square_long_runtime PROC FRAME
+beman_big_int_square_long_runtime_generic PROC FRAME
 
     push    rbx
     .pushreg rbx
@@ -265,6 +265,6 @@ generic_x64_sqr_end:
     pop     rbx
     ret
 
-beman_big_int_square_long_runtime ENDP
+beman_big_int_square_long_runtime_generic ENDP
 
 END
