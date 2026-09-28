@@ -89,6 +89,37 @@ add_library(
 add_library(beman::big_int ALIAS beman.big_int)
 target_compile_features(beman.big_int PUBLIC cxx_std_23)
 
+# [CMAKE.X86_64_BMI2_ADX]
+# x86-64 only: both the generic and BMI2+ADX schoolbook kernels are always
+# built, but which one the library calls is chosen at compile time (see
+# detail/config.hpp). AUTO leaves that choice to the compiler's own
+# __BMI2__/__ADX__ feature macros (set by -march=native, -march=broadwell or
+# newer, znver*, or -mbmi2 -madx). ON forces the BMI2/ADX kernels: the
+# resulting binary requires a CPU with both BMI2 and ADX (Intel Broadwell+ or
+# AMD Zen+), or it dies with an illegal instruction -- this is also how MSVC
+# opts in, since it defines neither __BMI2__ nor __ADX__. OFF forces the
+# generic kernels.
+set(BEMAN_BIG_INT_X86_64_BMI2_ADX
+    "AUTO"
+    CACHE STRING
+    "x86-64 only: select the BMI2+ADX schoolbook kernels at compile time. AUTO detects via compiler feature macros; ON always requires a CPU with BMI2 and ADX (Intel Broadwell+/AMD Zen+) or it dies with an illegal instruction, so MSVC needs ON since it defines no __BMI2__/__ADX__; OFF always uses the generic kernels. Default: AUTO. Values: { AUTO, ON, OFF }."
+)
+set_property(CACHE BEMAN_BIG_INT_X86_64_BMI2_ADX PROPERTY STRINGS AUTO ON OFF)
+
+string(TOUPPER "${BEMAN_BIG_INT_X86_64_BMI2_ADX}" _bigint_bmi2_adx_upper)
+if(_bigint_bmi2_adx_upper STREQUAL "AUTO")
+    set(_bigint_bmi2_adx_mode AUTO)
+elseif(_bigint_bmi2_adx_upper MATCHES "^(ON|TRUE|1)$")
+    set(_bigint_bmi2_adx_mode ON)
+elseif(_bigint_bmi2_adx_upper MATCHES "^(OFF|FALSE|0)$")
+    set(_bigint_bmi2_adx_mode OFF)
+else()
+    message(
+        FATAL_ERROR
+        "BEMAN_BIG_INT_X86_64_BMI2_ADX must be one of AUTO, ON, OFF (got: ${BEMAN_BIG_INT_X86_64_BMI2_ADX})"
+    )
+endif()
+
 # Only enable assembly and add the assembly source when using GCC, Clang, or
 # MSVC on x86_64 or AArch64. This avoids trying to compile .s/.S files with
 # toolchains that may not support the same assembler syntax or where we don't
@@ -112,7 +143,20 @@ if(
         PRIVATE
             src/multiply_long_runtime_x86_64_generic.s
             src/square_long_runtime_x86_64_generic.s
+            src/multiply_long_runtime_x86_64_bmi2_adx.s
+            src/square_long_runtime_x86_64_bmi2_adx.s
     )
+    if(_bigint_bmi2_adx_mode STREQUAL "ON")
+        target_compile_definitions(
+            beman.big_int
+            PUBLIC BEMAN_BIG_INT_X86_64_BMI2_ADX=1
+        )
+    elseif(_bigint_bmi2_adx_mode STREQUAL "OFF")
+        target_compile_definitions(
+            beman.big_int
+            PUBLIC BEMAN_BIG_INT_X86_64_BMI2_ADX=0
+        )
+    endif()
 elseif(
     (
         CMAKE_CXX_COMPILER_ID STREQUAL "GNU"
@@ -135,7 +179,20 @@ elseif(MSVC AND CMAKE_CXX_COMPILER_ARCHITECTURE_ID STREQUAL "x64")
         PRIVATE
             src/multiply_long_runtime_x86_64_generic.asm
             src/square_long_runtime_x86_64_generic.asm
+            src/multiply_long_runtime_x86_64_bmi2_adx.asm
+            src/square_long_runtime_x86_64_bmi2_adx.asm
     )
+    if(_bigint_bmi2_adx_mode STREQUAL "ON")
+        target_compile_definitions(
+            beman.big_int
+            PUBLIC BEMAN_BIG_INT_X86_64_BMI2_ADX=1
+        )
+    elseif(_bigint_bmi2_adx_mode STREQUAL "OFF")
+        target_compile_definitions(
+            beman.big_int
+            PUBLIC BEMAN_BIG_INT_X86_64_BMI2_ADX=0
+        )
+    endif()
 elseif(MSVC AND CMAKE_CXX_COMPILER_ARCHITECTURE_ID STREQUAL "ARM64")
     # ASM_MARMASM requires CMake >= 3.26; the project minimum (3.30) already covers it.
     enable_language(ASM_MARMASM)
