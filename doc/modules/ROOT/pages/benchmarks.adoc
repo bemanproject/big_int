@@ -143,7 +143,9 @@ https://github.com/eisenwave/std-big-int/blob/main/tests/beman/big_int/perf/elli
 
 Multiplication graduates to successively higher-order algorithms as the operand
 limb count grows. Below 48 limbs it uses schoolbook multiplication; above 48
-limbs it crosses over to Karatsuba. Successive Toom-Cook orders of 3, 4, 6.5, and
+limbs it crosses over to Karatsuba. On `AArch64`, where the assembly basecase
+stays ahead longer, that crossover is at 112 limbs (see
+<<benchmarks_arch_opts_aarch64>>). Successive Toom-Cook orders of 3, 4, 6.5, and
 8.5 cross over at 400, 1,600, 2,400, and 15,000 limbs respectively on the
 non-SIMD path. The FFT tier (a small-prime number-theoretic transform) crosses
 over at 24,000 limbs on the non-SIMD path and at 4,500 limbs on the SIMD path --
@@ -408,6 +410,14 @@ GNU-syntax file assembles under both Linux ELF (GCC/clang) and Apple Mach-O
 (AppleClang); a companion armasm64 `.asm` file covers MSVC on Windows ARM64.
 Detection happens at compile time, alongside the existing `x86_64` detection.
 
+Once rows are at least 8 limbs long (the longer operand has 8 limbs, or 9 for
+squaring), both routines process two rows per pass. The second row
+trails the first by one four-limb block, aligned so that it only reads result
+limbs the first row has already finished with. The two rows' carry chains are
+independent, so the core overlaps them, hiding much of each row's carry
+latency. Smaller operands, and an odd row left over at the end, use the
+one-row code.
+
 The table below compares the portable pass:[C++] `multiply_long` against the
 assembly `multiply_long_runtime`, measured per operation on an Apple M4 Max
 (`appleclang-release`).
@@ -416,11 +426,11 @@ assembly `multiply_long_runtime`, measured per operation on an Apple M4 Max
 |===
 | limbs | pass:[C++] `multiply_long` [ns] | ASM `multiply_long_runtime` [ns]
 
-| 4     |      7 |      8
-| 8     |     32 |     26
-| 16    |    142 |     75
-| 32    |    412 |    273
-| 64    |   1785 |   1105
+| 4     |      6 |      8
+| 8     |     28 |     20
+| 16    |    121 |     63
+| 32    |    384 |    245
+| 64    |   1659 |    953
 |===
 
 Squaring follows the same design as the `x86_64` routine: it builds the
@@ -435,11 +445,11 @@ multiplication routine.
 |===
 | limbs | pass:[C++] `square_long` [ns] | ASM multiply `a * a` [ns] | ASM square [ns]
 
-| 4     |    13 |      8 |     6
-| 8     |    41 |     26 |    20
-| 16    |    98 |     77 |    70
-| 32    |   322 |    268 |   186
-| 64    |  1008 |   1117 |   611
+| 4     |    12 |      8 |     6
+| 8     |    36 |     19 |    18
+| 16    |    85 |     66 |    55
+| 32    |   295 |    241 |   163
+| 64    |   899 |    946 |   548
 |===
 
 The implementations can be found in
@@ -448,6 +458,33 @@ https://github.com/eisenwave/std-big-int/blob/main/src/multiply_long_runtime_aar
 https://github.com/eisenwave/std-big-int/blob/main/src/square_long_runtime_aarch64_generic.S[square_long_runtime_aarch64_generic.S],
 and
 https://github.com/eisenwave/std-big-int/blob/main/src/square_long_runtime_aarch64_generic.asm[square_long_runtime_aarch64_generic.asm].
+
+With these basecases, `AArch64` uses schoolbook multiplication up to 112 limbs
+(the shorter operand's length) instead of 48, and the squaring basecase up to
+256 limbs instead of 72. Both cutoffs were tuned end to end on the M4 Max,
+including unbalanced products. The Karatsuba recursion keeps its 40-limb leaves.
+
+[#benchmarks_arch_opts_aarch64_neon]
+==== NEON, SVE2 and SME
+
+NEON has no 64 x 64 -> 128-bit multiply, so a vector kernel has to split limbs
+into smaller digits. A prototype was measured and not adopted. It multiplied
+32-bit by 16-bit digits with `UMLAL`, so that 64-bit lanes can accumulate
+column sums without overflow, and ran alongside scalar rows. On the M4 Max,
+the vector part alone reached 0.3 to 0.6 limb-products (64 x 64-bit partial
+products) per cycle at 16 to 47 limbs. The scalar routine reached 0.8 to 0.9.
+That put the expected gain from interleaving the two at only about 5 to 15
+percent, and only near the top of the schoolbook range.
+
+The scalar routine is already close to the core's limit. The M4's 64-bit
+multiplies and flag-setting additions compete for the same execution pipes,
+which caps a schoolbook row at about one cycle per limb-product.
+
+SVE2's add-with-carry-long instructions (`ADCLB`/`ADCLT`) are not available
+outside streaming mode on Apple cores. SME's streaming mode adds a mode switch
+on every call and moves data through the L2 cache. Its outer products also
+produce individual partial products rather than the column sums that
+schoolbook multiplication needs.
 
 [#benchmarks_sources]
 == Source programs
