@@ -29,9 +29,6 @@
 // Writes exactly 2 * len_a limbs, so p_result need not be pre-zeroed (matching
 // multiply_long_runtime). p_result must not alias p_a.
 //
-// Leaf function: only x0-x17 are touched, never x18 or x19-x30/sp, so there is
-// no prologue, no stack, and nothing beyond .cfi_startproc/.cfi_endproc.
-//
 // a^2 = D + 2 * T, where D = sum a[i]^2 * B^(2i) is the diagonal and
 // T = sum_{i < j} a[i] * a[j] * B^(i + j) the off-diagonal triangle. The first
 // phase builds T with one row per a[i], the same mul/addmul rows as
@@ -39,7 +36,7 @@
 // the widening multiplies of a general product. The second phase is a single
 // pass that doubles T and adds D.
 //
-// Register allocation while building the triangle:
+// Register allocation while building the triangle, solo-row path:
 //
 //   x0 -> result walk: the next limb to read/write within the current row
 //   x1 -> &a[i], the row's multiplier pointer; the ldr below advances it to
@@ -66,6 +63,12 @@
 // later row starts one limb further on in both a and result and ends one limb
 // further on, so its accumulating span is always already written and its
 // carry-out slot never is: no limb of the triangle needs pre-zeroing.
+//
+// This solo-row code is used directly for small operands (see the row-pair
+// size gate below) and it is also where the row-pair path hands off the
+// last few rows of every triangle (row lengths eventually drop below the
+// row-pair path's threshold), so it remains a fully general, self-contained
+// implementation. Leaf on this path: only x0-x17 are touched.
 
 // One remainder limb of row 0: result[i + j] = a[j] * a[i] + carry.
 .macro GENERIC_ARM64_SQR_MUL_LIMB
@@ -171,6 +174,88 @@
     add     x8, x7, x9              // x8 = where the 4x unrolled body takes over
 .endm
 
+// ---------------------------------------------------------------------
+// Row-pair path: triangle rows i and i + 1 run interleaved, for the same
+// reason and in the same shape as multiply_long_runtime's row pairs (see
+// that file for the full derivation): row A (row i) is the plain solo-row
+// code above, unchanged, on its usual registers; row B (row i + 1) runs on
+// a second register set via the two ROWB macros below, so that one row's
+// carry chain and load-use latency can be hidden behind the other's
+// independent work, with the two rows' shared result accesses arranged to
+// hit the same 4-limb window (forwarding-friendly) rather than straddling
+// it.
+//
+// Row i has length len_i = len_a - 1 - i and starts at a[i + 1], result[2i
+// + 1]; row i + 1 has length len_i - 1 (one shorter) and starts at a[i + 2],
+// result[2i + 3] -- two result limbs further on, not one, since each row
+// advances the result base by two limbs, not one, unlike multiply's equal-
+// length rows. Both rows still scan to the SAME a_end, so row B's natural
+// block index k needs shifting back by 2 (not multiply's 1) to land on row
+// A's block boundaries: row B's block m covers a-relative index
+// [4m - 2, 4m + 1], giving a row B prefix of (len_i & 3) + 2 single-limb
+// elements (row A's own remainder, plus the 2 elements block 0 would have
+// covered) before the first full paired block.
+//
+// Row lengths shrink going down the triangle, so this path is a prefix of
+// the triangle: it keeps pairing rows (i, i + 1) as long as row i has at
+// least two 4-limb blocks, then hands off whatever is left (always at least
+// a few whole rows; see the gate below) to the solo-row path above, entered
+// at its outer-loop label so it keeps every row after the hand-off exactly
+// as before.
+//
+//   Row A (row i):     rp=x0,  ap=x7,  mult=x5,  carry=x6  (solo-row registers)
+//   Row B (row i + 1): rp=x19, ap=x20, mult=x21, carry=x22
+//   Fixed across the whole call: a_end=x2, a base=x3, row mult walk=x1
+//     (shared with the solo-row path: it always points at the next
+//     unconsumed row's multiplier), next pair's result base=x4
+//   Per pair: row A's 4x boundary=x8, row B's prefix count=x25 (x26 counts
+//     it down)
+//   Temporaries x9-x17, shared by every row A and row B macro invocation.
+// ---------------------------------------------------------------------
+
+.macro GENERIC_ARM64_SQR_ADDMUL_LIMB_ROWB rp, ap, mult, carry
+    ldr     x9, [\ap], #8
+    ldr     x12, [\rp]
+    mul     x10, x9, \mult
+    umulh   x11, x9, \mult
+    adds    x10, x10, x12
+    adc     x11, x11, xzr
+    adds    x10, x10, \carry
+    adc     \carry, x11, xzr
+    str     x10, [\rp], #8
+.endm
+
+.macro GENERIC_ARM64_SQR_ADDMUL_BLOCK4_ROWB rp, ap, mult, carry
+    ldp     x9, x10, [\ap], #16
+    ldp     x11, x12, [\ap], #16
+    ldp     x13, x14, [\rp]
+    ldp     x15, x16, [\rp, #16]
+
+    mul     x17, x9, \mult
+    adds    x13, x13, x17
+    mul     x17, x10, \mult
+    adcs    x14, x14, x17
+    mul     x17, x11, \mult
+    adcs    x15, x15, x17
+    mul     x17, x12, \mult
+    adcs    x16, x16, x17
+    adc     x17, xzr, xzr
+
+    umulh   x9, x9, \mult
+    umulh   x10, x10, \mult
+    umulh   x11, x11, \mult
+    umulh   x12, x12, \mult
+
+    adds    x13, x13, \carry
+    adcs    x14, x14, x9
+    adcs    x15, x15, x10
+    adcs    x16, x16, x11
+    adc     \carry, x12, x17
+
+    stp     x13, x14, [\rp], #16
+    stp     x15, x16, [\rp], #16
+.endm
+
 .p2align 2
 SYM(beman_big_int_square_long_runtime):
 .cfi_startproc
@@ -181,6 +266,166 @@ SYM(beman_big_int_square_long_runtime):
     add     x2, x1, x2, lsl #3      // x2 = a_end = a + 8 * len_a
     mov     x3, x1                  // a base, kept for the diagonal pass
     add     x4, x0, #8              // row 0 starts at result + 8 * (2 * 0 + 1)
+
+    // Row-pair gate: pairing row 0 needs its length (len_a - 1) to have at
+    // least two 4-limb blocks, i.e. len_a - 1 >= 8, i.e. len_a >= 9. Below
+    // that, the whole triangle runs through the solo-row path unchanged.
+
+    sub     x9, x2, x1
+    cmp     x9, #72
+    b.lo    L(generic_arm64_sqr_solo_path)
+
+    sub     sp, sp, #64
+    .cfi_def_cfa_offset 64
+    stp     x19, x20, [sp]
+    stp     x21, x22, [sp, #16]
+    stp     x23, x24, [sp, #32]
+    stp     x25, x26, [sp, #48]
+    .cfi_offset x19, -64
+    .cfi_offset x20, -56
+    .cfi_offset x21, -48
+    .cfi_offset x22, -40
+    .cfi_offset x23, -32
+    .cfi_offset x24, -24
+    .cfi_offset x25, -16
+    .cfi_offset x26, -8
+
+    // ---- Pair 0: row A is row 0, so it stores instead of accumulating. ----
+
+    ldr     x5, [x1], #8    // row A multiplier = a[0]
+    mov     x7, x1          // row A a-walk = a[1]
+    mov     x6, xzr
+    mov     x0, x4          // row A result walk = this pair's result base
+
+    sub     x9, x2, x7
+    and     x9, x9, #24
+    add     x8, x7, x9       // row A's 4x boundary
+    lsr     x25, x9, #3
+    add     x25, x25, #2     // row B's prefix length = row A's remainder + 2
+
+    cmp     x7, x8
+    b.eq    L(generic_arm64_sqr_pair0_mul_4x)
+
+L(generic_arm64_sqr_pair0_mul_rmdr):
+    GENERIC_ARM64_SQR_MUL_LIMB
+    cmp     x7, x8
+    b.ne    L(generic_arm64_sqr_pair0_mul_rmdr)
+
+L(generic_arm64_sqr_pair0_mul_4x):
+    GENERIC_ARM64_SQR_MUL_4X    // row A block 0
+    GENERIC_ARM64_SQR_MUL_4X    // row A block 1 (guaranteed to exist)
+
+    ldr     x21, [x1], #8       // row B multiplier = a[1]
+    mov     x20, x1             // row B a-walk = a[2]
+    add     x19, x4, #16        // row B result walk = pair base + 2 limbs
+    mov     x22, xzr
+    mov     x26, x25
+
+L(generic_arm64_sqr_pair0_rowb_prefix):
+    GENERIC_ARM64_SQR_ADDMUL_LIMB_ROWB x19, x20, x21, x22
+    subs    x26, x26, #1
+    b.ne    L(generic_arm64_sqr_pair0_rowb_prefix)
+
+    cmp     x7, x2
+    b.eq    L(generic_arm64_sqr_pair0_tail)
+
+L(generic_arm64_sqr_pair0_steady):
+    GENERIC_ARM64_SQR_MUL_4X
+    GENERIC_ARM64_SQR_ADDMUL_BLOCK4_ROWB x19, x20, x21, x22
+    cmp     x7, x2
+    b.ne    L(generic_arm64_sqr_pair0_steady)
+
+L(generic_arm64_sqr_pair0_tail):
+    str     x6, [x0]             // row A's carry
+    GENERIC_ARM64_SQR_ADDMUL_BLOCK4_ROWB x19, x20, x21, x22    // row B's last block
+    GENERIC_ARM64_SQR_ADDMUL_LIMB_ROWB   x19, x20, x21, x22    // row B's leftover element
+    str     x22, [x19]           // row B's carry
+
+    add     x4, x4, #32          // two rows on: next pair's result base
+
+    // ---- Every later pair: both rows accumulate. ----
+
+L(generic_arm64_sqr_pair_check):
+    sub     x9, x2, x1
+    cmp     x9, #72
+    b.lo    L(generic_arm64_sqr_pair_done)    // not enough left for another pair
+
+    ldr     x5, [x1], #8
+    mov     x7, x1
+    mov     x6, xzr
+    mov     x0, x4
+
+    sub     x9, x2, x7
+    and     x9, x9, #24
+    add     x8, x7, x9
+    lsr     x25, x9, #3
+    add     x25, x25, #2
+
+    cmp     x7, x8
+    b.eq    L(generic_arm64_sqr_pair_addmul_4x)
+
+L(generic_arm64_sqr_pair_addmul_rmdr):
+    GENERIC_ARM64_SQR_ADDMUL_LIMB
+    cmp     x7, x8
+    b.ne    L(generic_arm64_sqr_pair_addmul_rmdr)
+
+L(generic_arm64_sqr_pair_addmul_4x):
+    GENERIC_ARM64_SQR_ADDMUL_4X
+    GENERIC_ARM64_SQR_ADDMUL_4X
+
+    ldr     x21, [x1], #8
+    mov     x20, x1
+    add     x19, x4, #16
+    mov     x22, xzr
+    mov     x26, x25
+
+L(generic_arm64_sqr_pair_rowb_prefix):
+    GENERIC_ARM64_SQR_ADDMUL_LIMB_ROWB x19, x20, x21, x22
+    subs    x26, x26, #1
+    b.ne    L(generic_arm64_sqr_pair_rowb_prefix)
+
+    cmp     x7, x2
+    b.eq    L(generic_arm64_sqr_pair_tail)
+
+L(generic_arm64_sqr_pair_steady):
+    GENERIC_ARM64_SQR_ADDMUL_4X
+    GENERIC_ARM64_SQR_ADDMUL_BLOCK4_ROWB x19, x20, x21, x22
+    cmp     x7, x2
+    b.ne    L(generic_arm64_sqr_pair_steady)
+
+L(generic_arm64_sqr_pair_tail):
+    str     x6, [x0]
+    GENERIC_ARM64_SQR_ADDMUL_BLOCK4_ROWB x19, x20, x21, x22
+    GENERIC_ARM64_SQR_ADDMUL_LIMB_ROWB   x19, x20, x21, x22
+    str     x22, [x19]
+
+    add     x4, x4, #32
+    b       L(generic_arm64_sqr_pair_check)
+
+L(generic_arm64_sqr_pair_done):
+
+    // Hand off whatever rows are left (always at least a few whole rows;
+    // see the gate above) to the solo-row outer loop, unchanged: x1 and x4
+    // already point at the next row's multiplier and result base, exactly
+    // as that loop leaves them between its own rows.
+
+    ldp     x19, x20, [sp]
+    ldp     x21, x22, [sp, #16]
+    ldp     x23, x24, [sp, #32]
+    ldp     x25, x26, [sp, #48]
+    add     sp, sp, #64
+    .cfi_def_cfa_offset 0
+    .cfi_restore x19
+    .cfi_restore x20
+    .cfi_restore x21
+    .cfi_restore x22
+    .cfi_restore x23
+    .cfi_restore x24
+    .cfi_restore x25
+    .cfi_restore x26
+    b       L(generic_arm64_sqr_outer_loop_start)
+
+L(generic_arm64_sqr_solo_path):
 
     GENERIC_ARM64_SQR_ROW_SETUP
 
