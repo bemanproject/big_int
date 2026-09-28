@@ -131,8 +131,16 @@ inline constexpr std::size_t square_long_cutoff = 4;
 #endif
 
 // Minimum number of limbs for Karatsuba to be worthwhile
-// Directly from Boost, and reconfirmed as correct
-inline constexpr std::size_t karatsuba_cutoff   = 48;
+// Directly from Boost, and reconfirmed as correct on x86_64 and the portable kernel.
+// `karatsuba_fallback` (the recursion leaf size) stays at 40 everywhere: larger
+// leaves measured slower end to end on AArch64 too.
+#if defined(BEMAN_BIG_INT_ARCH_AARCH64)
+// Tuned end to end (x * y through big_int, M4 Max) with the 2-row AArch64
+// schoolbook kernel; 96-112 is a noisy transition zone.
+inline constexpr std::size_t karatsuba_cutoff = 112;
+#else
+inline constexpr std::size_t karatsuba_cutoff = 48;
+#endif
 inline constexpr std::size_t karatsuba_fallback = 40;
 
 // Heuristic estimate of scratch space needed for Karatsuba multiplication.
@@ -172,7 +180,13 @@ void multiply_karatsuba(const std::span<uint_multiprecision_t>       result,
 // basecase stays ahead of recursion roughly twice as long as schoolbook does
 // against general Karatsuba (the same SQR/MUL threshold ratio GMP observes).
 // Tuned via multiplication_stress_bench.
+#if defined(BEMAN_BIG_INT_ARCH_AARCH64)
+// Tuned end to end (x * x through big_int, M4 Max) with the 2-row AArch64
+// squaring kernel: a Karatsuba split only wins consistently from ~256 limbs.
+inline constexpr std::size_t square_karatsuba_cutoff = 256;
+#else
 inline constexpr std::size_t square_karatsuba_cutoff = 72;
+#endif
 
 // ---------------------------------------------------------------------------
 // Squaring counterpart of multiply_karatsuba: one evaluation (a_h + a_l) per
