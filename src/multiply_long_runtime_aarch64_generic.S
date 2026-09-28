@@ -51,7 +51,12 @@
 // x0 needs an explicit rewind (row length back, then one limb forward)
 // once a row's carry has been stored.
 //
-// Leaf function: only x0-x17 are used, no stack, no calls.
+// This is the SOLO-ROW path: one row at a time, exactly as before. It is
+// used directly for tiny operands (see the size gate below) and it is also
+// where the ROW-PAIR path below hands off its final unpaired row, so it
+// remains a fully general, self-contained implementation.
+//
+// Leaf on this path only: x0-x17, no stack, no calls.
 
 // One limb of the first row: result[i] = a[i] * b[0] + carry.
 .macro GENERIC_ARM64_MUL_LIMB
@@ -157,6 +162,101 @@
     stp     x15, x16, [x0], #16   // result[i+2 .. i+3] = r2, r3; result walk advances by 32
 .endm
 
+// ---------------------------------------------------------------------
+// Row-pair path: rows j and j+1 run interleaved, each an independent
+// ADDMUL_BLOCK4/LIMB carry chain, so the out-of-order engine can hide one
+// row's load-use and carry latency behind the other's independent work.
+//
+// Row j ("row A") is always the plain solo-row code above, unchanged, on
+// its usual registers (x0, x5, x6, x7). Row j+1 ("row B") runs on a second
+// register set (x19 result walk, x20 a walk, x21 multiplier, x22 carry) via
+// the two macros below, which are byte-for-byte the solo-row ADDMUL bodies
+// with the persistent registers parameterized; the temporaries (x9-x17)
+// stay hardcoded and are shared with row A's macro invocations that
+// surround them; each invocation's temps are dead before the next one
+// reuses the names, so register renaming resolves the reuse without
+// introducing a real dependency between the two rows.
+//
+// Row B's own natural 4-limb blocks (its a-walk starts one limb after row
+// A's) would straddle two of row A's stp pairs -- a load spanning two
+// stores defeats store-to-load forwarding. Shifting row B's block
+// boundaries back by one limb fixes this: row B's block m covers
+// a[4m - 1 .. 4m + 2], which lands on result[4m .. 4m + 3] -- exactly row
+// A's block m stp pair -- instead of straddling row A's blocks m and m + 1.
+// Row B's block m is always issued one loop iteration after row A's block m
+// (row A's block m + 1 runs in between), so row B never reads anything row
+// A has not already committed, and row A never reads anything row B wrote:
+// the dependency is one-directional, with a whole iteration's worth of
+// independent row-A work to absorb the forwarding latency.
+//
+// Block index 0 does not exist for row B (a[-1] is invalid); the first
+// (len_a & 3) + 3 elements -- row A's own remainder, plus the three
+// elements block 0 would have covered -- are instead handled by single-limb
+// steps, run once row A has produced that much data (its remainder and its
+// first 4-limb block). This prefix length only depends on len_a, so it is
+// computed once per call, not once per pair. Symmetrically, row B's last
+// block cannot reach the final element of the row; that one element and
+// row B's carry are handled after row A is completely done.
+//
+// This path is only entered once len_a is large enough to guarantee at
+// least two 4-limb blocks (see the size gate below), so the "row A block 0,
+// then row A block 1, then row B's prefix" sequence and the "at least one
+// more row A block after that" checks below never see fewer blocks than
+// they assume.
+//
+//   Row A (row j):   rp=x0,  ap=x7,  mult=x5,  carry=x6  (solo-row registers)
+//   Row B (row j+1): rp=x19, ap=x20, mult=x21, carry=x22
+//   Fixed across the whole call: a_base=x1, a_end=x2, b walk=x3,
+//     len_a in bytes=x23, row B prefix length=x25
+//   Per pair: pair result base=x24, row B prefix counter=x26
+//   Temporaries x9-x17, shared by every row A and row B macro invocation.
+// ---------------------------------------------------------------------
+
+.macro GENERIC_ARM64_ADDMUL_LIMB_ROWB rp, ap, mult, carry
+    ldr     x9, [\ap], #8    // x9 = a[i], a walk advances
+    ldr     x10, [\rp]       // x10 = result[pos]
+    mul     x11, x9, \mult   // x11 = low64(a[i] * mult)
+    umulh   x12, x9, \mult   // x12 = high64(a[i] * mult)
+
+    adds    x11, x11, x10    // low64 += result[pos]
+    adc     x12, x12, xzr    // high64 += carry_flag
+    adds    x11, x11, \carry // low64 += carry
+    adc     \carry, x12, xzr // carry = high64 + carry_flag
+
+    str     x11, [\rp], #8   // result[pos] = low64, result walk advances
+.endm
+
+.macro GENERIC_ARM64_ADDMUL_BLOCK4_ROWB rp, ap, mult, carry
+    ldp     x9, x10, [\ap], #16
+    ldp     x11, x12, [\ap], #16
+    ldp     x13, x14, [\rp]
+    ldp     x15, x16, [\rp, #16]
+
+    mul     x17, x9, \mult
+    adds    x13, x13, x17
+    mul     x17, x10, \mult
+    adcs    x14, x14, x17
+    mul     x17, x11, \mult
+    adcs    x15, x15, x17
+    mul     x17, x12, \mult
+    adcs    x16, x16, x17
+    adc     x17, xzr, xzr
+
+    umulh   x9, x9, \mult
+    umulh   x10, x10, \mult
+    umulh   x11, x11, \mult
+    umulh   x12, x12, \mult
+
+    adds    x13, x13, \carry
+    adcs    x14, x14, x9
+    adcs    x15, x15, x10
+    adcs    x16, x16, x11
+    adc     \carry, x12, x17
+
+    stp     x13, x14, [\rp], #16
+    stp     x15, x16, [\rp], #16
+.endm
+
 .p2align 2
 SYM(beman_big_int_multiply_long_runtime):
 .cfi_startproc
@@ -177,6 +277,19 @@ SYM(beman_big_int_multiply_long_runtime):
 L(generic_arm64_sizes_ordered):
 
     cbz     x4, L(generic_arm64_end)   // an empty length leaves nothing to do
+
+    // Row pairing needs at least one full row pair, and needs len_a big
+    // enough that row A always has at least two 4-limb blocks (so "block 0,
+    // then block 1, then row B's prefix" and the "any blocks left after
+    // that" check are always valid). Anything smaller falls straight through
+    // into the solo-row path below, unchanged and immediately following, so
+    // tiny operands cost exactly one not-taken branch more than before, not
+    // a jump to a differently-placed copy of the same code.
+
+    cmp     x2, #8
+    b.hs    L(generic_arm64_row_pair_maybe)
+
+L(generic_arm64_solo_path):
 
     and     x9, x2, #3           // x9 = len_a & 3
     add     x8, x1, x9, lsl #3   // x8 = a + 8 * (len_a & 3): remainder/4x boundary
@@ -267,6 +380,193 @@ L(generic_arm64_outer_loop_end):
 
 L(generic_arm64_end):
 
+    ret
+
+// ---------------------------------------------------------------------
+// Row-pair path (see the macro block comment above for the design). Only
+// entered once len_a and len_b are both large enough; everything above is
+// the unmodified solo-row implementation.
+// ---------------------------------------------------------------------
+
+L(generic_arm64_row_pair_maybe):
+
+    cmp     x4, #2
+    b.lo    L(generic_arm64_solo_path)
+
+    sub     sp, sp, #64
+    .cfi_def_cfa_offset 64
+    stp     x19, x20, [sp]
+    stp     x21, x22, [sp, #16]
+    stp     x23, x24, [sp, #32]
+    stp     x25, x26, [sp, #48]
+    .cfi_offset x19, -64
+    .cfi_offset x20, -56
+    .cfi_offset x21, -48
+    .cfi_offset x22, -40
+    .cfi_offset x23, -32
+    .cfi_offset x24, -24
+    .cfi_offset x25, -16
+    .cfi_offset x26, -8
+
+    and     x9, x2, #3            // x9 = len_a & 3 (row remainder length)
+    add     x8, x1, x9, lsl #3    // x8 = a + 8 * (len_a & 3): remainder/4x boundary
+    add     x25, x9, #3           // x25 = row B's prefix length (constant for every pair)
+    lsl     x23, x2, #3           // x23 = len_a * 8 (bytes), constant
+    add     x2, x1, x23           // x2 = a_end
+
+    // ---- Pair 0: row A is row 0, so it stores instead of accumulating. ----
+
+    ldr     x5, [x3], #8   // x5 = b[0]
+    ldr     x21, [x3], #8  // x21 = b[1]
+    mov     x24, x0        // x24 = this pair's result base
+    mov     x7, x1         // row A a-walk = a base
+    mov     x6, xzr        // row A carry = 0
+
+    cmp     x7, x8
+    b.eq    L(generic_arm64_pair0_mul_4x)
+
+L(generic_arm64_pair0_mul_rmdr):
+    GENERIC_ARM64_MUL_LIMB
+    cmp     x7, x8
+    b.ne    L(generic_arm64_pair0_mul_rmdr)
+
+L(generic_arm64_pair0_mul_4x):
+    GENERIC_ARM64_MUL_BLOCK4    // row A block 0
+    GENERIC_ARM64_MUL_BLOCK4    // row A block 1 (guaranteed to exist)
+
+    mov     x20, x1             // row B a-walk = a base
+    add     x19, x24, #8        // row B result walk = pair base + 1 limb
+    mov     x22, xzr            // row B carry = 0
+    mov     x26, x25            // row B prefix counter = prefix length
+
+L(generic_arm64_pair0_rowb_prefix):
+    GENERIC_ARM64_ADDMUL_LIMB_ROWB x19, x20, x21, x22
+    subs    x26, x26, #1
+    b.ne    L(generic_arm64_pair0_rowb_prefix)
+
+    cmp     x7, x2
+    b.eq    L(generic_arm64_pair0_tail)
+
+L(generic_arm64_pair0_steady):
+    GENERIC_ARM64_MUL_BLOCK4                        // row A's next block
+    GENERIC_ARM64_ADDMUL_BLOCK4_ROWB x19, x20, x21, x22    // row B's lagging block
+    cmp     x7, x2
+    b.ne    L(generic_arm64_pair0_steady)
+
+L(generic_arm64_pair0_tail):
+    str     x6, [x0]                                // row A's carry
+    GENERIC_ARM64_ADDMUL_BLOCK4_ROWB x19, x20, x21, x22    // row B's last block
+    GENERIC_ARM64_ADDMUL_LIMB_ROWB   x19, x20, x21, x22    // row B's leftover element
+    str     x22, [x19]                              // row B's carry
+
+    sub     x0, x0, x23   // rewind the result walk back to this pair's start...
+    add     x0, x0, #16   // ...then two limbs on, to the next pair's row A base
+
+    subs    x4, x4, #2
+
+    // ---- Every later pair: both rows accumulate. ----
+
+L(generic_arm64_pair_check):
+    cmp     x4, #2
+    b.lo    L(generic_arm64_pair_leftover)
+
+    ldr     x5, [x3], #8
+    ldr     x21, [x3], #8
+    mov     x24, x0
+    mov     x7, x1
+    mov     x6, xzr
+
+    cmp     x7, x8
+    b.eq    L(generic_arm64_pair_addmul_4x)
+
+L(generic_arm64_pair_addmul_rmdr):
+    GENERIC_ARM64_ADDMUL_LIMB
+    cmp     x7, x8
+    b.ne    L(generic_arm64_pair_addmul_rmdr)
+
+L(generic_arm64_pair_addmul_4x):
+    GENERIC_ARM64_ADDMUL_BLOCK4    // row A block 0
+    GENERIC_ARM64_ADDMUL_BLOCK4    // row A block 1
+
+    mov     x20, x1
+    add     x19, x24, #8
+    mov     x22, xzr
+    mov     x26, x25
+
+L(generic_arm64_pair_rowb_prefix):
+    GENERIC_ARM64_ADDMUL_LIMB_ROWB x19, x20, x21, x22
+    subs    x26, x26, #1
+    b.ne    L(generic_arm64_pair_rowb_prefix)
+
+    cmp     x7, x2
+    b.eq    L(generic_arm64_pair_tail)
+
+L(generic_arm64_pair_steady):
+    GENERIC_ARM64_ADDMUL_BLOCK4
+    GENERIC_ARM64_ADDMUL_BLOCK4_ROWB x19, x20, x21, x22
+    cmp     x7, x2
+    b.ne    L(generic_arm64_pair_steady)
+
+L(generic_arm64_pair_tail):
+    str     x6, [x0]
+    GENERIC_ARM64_ADDMUL_BLOCK4_ROWB x19, x20, x21, x22
+    GENERIC_ARM64_ADDMUL_LIMB_ROWB   x19, x20, x21, x22
+    str     x22, [x19]
+
+    sub     x0, x0, x23
+    add     x0, x0, #16
+
+    subs    x4, x4, #2
+    b       L(generic_arm64_pair_check)
+
+L(generic_arm64_pair_leftover):
+
+    // len_b was odd: one row left over (never row 0, so it accumulates).
+    // x0/x1/x2/x3/x8 are already exactly where the solo-row loop expects
+    // them, so this is that loop's body for a single row.
+
+    cbz     x4, L(generic_arm64_pair_done)
+
+    ldr     x5, [x3], #8
+    mov     x7, x1
+    mov     x6, xzr
+
+    cmp     x7, x8
+    b.eq    L(generic_arm64_pair_leftover_4x)
+
+L(generic_arm64_pair_leftover_rmdr):
+    GENERIC_ARM64_ADDMUL_LIMB
+    cmp     x7, x8
+    b.ne    L(generic_arm64_pair_leftover_rmdr)
+
+L(generic_arm64_pair_leftover_4x):
+    cmp     x7, x2
+    b.eq    L(generic_arm64_pair_leftover_end)
+
+L(generic_arm64_pair_leftover_unroll):
+    GENERIC_ARM64_ADDMUL_BLOCK4
+    cmp     x7, x2
+    b.ne    L(generic_arm64_pair_leftover_unroll)
+
+L(generic_arm64_pair_leftover_end):
+    str     x6, [x0]
+
+L(generic_arm64_pair_done):
+
+    ldp     x19, x20, [sp]
+    ldp     x21, x22, [sp, #16]
+    ldp     x23, x24, [sp, #32]
+    ldp     x25, x26, [sp, #48]
+    add     sp, sp, #64
+    .cfi_def_cfa_offset 0
+    .cfi_restore x19
+    .cfi_restore x20
+    .cfi_restore x21
+    .cfi_restore x22
+    .cfi_restore x23
+    .cfi_restore x24
+    .cfi_restore x25
+    .cfi_restore x26
     ret
 
 .cfi_endproc
