@@ -8,11 +8,14 @@
 #define BEMAN_BIG_INT_TESTS_X86_64_BMI2_ADX_SUPPORT_HPP
 
 #include <beman/big_int/detail/config.hpp>
+#include <beman/big_int/detail/multiply_long_runtime.hpp>
+#include <beman/big_int/detail/square_long_runtime.hpp>
 
 #if defined(BEMAN_BIG_INT_ARCH_X86_64)
 
     #if defined(BEMAN_BIG_INT_MSVC)
         #include <intrin.h>
+        #include <windows.h>
     #else
         #include <cpuid.h>
     #endif
@@ -46,6 +49,47 @@ inline bool cpu_has_bmi2_and_adx() noexcept {
     return (ebx & bmi2_bit) != 0 && (ebx & adx_bit) != 0;
 }
 
+    #if defined(BEMAN_BIG_INT_MSVC)
+// Windows-on-ARM's x64 emulator has been observed to report BMI2+ADX via
+// CPUID without actually executing mulx/adcx/adox: they raise SEH exception
+// 0xC000001D (illegal instruction) instead. This runs the real kernels once
+// on a tiny input to check, inside SEH. No C++ objects needing unwinding may
+// live in a function that uses __try/__except, so this stays a small
+// standalone function operating only on local arrays of plain integers.
+inline bool bmi2_adx_kernels_actually_run() noexcept {
+    __try {
+        beman::big_int::uint_multiprecision_t a[2]       = {1, 2};
+        beman::big_int::uint_multiprecision_t b[2]       = {3, 4};
+        beman::big_int::uint_multiprecision_t mul_out[4] = {0, 0, 0, 0};
+        ::beman_big_int_multiply_long_runtime_bmi2_adx(mul_out, a, 2, b, 2);
+
+        beman::big_int::uint_multiprecision_t sq_out[4] = {0, 0, 0, 0};
+        ::beman_big_int_square_long_runtime_bmi2_adx(sq_out, a, 2);
+        return true;
+    } __except (GetExceptionCode() == static_cast<DWORD>(EXCEPTION_ILLEGAL_INSTRUCTION)
+                    ? EXCEPTION_EXECUTE_HANDLER
+                    : EXCEPTION_CONTINUE_SEARCH) {
+        return false;
+    }
+}
+    #endif // defined(BEMAN_BIG_INT_MSVC)
+
+// True when it is safe to actually call the bmi2_adx kernels: CPUID reports
+// both features, and -- on MSVC, where Windows-on-ARM x64 emulation is known
+// to lie about this -- a one-time probe of the real kernels also ran
+// without faulting. The probe result is cached (it never changes at runtime).
+inline bool bmi2_adx_kernels_are_usable() noexcept {
+    if (!cpu_has_bmi2_and_adx()) {
+        return false;
+    }
+    #if defined(BEMAN_BIG_INT_MSVC)
+    static const bool probed_ok = bmi2_adx_kernels_actually_run();
+    return probed_ok;
+    #else
+    return true;
+    #endif
+}
+
 } // namespace beman::big_int::tests
 
 #else
@@ -55,6 +99,7 @@ namespace beman::big_int::tests {
 // Non-x86-64 builds never select the bmi2_adx kernel, so callers can check
 // this unconditionally instead of wrapping every call site in an #if.
 inline bool cpu_has_bmi2_and_adx() noexcept { return false; }
+inline bool bmi2_adx_kernels_are_usable() noexcept { return false; }
 
 } // namespace beman::big_int::tests
 
