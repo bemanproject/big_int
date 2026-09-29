@@ -134,19 +134,22 @@ inline constexpr std::size_t square_long_cutoff = 4;
 
 // Minimum number of limbs for Karatsuba to be worthwhile
 // Directly from Boost, and reconfirmed as correct on x86_64 and the portable kernel.
-// `karatsuba_fallback` (the recursion leaf size) stays at 40 everywhere: larger
-// leaves measured slower end to end on AArch64 and with the x86_64 BMI2/ADX
-// kernels too.
 #if defined(BEMAN_BIG_INT_ARCH_AARCH64)
 // Tuned end to end (x * y through big_int, M4 Max) with the 2-row AArch64
 // schoolbook kernel; 96-112 is a noisy transition zone.
 inline constexpr std::size_t karatsuba_cutoff = 112;
+#elif defined(BEMAN_BIG_INT_ARCH_X86_64) && BEMAN_BIG_INT_X86_64_AVX512_IFMA
+inline constexpr std::size_t karatsuba_cutoff = 260;
 #elif defined(BEMAN_BIG_INT_ARCH_X86_64) && BEMAN_BIG_INT_X86_64_BMI2_ADX
 inline constexpr std::size_t karatsuba_cutoff = 47;
 #else
 inline constexpr std::size_t karatsuba_cutoff = 48;
 #endif
+#if defined(BEMAN_BIG_INT_ARCH_X86_64) && BEMAN_BIG_INT_X86_64_AVX512_IFMA
+inline constexpr std::size_t karatsuba_fallback = 230;
+#else
 inline constexpr std::size_t karatsuba_fallback = 40;
+#endif
 
 // Heuristic estimate of scratch space needed for Karatsuba multiplication.
 // One Karatsuba level uses ~2*s limbs (t1=2n+2, t2=t3=n+1 with n=s/2+1). The
@@ -189,6 +192,8 @@ void multiply_karatsuba(const std::span<uint_multiprecision_t>       result,
 // Tuned end to end (x * x through big_int, M4 Max) with the 2-row AArch64
 // squaring kernel: a Karatsuba split only wins consistently from ~256 limbs.
 inline constexpr std::size_t square_karatsuba_cutoff = 256;
+#elif defined(BEMAN_BIG_INT_ARCH_X86_64) && BEMAN_BIG_INT_X86_64_AVX512_IFMA
+inline constexpr std::size_t square_karatsuba_cutoff = 257;
 #elif defined(BEMAN_BIG_INT_ARCH_X86_64) && BEMAN_BIG_INT_X86_64_BMI2_ADX
 inline constexpr std::size_t square_karatsuba_cutoff = 120;
 #else
@@ -213,7 +218,11 @@ void square_karatsuba(const std::span<uint_multiprecision_t>       result,
 // Minimum number of limbs for Toom-Cook 3 to be worthwhile. Karatsuba still
 // wins at 300-350 limbs (~15%); Toom-3 reliably overtakes from ~400.
 // Tuned via multiplication_stress_bench.
+#if defined(BEMAN_BIG_INT_ARCH_X86_64) && BEMAN_BIG_INT_X86_64_AVX512_IFMA
+inline constexpr std::size_t toom_cook_3_cutoff = 1600;
+#else
 inline constexpr std::size_t toom_cook_3_cutoff = 400;
+#endif
 
 // Heuristic estimate of scratch space needed for Toom-Cook 3 multiplication.
 // One Toom-3 level uses 8k+10 limbs (~2.67*s where k = ceil(s/3)). The
@@ -253,7 +262,11 @@ void multiply_toom_cook_3(const std::span<uint_multiprecision_t>       result,
 // Minimum number of limbs for the Toom-Cook 3 squaring variant; roughly twice
 // the general toom_cook_3_cutoff, mirroring the SQR/MUL threshold ratio.
 // Tuned via multiplication_stress_bench.
+#if defined(BEMAN_BIG_INT_ARCH_X86_64) && BEMAN_BIG_INT_X86_64_AVX512_IFMA
+inline constexpr std::size_t square_toom_cook_3_cutoff = 20000;
+#else
 inline constexpr std::size_t square_toom_cook_3_cutoff = 300;
+#endif
 
 // ---------------------------------------------------------------------------
 // Squaring counterpart of multiply_toom_cook_3: one evaluation per point
@@ -274,7 +287,11 @@ void square_toom_cook_3(const std::span<uint_multiprecision_t>       result,
 // Minimum number of limbs for Toom-Cook 4 to be worthwhile. Toom-3 still wins
 // at 1400 (~9%); Toom-4 reliably overtakes from ~1600.
 // Tuned via multiplication_stress_bench.
+#if defined(BEMAN_BIG_INT_ARCH_X86_64) && BEMAN_BIG_INT_X86_64_AVX512_IFMA
+inline constexpr std::size_t toom_cook_4_cutoff = 4000;
+#else
 inline constexpr std::size_t toom_cook_4_cutoff = 1600;
+#endif
 
 // Heuristic estimate of scratch space needed for Toom-Cook 4 multiplication.
 // One Toom-4 level uses 14k+16 limbs (~3.5*s where k = ceil(s/4)). The geometric
@@ -316,7 +333,11 @@ void multiply_toom_cook_4(const std::span<uint_multiprecision_t>       result,
 // Minimum number of limbs for the Toom-Cook 4 squaring variant; roughly twice
 // the general toom_cook_4_cutoff, mirroring the SQR/MUL threshold ratio.
 // Tuned via multiplication_stress_bench.
+#if defined(BEMAN_BIG_INT_ARCH_X86_64) && BEMAN_BIG_INT_X86_64_AVX512_IFMA
+inline constexpr std::size_t square_toom_cook_4_cutoff = 20000;
+#else
 inline constexpr std::size_t square_toom_cook_4_cutoff = 2000;
+#endif
 
 // ---------------------------------------------------------------------------
 // Squaring counterpart of multiply_toom_cook_4: one evaluation per point
@@ -336,7 +357,11 @@ void square_toom_cook_4(const std::span<uint_multiprecision_t>       result,
 // cleanly and monotonically from ~2400 limbs (re-measured 2026-06-04; the old
 // 3000 left a ~2400-3000 band on the slower Toom-4).
 // Tuned via multiplication_stress_bench.
+#if defined(BEMAN_BIG_INT_ARCH_X86_64) && BEMAN_BIG_INT_X86_64_AVX512_IFMA
+inline constexpr std::size_t toom_cook_6_5_cutoff = 4000;
+#else
 inline constexpr std::size_t toom_cook_6_5_cutoff = 2400;
+#endif
 
 // Heuristic estimate of scratch space needed for Toom-Cook 6.5 multiplication.
 // One Toom-6.5 level uses 24k+26 limbs (~4*s where k = ceil(min/6)) for ten
@@ -389,7 +414,11 @@ void multiply_toom_cook_6_5(const std::span<uint_multiprecision_t>       result,
 // Minimum number of limbs for the Toom-6.5 squaring variant; roughly twice
 // the general toom_cook_6_5_cutoff, mirroring the SQR/MUL threshold ratio.
 // Tuned via multiplication_stress_bench.
+#if defined(BEMAN_BIG_INT_ARCH_X86_64) && BEMAN_BIG_INT_X86_64_AVX512_IFMA
+inline constexpr std::size_t square_toom_cook_6_5_cutoff = 20000;
+#else
 inline constexpr std::size_t square_toom_cook_6_5_cutoff = 2400;
+#endif
 
 // ---------------------------------------------------------------------------
 // Squaring counterpart of multiply_toom_cook_6_5. Squaring is always balanced,
@@ -413,7 +442,11 @@ void square_toom_cook_6_5(const std::span<uint_multiprecision_t>       result,
 // multiplication_stress_bench (two runs, AppleClang): below ~15000 Toom-6.5
 // ties or wins; from 15000 Toom-8.5 overtakes cleanly and monotonically, and
 // decisively (~5-8%) beyond ~24000.
+#if defined(BEMAN_BIG_INT_ARCH_X86_64) && BEMAN_BIG_INT_X86_64_AVX512_IFMA
+inline constexpr std::size_t toom_cook_8_5_cutoff = 6000;
+#else
 inline constexpr std::size_t toom_cook_8_5_cutoff = 15000;
+#endif
 
 // Heuristic estimate of scratch space needed for Toom-Cook 8.5 multiplication.
 // One Toom-8.5 level uses 32k+34 limbs (~4*s where k = ceil(min/8)) for fourteen
@@ -453,7 +486,11 @@ void multiply_toom_cook_8_5(const std::span<uint_multiprecision_t>       result,
 // multiplication_stress_bench (two runs): square-Toom-6.5 stays competitive
 // longer than the multiply kernel, with a reproducible ~1% square-Toom-8.5 dip
 // near 20000, so the cutoff sits above it where 8.5 overtakes cleanly.
+#if defined(BEMAN_BIG_INT_ARCH_X86_64) && BEMAN_BIG_INT_X86_64_AVX512_IFMA
+inline constexpr std::size_t square_toom_cook_8_5_cutoff = 40000;
+#else
 inline constexpr std::size_t square_toom_cook_8_5_cutoff = 24000;
+#endif
 
 // ---------------------------------------------------------------------------
 // Squaring counterpart of multiply_toom_cook_8_5. Squaring is always balanced
@@ -651,20 +688,38 @@ constexpr std::size_t fft_cyclic_storage_size(const fft_cyclic_params& p) noexce
 //   config                     fft_mul   square_fft
 //   integer, x86-64              24000      24000   x86's fast 64x64 mul makes Toom
 //                                                   dominate the scalar NTT to ~24k
+//   integer, x86-64 AVX-512 IFMA 400000+   400000+   IFMA speeds up every Toom tier's
+//                                                   basecase but not the NTT itself
+//                                                   (plain modular arithmetic), so the
+//                                                   gap only widens; Toom-8.5 still
+//                                                   won every size tested, up to
+//                                                   300000 -- this is a measured floor,
+//                                                   not a pinned crossover
 //   integer, AArch64 / other      4500       4500   NTT competitive with Toom here
 //   FP (SIMD), x86-64 AVX2        6000      11000   AVX2 makes the FFT viable early
+//   FP (SIMD), x86-64 AVX2 IFMA  50000     (untuned) same effect as the integer path;
+//                                                   spot-checked 3000-60000, noisy
+//                                                   crossover around 40000-50000
 //   FP (SIMD), AArch64 NEON       6000       6000
 //
 // (On AArch64 the FP/NEON NTT is actually a little slower than the integer NTT -- the
 // 3-prime FP transform costs more than the 2-prime integer one and NEON's 2-wide does
 // not recover it -- so SIMD multiply mainly benefits x86-64.)
 #if defined(BEMAN_BIG_INT_SIMD_MUL)
-inline constexpr std::size_t fft_mul_cutoff = 6000;
-    #if defined(__x86_64__) || defined(_M_X64) || defined(__amd64__)
+    #if defined(BEMAN_BIG_INT_ARCH_X86_64) && BEMAN_BIG_INT_X86_64_AVX512_IFMA
+inline constexpr std::size_t fft_mul_cutoff    = 50000;
 inline constexpr std::size_t square_fft_cutoff = 11000;
     #else
+inline constexpr std::size_t fft_mul_cutoff = 6000;
+        #if defined(__x86_64__) || defined(_M_X64) || defined(__amd64__)
+inline constexpr std::size_t square_fft_cutoff = 11000;
+        #else
 inline constexpr std::size_t square_fft_cutoff = 6000;
+        #endif
     #endif
+#elif defined(BEMAN_BIG_INT_ARCH_X86_64) && BEMAN_BIG_INT_X86_64_AVX512_IFMA
+inline constexpr std::size_t fft_mul_cutoff    = 400000;
+inline constexpr std::size_t square_fft_cutoff = 400000;
 #elif defined(__x86_64__) || defined(_M_X64) || defined(__amd64__)
 inline constexpr std::size_t fft_mul_cutoff    = 24000;
 inline constexpr std::size_t square_fft_cutoff = 24000;
