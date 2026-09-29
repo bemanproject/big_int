@@ -120,6 +120,45 @@ else()
     )
 endif()
 
+# [CMAKE.X86_64_AVX512_IFMA]
+# x86-64 only: an additional schoolbook multiply/square kernel pair using
+# AVX-512 IFMA (vpmadd52luq/vpmadd52huq, radix 2^52)
+set(BEMAN_BIG_INT_X86_64_AVX512_IFMA
+    "AUTO"
+    CACHE STRING
+    "x86-64 only: select the AVX-512 IFMA schoolbook kernels (for large operands; smaller ones still use BMI2/ADX or the generic kernel) at compile time. AUTO detects via compiler feature macros; ON always requires a CPU with AVX-512 F/BW/VL/VBMI/IFMA plus BMI2/ADX (Intel Ice Lake/Tiger Lake/Rocket Lake/Sapphire Rapids or newer, AMD Zen 4 or newer) or it dies with an illegal instruction, so MSVC needs ON since it defines none of those macros itself; OFF never selects them. Default: AUTO. Values: { AUTO, ON, OFF }."
+)
+set_property(
+    CACHE BEMAN_BIG_INT_X86_64_AVX512_IFMA
+    PROPERTY STRINGS AUTO ON OFF
+)
+
+string(TOUPPER "${BEMAN_BIG_INT_X86_64_AVX512_IFMA}" _bigint_avx512_ifma_upper)
+if(_bigint_avx512_ifma_upper STREQUAL "AUTO")
+    set(_bigint_avx512_ifma_mode AUTO)
+elseif(_bigint_avx512_ifma_upper MATCHES "^(ON|TRUE|1)$")
+    set(_bigint_avx512_ifma_mode ON)
+elseif(_bigint_avx512_ifma_upper MATCHES "^(OFF|FALSE|0)$")
+    set(_bigint_avx512_ifma_mode OFF)
+else()
+    message(
+        FATAL_ERROR
+        "BEMAN_BIG_INT_X86_64_AVX512_IFMA must be one of AUTO, ON, OFF (got: ${BEMAN_BIG_INT_X86_64_AVX512_IFMA})"
+    )
+endif()
+
+# When IFMA is explicitly ON and BMI2_ADX was left at AUTO, promote BMI2_ADX
+# to ON too: the IFMA forwarder's small-shape fallback is the BMI2/ADX
+# kernel, and MSVC (which needs IFMA=ON since it detects no feature macros)
+# cannot auto-detect BMI2/ADX either. An explicit BMI2_ADX=OFF is respected,
+# so small shapes then fall back to the generic kernel instead.
+if(
+    _bigint_avx512_ifma_mode STREQUAL "ON"
+    AND _bigint_bmi2_adx_mode STREQUAL "AUTO"
+)
+    set(_bigint_bmi2_adx_mode ON)
+endif()
+
 # Only enable assembly and add the assembly source when using GCC, Clang, or
 # MSVC on x86_64 or AArch64. This avoids trying to compile .s/.S files with
 # toolchains that may not support the same assembler syntax or where we don't
@@ -145,6 +184,8 @@ if(
             src/square_long_runtime_x86_64_generic.s
             src/multiply_long_runtime_x86_64_bmi2_adx.s
             src/square_long_runtime_x86_64_bmi2_adx.s
+            src/multiply_long_runtime_x86_64_avx512_ifma.s
+            src/square_long_runtime_x86_64_avx512_ifma.s
     )
     if(_bigint_bmi2_adx_mode STREQUAL "ON")
         target_compile_definitions(
@@ -155,6 +196,17 @@ if(
         target_compile_definitions(
             beman.big_int
             PUBLIC BEMAN_BIG_INT_X86_64_BMI2_ADX=0
+        )
+    endif()
+    if(_bigint_avx512_ifma_mode STREQUAL "ON")
+        target_compile_definitions(
+            beman.big_int
+            PUBLIC BEMAN_BIG_INT_X86_64_AVX512_IFMA=1
+        )
+    elseif(_bigint_avx512_ifma_mode STREQUAL "OFF")
+        target_compile_definitions(
+            beman.big_int
+            PUBLIC BEMAN_BIG_INT_X86_64_AVX512_IFMA=0
         )
     endif()
 elseif(
@@ -181,6 +233,8 @@ elseif(MSVC AND CMAKE_CXX_COMPILER_ARCHITECTURE_ID STREQUAL "x64")
             src/square_long_runtime_x86_64_generic.asm
             src/multiply_long_runtime_x86_64_bmi2_adx.asm
             src/square_long_runtime_x86_64_bmi2_adx.asm
+            src/multiply_long_runtime_x86_64_avx512_ifma.asm
+            src/square_long_runtime_x86_64_avx512_ifma.asm
     )
     if(_bigint_bmi2_adx_mode STREQUAL "ON")
         target_compile_definitions(
@@ -191,6 +245,17 @@ elseif(MSVC AND CMAKE_CXX_COMPILER_ARCHITECTURE_ID STREQUAL "x64")
         target_compile_definitions(
             beman.big_int
             PUBLIC BEMAN_BIG_INT_X86_64_BMI2_ADX=0
+        )
+    endif()
+    if(_bigint_avx512_ifma_mode STREQUAL "ON")
+        target_compile_definitions(
+            beman.big_int
+            PUBLIC BEMAN_BIG_INT_X86_64_AVX512_IFMA=1
+        )
+    elseif(_bigint_avx512_ifma_mode STREQUAL "OFF")
+        target_compile_definitions(
+            beman.big_int
+            PUBLIC BEMAN_BIG_INT_X86_64_AVX512_IFMA=0
         )
     endif()
 elseif(MSVC AND CMAKE_CXX_COMPILER_ARCHITECTURE_ID STREQUAL "ARM64")
