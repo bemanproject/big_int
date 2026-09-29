@@ -20,12 +20,37 @@ extern "C" void beman_big_int_multiply_long_runtime_bmi2_adx(beman::big_int::uin
                                                              const std::size_t                            len_a,
                                                              const beman::big_int::uint_multiprecision_t* p_b,
                                                              const std::size_t len_b) noexcept;
+// Always declared on x86-64 (the .s/.asm stub or real kernel is always
+// assembled), even when BEMAN_BIG_INT_X86_64_AVX512_IFMA resolves to 0.
+extern "C" void beman_big_int_multiply_long_runtime_avx512_ifma(beman::big_int::uint_multiprecision_t*       p_result,
+                                                                const beman::big_int::uint_multiprecision_t* p_a,
+                                                                const std::size_t                            len_a,
+                                                                const beman::big_int::uint_multiprecision_t* p_b,
+                                                                const std::size_t len_b) noexcept;
+
+namespace beman::big_int::detail {
+
+// Below this many limbs (in EITHER operand) the AVX-512 IFMA kernel routes
+// back to the BMI2/ADX-or-generic choice. Tuned end to end (x * y through
+// big_int, i9-11900K): below 18 limbs the IFMA kernel's fixed overhead costs
+// more than it saves (worst case ~15% slower, at 16 limbs); from 18 on it
+// wins, increasingly so, up to ~2.5x by a few hundred limbs.
+inline constexpr std::size_t ifma_multiply_min_limbs = 18;
+
+} // namespace beman::big_int::detail
 
 inline void beman_big_int_multiply_long_runtime(beman::big_int::uint_multiprecision_t*       p_result,
                                                 const beman::big_int::uint_multiprecision_t* p_a,
                                                 const std::size_t                            len_a,
                                                 const beman::big_int::uint_multiprecision_t* p_b,
                                                 const std::size_t                            len_b) noexcept {
+    #if BEMAN_BIG_INT_X86_64_AVX512_IFMA
+    if (len_a >= beman::big_int::detail::ifma_multiply_min_limbs &&
+        len_b >= beman::big_int::detail::ifma_multiply_min_limbs) {
+        beman_big_int_multiply_long_runtime_avx512_ifma(p_result, p_a, len_a, p_b, len_b);
+        return;
+    }
+    #endif
     #if BEMAN_BIG_INT_X86_64_BMI2_ADX
     beman_big_int_multiply_long_runtime_bmi2_adx(p_result, p_a, len_a, p_b, len_b);
     #else
