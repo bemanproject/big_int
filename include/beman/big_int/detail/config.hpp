@@ -317,6 +317,20 @@ using int_wide_t = long long;
     #endif
 #endif
 
+// Compile-time choice of the AVX-512 IFMA x86-64 kernels (large operands
+// only; small ones still go through the BMI2/ADX-or-generic choice above).
+#if !defined(BEMAN_BIG_INT_ARCH_X86_64)
+    #undef BEMAN_BIG_INT_X86_64_AVX512_IFMA
+    #define BEMAN_BIG_INT_X86_64_AVX512_IFMA 0
+#elif !defined(BEMAN_BIG_INT_X86_64_AVX512_IFMA)
+    #if defined(__AVX512IFMA__) && defined(__AVX512VL__) && defined(__AVX512BW__) && defined(__AVX512VBMI__) && \
+        defined(__BMI2__) && defined(__ADX__)
+        #define BEMAN_BIG_INT_X86_64_AVX512_IFMA 1
+    #else
+        #define BEMAN_BIG_INT_X86_64_AVX512_IFMA 0
+    #endif
+#endif
+
 #if (((defined(BEMAN_BIG_INT_GCC) || defined(BEMAN_BIG_INT_CLANG)) && defined(__aarch64__)) || \
      (defined(BEMAN_BIG_INT_MSVC) && defined(_M_ARM64))) &&                                    \
     BEMAN_BIG_INT_LIMB_WIDTH == 64
