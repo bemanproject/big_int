@@ -115,9 +115,51 @@ defines `__BMI2__` or `__ADX__` itself. x64 emulation on Windows on ARM
 reports these features but may not execute them.
 ====
 
-AVX2 was evaluated for these kernels and is not used: 64-bit-limb schoolbook
-multiplication needs a 64x64->128-bit widening multiply, which AVX2 has no
-vector instruction for.
+AVX2 was evaluated for these schoolbook kernels and is not used directly: a
+64-bit-limb widening multiply needs a 64x64->128-bit product, which AVX2 has
+no vector instruction for. AVX-512 IFMA does provide one (see below), at a
+reduced 52-bit radix.
+
+[#build_and_usage_avx512_ifma]
+=== Optional: x86-64 AVX-512 IFMA kernels
+
+On x86-64, a third schoolbook multiply/square kernel pair is available,
+built using AVX-512 IFMA (`vpmadd52luq`/`vpmadd52huq`, a vectorized
+52x52->104-bit multiply-add at radix pass:[2^52]) together with BMI2/ADX.
+Selection is still compile-time, with no runtime dispatch cost, but it adds a
+size gate on top of the BMI2/ADX-or-generic choice above: operands below the
+gate (tuned end to end at 18 limbs for multiply; squaring uses a placeholder
+threshold until its own kernel exists) still go through the BMI2/ADX-or-generic
+kernel, since the IFMA kernel only wins on larger operands.
+
+When you compile with flags that define `__AVX512IFMA__`, `__AVX512VL__`,
+`__AVX512BW__`, `__AVX512VBMI__`, `__BMI2__`, and `__ADX__` (for example
+`-march=native`, or `-march=icelake-client`, `-march=rocketlake`,
+`-march=sapphirerapids`, `-march=znver4`, or newer), the IFMA kernels are
+selected automatically for operands at or above the size gate.
+
+You can also select explicitly with the CMake option
+`BEMAN_BIG_INT_X86_64_AVX512_IFMA` (default `AUTO`, also accepting `ON`/`OFF`):
+
+[source,bash]
+----
+cmake --preset gcc-release -DBEMAN_BIG_INT_X86_64_AVX512_IFMA=ON
+----
+
+[IMPORTANT]
+====
+`ON` always builds a binary that requires a CPU with AVX-512 F, BW, VL,
+VBMI, and IFMA, plus BMI2 and ADX (Intel Ice Lake, Tiger Lake, Rocket Lake,
+Sapphire Rapids, or newer; AMD Zen 4 or newer): running it on an older CPU,
+or an `AUTO` build compiled with `-march=` flags targeting a newer CPU than
+it then runs on, crashes with an illegal instruction. MSVC needs `ON` to opt
+in, since it never defines any of those feature macros itself. When `ON` is
+set and `BEMAN_BIG_INT_X86_64_BMI2_ADX` is left at its default `AUTO`, the
+latter is promoted to `ON` too: the IFMA kernel's below-the-gate fallback is
+the BMI2/ADX kernel, and MSVC cannot auto-detect it either. Set
+`BEMAN_BIG_INT_X86_64_BMI2_ADX=OFF` explicitly if you want that fallback to
+stay the generic kernel instead.
+====
 
 [#build_and_usage_modules]
 === Optional: the pass:[C++] named module

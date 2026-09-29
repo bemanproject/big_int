@@ -23,10 +23,34 @@ extern "C" void beman_big_int_square_long_runtime_generic(beman::big_int::uint_m
 extern "C" void beman_big_int_square_long_runtime_bmi2_adx(beman::big_int::uint_multiprecision_t*       p_result,
                                                            const beman::big_int::uint_multiprecision_t* p_a,
                                                            const std::size_t len_a) noexcept;
+// Always declared on x86-64 (the .s/.asm stub or real kernel is always
+// assembled), even when BEMAN_BIG_INT_X86_64_AVX512_IFMA resolves to 0.
+extern "C" void beman_big_int_square_long_runtime_avx512_ifma(beman::big_int::uint_multiprecision_t*       p_result,
+                                                              const beman::big_int::uint_multiprecision_t* p_a,
+                                                              const std::size_t len_a) noexcept;
+
+namespace beman::big_int::detail {
+
+// Below this many limbs the AVX-512 IFMA square kernel routes back to the
+// BMI2/ADX-or-generic choice.
+inline constexpr std::size_t ifma_square_min_limbs = 16;
+
+// The AVX-512 IFMA square kernel handles n up to this many limbs natively
+// (radix 2^52 internal accumulation); above it, it tail-calls the BMI2/ADX
+// square kernel instead.
+inline constexpr std::size_t ifma_square_native_max_limbs = 256;
+
+} // namespace beman::big_int::detail
 
 inline void beman_big_int_square_long_runtime(beman::big_int::uint_multiprecision_t*       p_result,
                                               const beman::big_int::uint_multiprecision_t* p_a,
                                               const std::size_t                            len_a) noexcept {
+    #if BEMAN_BIG_INT_X86_64_AVX512_IFMA
+    if (len_a >= beman::big_int::detail::ifma_square_min_limbs) {
+        beman_big_int_square_long_runtime_avx512_ifma(p_result, p_a, len_a);
+        return;
+    }
+    #endif
     #if BEMAN_BIG_INT_X86_64_BMI2_ADX
     beman_big_int_square_long_runtime_bmi2_adx(p_result, p_a, len_a);
     #else

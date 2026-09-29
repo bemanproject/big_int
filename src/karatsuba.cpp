@@ -7,6 +7,13 @@
 
 namespace beman::big_int::detail {
 
+// Squares below square_karatsuba_cutoff (and the squaring leaves below) stay
+// inside the IFMA square kernel's native range.
+#if defined(BEMAN_BIG_INT_ARCH_X86_64) && BEMAN_BIG_INT_X86_64_AVX512_IFMA
+static_assert(square_karatsuba_cutoff - 1 <= ifma_square_native_max_limbs,
+              "square_karatsuba_cutoff must not exceed the IFMA square kernel's native range");
+#endif
+
 void multiply_karatsuba(const std::span<uint_multiprecision_t>       result,
                         const std::span<const uint_multiprecision_t> a_untrimmed,
                         const std::span<const uint_multiprecision_t> b_untrimmed,

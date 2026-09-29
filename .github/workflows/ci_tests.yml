@@ -154,7 +154,61 @@ jobs:
       - run: cmake --preset ${{ matrix.preset }} --log-level=VERBOSE
       - run: cmake --workflow --preset ${{ matrix.preset }}
 
+  # Standalone job: hosted runners are not guaranteed to have AVX-512 IFMA
+  # hardware, so the IFMA=ON build and its kernel tests run under Intel SDE
+  # (-icl: Ice Lake, the earliest AVX-512 IFMA client target) instead. The
+  # full suite took 131s under SDE at -j4 on the reference development box.
+  ifma-sde-linux:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: lukka/get-cmake@latest
+        with:
+          cmakeVersion: 4.3.3
+      - name: Download and verify Intel SDE
+        run: |
+          curl -sL -o sde.tar.xz https://downloadmirror.intel.com/924984/sde-external-10.13.1-2026-07-28-lin.tar.xz
+          echo "94e97d623fec54385686e1e7ba65ebc9941748c05ee451423948334892bf2b50  sde.tar.xz" | sha256sum -c -
+          tar -xJf sde.tar.xz
+      - run: >-
+          cmake --preset gcc-release -DBEMAN_BIG_INT_X86_64_AVX512_IFMA=ON
+          "-DCMAKE_CROSSCOMPILING_EMULATOR=${{ github.workspace }}/sde-external-10.13.1-2026-07-28-lin/sde64;-icl;--"
+      - run: cmake --build build/gcc-release
+      - run: ctest --preset gcc-release -j4
+
+  # Standalone job: the Windows counterpart of ifma-sde-linux, same SDE
+  # release's Windows archive. sde.exe auto-detects 32/64-bit, unlike the
+  # Linux kit's separate sde/sde64 binaries.
+  ifma-sde-windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: lukka/get-cmake@latest
+        with:
+          cmakeVersion: 4.3.3
+      - uses: TheMrMilchmann/setup-msvc-dev@v4
+        with:
+          arch: x64
+      - name: Download and verify Intel SDE
+        run: |
+          curl.exe -sL -o sde.tar.xz https://downloadmirror.intel.com/924984/sde-external-10.13.1-2026-07-28-win.tar.xz
+          $expected = "74e626ede09b0baa5011fc9e51b58627ea92c3fc0bae5fd7db34b490f335f651"
+          $actual = (Get-FileHash sde.tar.xz -Algorithm SHA256).Hash.ToLower()
+          if ($actual -ne $expected) { throw "Intel SDE checksum mismatch: got $actual, expected $expected" }
+          7z x sde.tar.xz -y
+          7z x sde.tar -y
+        shell: pwsh
+      # Forward slashes: the emulator path lands in generated CTest scripts,
+      # where a backslash path would be read as escape sequences.
+      - name: Configure
+        run: |
+          $sde = "${{ github.workspace }}/sde-external-10.13.1-2026-07-28-win/sde.exe".Replace('\', '/')
+          cmake --preset msvc-release -DBEMAN_BIG_INT_X86_64_AVX512_IFMA=ON "-DCMAKE_CROSSCOMPILING_EMULATOR=$sde;-icl;--"
+        shell: pwsh
+      - run: cmake --build build/msvc-release
+      - run: ctest --preset msvc-release -j4
+
   create-issue-when-fault:
-    needs: [preset-test, build-and-test, msvc-arm64]
+    needs: [preset-test, build-and-test, msvc-arm64, ifma-sde-linux, ifma-sde-windows]
     if: failure() && github.event_name == 'schedule'
     uses: bemanproject/infra-workflows/.github/workflows/reusable-beman-create-issue-when-fault.yml@1.7.4

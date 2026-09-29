@@ -29,6 +29,7 @@
 #include <gtest/gtest.h>
 
 #include "benchmark_testing.hpp"
+#include "x86_64_avx512_ifma_support.hpp"
 
 #include <algorithm>
 #include <cstddef>
@@ -152,6 +153,24 @@ double run_multiply_long_runtime_bmi2_adx_at(const std::size_t limbs, const unsi
                                 const std::span<const uint_t> b,
                                 scratch_for_test&) {
                                  ::beman_big_int_multiply_long_runtime_bmi2_adx(
+                                     r.data(), a.data(), a.size(), b.data(), b.size());
+                             });
+}
+
+// Same rationale, for the AVX-512 IFMA kernel. Returns 0 (a row of zeros in
+// the CSV, not a crash) when the running CPU lacks the required features.
+double run_multiply_long_runtime_avx512_ifma_at(const std::size_t limbs, const unsigned trials) {
+    if (!::beman::big_int::tests::avx512_ifma_kernels_are_usable()) {
+        return 0.0;
+    }
+    return measure_algorithm(limbs,
+                             trials,
+                             /*scratch_size=*/0,
+                             [](const std::span<uint_t>       r,
+                                const std::span<const uint_t> a,
+                                const std::span<const uint_t> b,
+                                scratch_for_test&) {
+                                 ::beman_big_int_multiply_long_runtime_avx512_ifma(
                                      r.data(), a.data(), a.size(), b.data(), b.size());
                              });
 }
@@ -319,6 +338,22 @@ double run_square_long_runtime_bmi2_adx_at(const std::size_t limbs, const unsign
            const std::span<const uint_t>,
            scratch_for_test&) { ::beman_big_int_square_long_runtime_bmi2_adx(r.data(), a.data(), a.size()); });
 }
+
+// Same rationale, for the AVX-512 IFMA kernel. Returns 0 (a row of zeros in
+// the CSV, not a crash) when the running CPU lacks the required features.
+double run_square_long_runtime_avx512_ifma_at(const std::size_t limbs, const unsigned trials) {
+    if (!::beman::big_int::tests::avx512_ifma_kernels_are_usable()) {
+        return 0.0;
+    }
+    return measure_algorithm(
+        limbs,
+        trials,
+        /*scratch_size=*/0,
+        [](const std::span<uint_t>       r,
+           const std::span<const uint_t> a,
+           const std::span<const uint_t>,
+           scratch_for_test&) { ::beman_big_int_square_long_runtime_avx512_ifma(r.data(), a.data(), a.size()); });
+}
 #endif
 
 double run_square_karatsuba_at(const std::size_t limbs, const unsigned trials) {
@@ -439,6 +474,7 @@ constexpr algorithm_runner algorithms[] = {
 #if defined(BEMAN_BIG_INT_ARCH_X86_64)
     {"multiply-long-runtime-generic", 2, 400, run_multiply_long_runtime_generic_at},
     {"multiply-long-runtime-bmi2-adx", 2, 400, run_multiply_long_runtime_bmi2_adx_at},
+    {"multiply-long-runtime-avx512-ifma", 2, 400, run_multiply_long_runtime_avx512_ifma_at},
 #endif
     {"karatsuba", 4, 2000, run_karatsuba_at},
     {"toom-cook-3", 300, 10000, run_toom_cook_3_at},
@@ -451,6 +487,7 @@ constexpr algorithm_runner algorithms[] = {
 #if defined(BEMAN_BIG_INT_ARCH_X86_64)
     {"square-long-runtime-generic", 2, 400, run_square_long_runtime_generic_at},
     {"square-long-runtime-bmi2-adx", 2, 400, run_square_long_runtime_bmi2_adx_at},
+    {"square-long-runtime-avx512-ifma", 2, 400, run_square_long_runtime_avx512_ifma_at},
 #endif
     {"square-karatsuba", 32, 2000, run_square_karatsuba_at},
     {"square-toom-cook-3", 200, 10000, run_square_toom_cook_3_at},

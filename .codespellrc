@@ -6,4 +6,5 @@
 # - statics: Static memory contents
 # - sme: Arm Scalable Matrix Extension
 # - seh: Structured Exception Handling (Windows)
-ignore-words-list = toom,ser,vEw,statics,sme,seh
+# - retuned: tuned again -> not "returned"
+ignore-words-list = toom,ser,vEw,statics,sme,seh,retuned
