@@ -766,18 +766,26 @@ constexpr std::size_t fft_cyclic_storage_size(const fft_cyclic_params& p) noexce
 // 1400, and the SIMD floor of 3300 removes band-top false positives. FFT entry gates. The FFT time is a step function
 // of the power-of-two transform length L while the Toom ladder is smooth, so a bare `min >= cutoff` is wrong inside
 // every L band. The gate is a floor plus an integer cost model (fft_mul_worthwhile / square_fft_worthwhile below): use
-// the FFT iff the shorter operand has at least *_min_limbs limbs and L * log2(L) * den <= num * max * isqrt(min). A
-// den of 0 switches the model off, leaving the plain floor (the SIMD and portable branches, whose models are not tuned
-// yet). The square gate is checked ahead of the square Toom chain; the model-off square floors (SIMD and portable) are
-// at least square_toom_cook_6_5_cutoff, which is where the FFT used to be reachable.
+// the FFT iff the shorter operand has at least *_min_limbs limbs and L * log2(L) * den <= num * max * isqrt(min) (the
+// integer IFMA build uses log2(L)^3 and the cube root instead, see fft_model_log_power). A den of 0 switches the model
+// off, leaving the plain floor (the portable branches and the SIMD branches other than x86-64 IFMA and AArch64, whose
+// models are not tuned yet). The square gate is checked ahead of the square Toom chain; the model-off square floors
+// (SIMD and portable) are at least square_toom_cook_6_5_cutoff, which is where the FFT used to be reachable.
 #if defined(BEMAN_BIG_INT_SIMD_MUL)
     #if defined(BEMAN_BIG_INT_ARCH_X86_64) && BEMAN_BIG_INT_X86_64_AVX512_IFMA
-inline constexpr std::size_t fft_mul_min_limbs    = 50000;
-inline constexpr std::size_t fft_mul_model_num    = 1;
-inline constexpr std::size_t fft_mul_model_den    = 0;
-inline constexpr std::size_t square_fft_min_limbs = 20000;
-inline constexpr std::size_t square_fft_model_num = 1;
-inline constexpr std::size_t square_fft_model_den = 0;
+// i9-11900K, gcc-release, 2026-09-30: the model is fitted to the forced Toom-Cook 8.5 and FP FFT tiers (balanced
+// 5000-3276000 limbs) and to 67 shapes with shorter operands of 16000-1300000 and longer ones up to 6400000 limbs (FFT
+// against sliced Toom): the faster tier is picked for 99% of the balanced sizes and 93% of those shapes, the rest
+// within 1.12x. The plain floors
+// (50000, 20000) took the FFT at band bottoms up to 1.3x (mul) and 2.2x (square) slower, and 11/64 (fitted to
+// balanced sizes only) left the FFT unused on 1:2 to 1:16 shapes up to 1.3x faster with it. The floors are the
+// smallest shapes measured.
+inline constexpr std::size_t fft_mul_min_limbs    = 16000;
+inline constexpr std::size_t fft_mul_model_num    = 15;
+inline constexpr std::size_t fft_mul_model_den    = 64;
+inline constexpr std::size_t square_fft_min_limbs = 8000;
+inline constexpr std::size_t square_fft_model_num = 75;
+inline constexpr std::size_t square_fft_model_den = 512;
     #elif defined(__x86_64__) || defined(_M_X64) || defined(__amd64__)
 inline constexpr std::size_t fft_mul_min_limbs    = 6000;
 inline constexpr std::size_t fft_mul_model_num    = 1;
@@ -802,15 +810,22 @@ inline constexpr std::size_t square_fft_model_den = 0;
     #endif
 // x86-64 integer (non-SIMD): i9-11900K, gcc-release, 2026-09-30, shape_sweep end to end, balanced and unbalanced
 // ratios. The scalar NTT is a step function of the transform length, so the cost model replaces the old floors (24000
-// for generic and BMI2/ADX, 400000 for IFMA); the floors here are only an early-out, the model rejects small shapes
-// itself.
+// for generic and BMI2/ADX, 400000 for IFMA); the generic and BMI2/ADX floors are only an early-out, the model rejects
+// small shapes itself.
 #elif defined(BEMAN_BIG_INT_ARCH_X86_64) && BEMAN_BIG_INT_X86_64_AVX512_IFMA
-inline constexpr std::size_t fft_mul_min_limbs    = 16000;
-inline constexpr std::size_t fft_mul_model_num    = 7;
-inline constexpr std::size_t fft_mul_model_den    = 64;
-inline constexpr std::size_t square_fft_min_limbs = 8000;
-inline constexpr std::size_t square_fft_model_num = 6;
-inline constexpr std::size_t square_fft_model_den = 64;
+// IFMA refit (2026-09-30) with the cubic model shape (fft_model_log_power, fft_model_root_degree below), fitted to the
+// forced Toom-Cook 8.5 and NTT tiers up to 3276000 limbs balanced and to 52 shapes with shorter operands of
+// 300000-1600000 and longer ones up to 8000000 limbs (NTT against sliced Toom): the faster tier is picked for 93-94%
+// of them and the rest are within 1.13x. The earlier 7/64 and 6/64 with the square-root shape took the NTT at band
+// bottoms up to 1.9x (mul) and 2.1x (square) slower. Below 300000 limbs the shape was not fitted and would accept
+// small band-top shapes, so the multiply floor is a real limit (the NTT loses there); the square floor is below the
+// model's first square (788000).
+inline constexpr std::size_t fft_mul_min_limbs    = 300000;
+inline constexpr std::size_t fft_mul_model_num    = 298;
+inline constexpr std::size_t fft_mul_model_den    = 1;
+inline constexpr std::size_t square_fft_min_limbs = 500000;
+inline constexpr std::size_t square_fft_model_num = 268;
+inline constexpr std::size_t square_fft_model_den = 1;
 #elif defined(BEMAN_BIG_INT_ARCH_X86_64) && BEMAN_BIG_INT_X86_64_BMI2_ADX
 inline constexpr std::size_t fft_mul_min_limbs    = 3000;
 inline constexpr std::size_t fft_mul_model_num    = 12;
@@ -848,6 +863,21 @@ inline constexpr std::size_t square_fft_model_num = 1;
 inline constexpr std::size_t square_fft_model_den = 0;
 #endif
 
+// Shape of the cost model, shared by the multiply and square gates: L * log2(L)^fft_model_log_power against
+// max * min^(1 / fft_model_root_degree) (see fft_model_worthwhile). The default 1 and 2 fit the crossovers below a few
+// hundred thousand limbs. The integer IFMA build crosses over at millions of limbs, where the NTT's memory traffic
+// makes its time grow about 2.4x per transform length instead of the 2.1x of L log L, and Toom-Cook 8.5 grows like
+// max * min^0.35; with the default shape its break-even drifted 0.8x per length.
+#if !defined(BEMAN_BIG_INT_SIMD_MUL) && defined(BEMAN_BIG_INT_ARCH_X86_64) && BEMAN_BIG_INT_X86_64_AVX512_IFMA
+inline constexpr unsigned fft_model_log_power   = 3;
+inline constexpr unsigned fft_model_root_degree = 3;
+#else
+inline constexpr unsigned fft_model_log_power   = 1;
+inline constexpr unsigned fft_model_root_degree = 2;
+#endif
+static_assert(fft_model_log_power >= 1 && fft_model_log_power <= 4, "log2(L)^p must stay far below 64 bits");
+static_assert(fft_model_root_degree == 2 || fft_model_root_degree == 3);
+
 static_assert(karatsuba_cutoff <= fft_mul_min_limbs, "the FFT gate is checked after the schoolbook gate");
 // Model-off square floors keep the pre-model behaviour, where the FFT was only reachable from the Toom-6.5 tier up.
 static_assert(square_fft_model_den != 0 || square_fft_min_limbs >= square_toom_cook_6_5_cutoff);
@@ -867,6 +897,18 @@ static_assert(square_fft_model_den != 0 || square_fft_min_limbs >= square_toom_c
     }
 }
 
+// Floor of the cube root, exact for every 64-bit input (bitwise; c * c <= x / c is c^3 <= x without overflow).
+[[nodiscard]] constexpr std::uint64_t icbrt_floor(const std::uint64_t x) noexcept {
+    std::uint64_t r = 0;
+    for (int bit = 21; bit >= 0; --bit) { // cbrt(2^64) < 2^22
+        const std::uint64_t c = r | (std::uint64_t{1} << bit);
+        if (c * c <= x / c) {
+            r = c;
+        }
+    }
+    return r;
+}
+
 // A 192-bit product of three 64-bit values, for the exact cost-model comparison (MSVC has no __int128).
 struct fft_u192 {
     std::uint64_t w0;
@@ -884,19 +926,27 @@ fft_mul3(const std::uint64_t a, const std::uint64_t b, const std::uint64_t c) no
     return {p0.low_bits, w1, p1.high_bits + cy};
 }
 
-// FFT cost-model test: length * log2(length) * den <= num * max_size * isqrt(min_size), compared exactly as 192-bit
-// products. `length` is a power of two, so log2(length) = bit_width - 1. A den of 0 is "model off".
+// FFT cost-model test: length * log2(length)^log_power * den <= num * max_size * root(min_size), where root is the
+// floor of the square (root_degree 2) or cube (3) root, compared exactly as 192-bit products. `length` is a power of
+// two, so log2(length) = bit_width - 1. A den of 0 is "model off".
 [[nodiscard]] constexpr bool fft_model_worthwhile(const std::uint64_t length,
                                                   const std::uint64_t num,
                                                   const std::uint64_t den,
                                                   const std::uint64_t max_size,
-                                                  const std::uint64_t min_size) noexcept {
+                                                  const std::uint64_t min_size,
+                                                  const unsigned      log_power   = 1,
+                                                  const unsigned      root_degree = 2) noexcept {
     if (den == 0) {
         return true;
     }
-    const std::uint64_t k   = static_cast<std::uint64_t>(std::bit_width(length)) - 1;
-    const fft_u192      lhs = fft_mul3(length, k, den);
-    const fft_u192      rhs = fft_mul3(num, max_size, isqrt_floor(min_size));
+    const std::uint64_t k     = static_cast<std::uint64_t>(std::bit_width(length)) - 1;
+    std::uint64_t       k_pow = 1;
+    for (unsigned i = 0; i < log_power; ++i) {
+        k_pow *= k; // k <= 63 and log_power <= 4: at most 2^24
+    }
+    const std::uint64_t root = root_degree == 3 ? icbrt_floor(min_size) : isqrt_floor(min_size);
+    const fft_u192      lhs  = fft_mul3(length, k_pow, den);
+    const fft_u192      rhs  = fft_mul3(num, max_size, root);
     if (lhs.w2 != rhs.w2) {
         return lhs.w2 < rhs.w2;
     }
@@ -908,15 +958,24 @@ fft_mul3(const std::uint64_t a, const std::uint64_t b, const std::uint64_t c) no
 
 // True when a min_size x max_size product (min_size <= max_size) should take the FFT (64-bit limbs only).
 [[nodiscard]] constexpr bool fft_mul_worthwhile(const std::size_t min_size, const std::size_t max_size) noexcept {
-    return min_size >= fft_mul_min_limbs &&
-           fft_model_worthwhile(
-               fft_transform_length(min_size, max_size), fft_mul_model_num, fft_mul_model_den, max_size, min_size);
+    return min_size >= fft_mul_min_limbs && fft_model_worthwhile(fft_transform_length(min_size, max_size),
+                                                                 fft_mul_model_num,
+                                                                 fft_mul_model_den,
+                                                                 max_size,
+                                                                 min_size,
+                                                                 fft_model_log_power,
+                                                                 fft_model_root_degree);
 }
 
 // True when an n-limb square should take the FFT (64-bit limbs only).
 [[nodiscard]] constexpr bool square_fft_worthwhile(const std::size_t n) noexcept {
-    return n >= square_fft_min_limbs &&
-           fft_model_worthwhile(fft_transform_length(n, n), square_fft_model_num, square_fft_model_den, n, n);
+    return n >= square_fft_min_limbs && fft_model_worthwhile(fft_transform_length(n, n),
+                                                             square_fft_model_num,
+                                                             square_fft_model_den,
+                                                             n,
+                                                             n,
+                                                             fft_model_log_power,
+                                                             fft_model_root_degree);
 }
 
 // Feature macro for tools that print the cost-model constants above.
@@ -926,6 +985,10 @@ static_assert(isqrt_floor(0) == 0 && isqrt_floor(1) == 1 && isqrt_floor(15) == 3
 static_assert(isqrt_floor(std::numeric_limits<std::uint64_t>::max()) == 0xFFFFFFFFULL);
 static_assert(isqrt_floor(std::uint64_t{1} << 62) == std::uint64_t{1} << 31);
 static_assert(isqrt_floor((std::uint64_t{1} << 40) - 1) == (std::uint64_t{1} << 20) - 1);
+static_assert(icbrt_floor(0) == 0 && icbrt_floor(7) == 1 && icbrt_floor(8) == 2 && icbrt_floor(26) == 2);
+static_assert(icbrt_floor(27) == 3 && icbrt_floor(std::numeric_limits<std::uint64_t>::max()) == 2642245);
+static_assert(icbrt_floor(std::uint64_t{2642245} * 2642245 * 2642245) == 2642245);
+static_assert(icbrt_floor(std::uint64_t{2642245} * 2642245 * 2642245 - 1) == 2642244);
 // Model off: the gate is the floor alone. Below the floor it is never taken; an enormous right side always is.
 static_assert(!fft_mul_worthwhile(fft_mul_min_limbs - 1, fft_mul_min_limbs - 1));
 static_assert(fft_mul_model_den != 0 || fft_mul_worthwhile(fft_mul_min_limbs, fft_mul_min_limbs));

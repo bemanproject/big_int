@@ -76,6 +76,11 @@ A faster double-precision floating-point transform with hand-written SIMD kernel
 cmake --preset gcc-release -DBEMAN_BIG_INT_SIMD_MUL=ON
 ----
 
+The option combines with the x86-64 kernel options below. Together with the
+AVX-512 IFMA kernels it is the fastest configuration measured on x86-64 (see
+xref:benchmarks.adoc#benchmarks_kernel_selection[the benchmarks]): it only changes
+products large enough for the FFT, which it makes up to about 1.8x faster.
+
 [IMPORTANT]
 ====
 The SIMD path is exact *only* under the default IEEE round-to-nearest mode with

@@ -110,12 +110,79 @@ https://gmplib.org/[GMP] (wrapped by Boost as `gmp_int`). GMP is hand-coded
 assembly in its hot paths and is the industry standard for performance, so it is
 the natural baseline.
 
-NOTE: The multiplication and division comparison tables below were measured on an
-x86-64 machine with the SIMD multiplication path enabled (configured with
-`-DBEMAN_BIG_INT_SIMD_MUL=ON`, so the FFT tier uses the AVX2 kernel); see
-xref:build_and_usage.adoc#build_and_usage_simd[Optional: SIMD-accelerated
-multiplication]. In those two tables, bracketed values are time relative to the
-fastest (GMP), where `[1.0]` is best.
+NOTE: Everything in this section was measured in September 2026 on an Intel(R)
+Core(TM) i9-11900K (turbo enabled, each run pinned to one core) with GCC 13 and
+the `gcc-release` preset (`RelWithDebInfo`, `-O2`), against GMP 6.3.0 and Boost
+1.91. `big_int` was built with the AVX-512 IFMA schoolbook kernels
+(`-DBEMAN_BIG_INT_X86_64_AVX512_IFMA=ON`, which also enables the BMI2/ADX kernels
+for small shapes; see
+xref:build_and_usage.adoc#build_and_usage_avx512_ifma[the build guide]) and the
+SIMD floating-point FFT (`-DBEMAN_BIG_INT_SIMD_MUL=ON`, see
+xref:build_and_usage.adoc#build_and_usage_simd[its floating-point requirements]),
+the fastest configuration on this machine (see below). In the comparison tables,
+bracketed values are time relative to the fastest of the three libraries at that
+width, where `[1.0]` is best.
+
+[#benchmarks_kernel_selection]
+=== Choosing the x86-64 kernel configuration
+
+On x86-64 the schoolbook kernels are selected at compile time: the generic
+baseline kernels, the BMI2/ADX kernels, or the AVX-512 IFMA kernels. All three
+builds were timed through the public operators with the programs of the
+comparison tables below. IFMA is the fastest at every width for multiplication
+and from 512 limbs for division. Below that the three tie for division, because
+Knuth long division does not call the multiplication kernels. Times are
+microseconds per operation; division divides a dividend of the stated width by a
+divisor half as wide.
+
+[cols="2,1,1,1", options="header"]
+|===
+| Operation, 64-bit limbs | generic | BMI2/ADX | AVX-512 IFMA
+
+| `*`, 128 | 5.5 | 4.1 | *1.8*
+| `*`, 1,024 | 153 | 122 | *62*
+| `*`, 8,192 | 2,900 | 2,450 | *1,550*
+| `*`, 32,768 | 18,500 | 16,200 | *10,700*
+| `/`, 128 | 3.7 | 3.6 | 3.7
+| `/`, 1,024 | 87 | 79 | *66*
+| `/`, 8,192 | 2,180 | 1,840 | *1,200*
+| `/`, 32,768 | 16,700 | 14,200 | *8,930*
+|===
+
+The SIMD FFT combines with the IFMA kernels. It only replaces the FFT tier, the
+integer NTT of the default build, with a double-precision transform using AVX2
+kernels that is about twice as fast. So it changes nothing below the FFT gate,
+and its FFT gate for this combination was fitted as described under the cost
+model below. Timed end to end through the public operators with
+https://github.com/eisenwave/std-big-int/blob/main/tests/beman/big_int/perf/shape_sweep.cpp[shape_sweep.cpp]
+on 34 shapes (balanced and unbalanced products up to 1,000,000 limbs, and
+squares), it was up to 1.8x faster than the IFMA build with the integer NTT. It was
+3% and 4% slower at two balanced sizes (50,000 and 80,000 limbs), band tops where
+the SIMD FFT and Toom-Cook 8.5 are within a few percent of each other and the
+gate takes the FFT (see the cost model below). Times are the median of five
+rounds, in milliseconds:
+
+[cols="2,1,1,1", options="header"]
+|===
+| Operation, 64-bit limbs | IFMA, integer NTT | IFMA + SIMD FFT | Speedup
+
+| `*`, 80,000 x 80,000 | 35.4 | 36.9 | 0.96
+| `*`, 100,000 x 100,000 | 48.2 | 39.9 | 1.21
+| `*`, 131,072 x 131,072 | 70.0 | 66.5 | 1.05
+| `*`, 200,000 x 200,000 | 127 | 82.2 | 1.55
+| `*`, 400,000 x 400,000 | 308 | 171 | 1.80
+| `*`, 800,000 x 800,000 | 681 | 377 | 1.81
+| `*`, 1,000,000 x 1,000,000 | 1,070 | 761 | 1.41
+| `*`, 30,000 x 600,000 | 192 | 148 | 1.30
+| `*`, 131,072 x 524,288 | 281 | 159 | 1.76
+| `*`, 16,000 x 1,000,000 | 246 | 246 | 1.00
+| `x * x`, 400,000 | 216 | 135 | 1.60
+| `x * x`, 1,000,000 | 704 | 603 | 1.17
+|===
+
+At 1,000,000 limbs, a band start, the integer build uses Toom-Cook 8.5 and the SIMD
+FFT is still 1.4x faster. Division only gains where its internal products reach the
+FFT: its rows below are unchanged up to 131,072 limbs.
 
 [#benchmarks_ecdsa]
 === Real-world gauge: ECDSA over secp256k1
@@ -125,17 +192,19 @@ elliptic-curve algebra: round-trip 256-bit ECDSA (secp256k1) key generation,
 signing, and verification, run once with pre-defined seeds and again over 32
 trials with random seeds. It is not a tuned ECDSA implementation but an overall
 performance gauge at modest integer widths, exercising a wide range of binary and
-unary operations and allocations, and it is timed end to end. Runs with
-`beman::big_int`, `boost::cpp_int`, and `boost::gmp_int` are compared. Source:
+unary operations and allocations, and it is timed end to end (the median of five
+runs). Runs with `beman::big_int`, `boost::cpp_int`, and `boost::gmp_int` are
+compared. At 256 bits the operands are four limbs, below every kernel and FFT
+threshold, so the build configuration does not matter here. Source:
 https://github.com/eisenwave/std-big-int/blob/main/tests/beman/big_int/perf/elliptic_ecc.perf.cpp[elliptic_ecc.perf.cpp].
 
 [cols="2,1,1", options="header"]
 |===
 | Integer type | Time [s] | Relative
 
-| `beman::big_int` | 2.0 | 1.3
-| `boost::cpp_int` | 1.7 | 1.1
-| `boost::gmp_int` | 1.6 | 1.0
+| `beman::big_int` | 0.66 | 1.3
+| `boost::cpp_int` | 0.59 | 1.2
+| `boost::gmp_int` | 0.50 | 1.0
 |===
 
 [#benchmarks_multiplication]
@@ -148,8 +217,9 @@ depends on the machine and on which basecase kernel is in use, so the crossovers
 are per-configuration constants in `detail/mul_impl.hpp`; the table below lists the
 values the library currently ships (the shorter operand's limb count, integer
 non-SIMD path). The `BEMAN_BIG_INT_SIMD_MUL` (floating-point NTT) configurations
-were not retuned and keep their earlier FFT floors (with the Toom thresholds of
-the table).
+use the Toom thresholds of the table with their own FFT gates. The AVX-512 IFMA
+build with the SIMD FFT has a cost model of its own (below); the other x86-64
+SIMD configurations were not retuned and keep their earlier FFT floors.
 
 [#benchmarks_crossovers]
 ==== Current crossovers
@@ -164,12 +234,12 @@ the table).
 | Toom-Cook 4 (`toom_cook_4_cutoff`) | 1,400 | 1,600 | 4,000 | 1,400
 | Toom-Cook 6.5 (`toom_cook_6_5_cutoff`) | 1,400 | 1,800 | 4,000 | 1,400
 | Toom-Cook 8.5 (`toom_cook_8_5_cutoff`) | 1,400 | 7,000 | 6,000 | 15,000 (rarely reached)
-| FFT floor (`fft_mul_min_limbs`) | 3,000 (cost model) | 3,000 (cost model) | 16,000 (cost model) | 1,400 (cost model)
+| FFT floor (`fft_mul_min_limbs`) | 3,000 (cost model) | 3,000 (cost model) | 300,000 (cost model) | 1,400 (cost model)
 | Slicing: Karatsuba-zone ratio; large zone from (ratio) | 7/4; 12,000 (9/8) | 7/4; 16,000 (9/8) | 7/4; 30,000 (4/3) | 7/4; 1,400 (3/2)
 | Squaring: schoolbook below (`square_long_cutoff`) | 5 | 10 | 10 | 5
 | Squaring: Karatsuba (`square_karatsuba_cutoff`) | 72 | 120 | 257 | 168
 | Squaring: Toom-Cook 3 (`square_toom_cook_3_cutoff`) | 300 | 440 | 4,200 | 500
-| Squaring: FFT floor (`square_fft_min_limbs`) | 3,000 (cost model) | 3,000 (cost model) | 8,000 (cost model) | 1,400 (cost model)
+| Squaring: FFT floor (`square_fft_min_limbs`) | 3,000 (cost model) | 3,000 (cost model) | 500,000 (cost model) | 1,400 (cost model)
 | Division: Burnikel-Ziegler divisor / quotient gate | 160 / 64 | 160 / 64 | 160 / 64 | 40 / 10
 | Division: Barrett from divisor of (`barrett_march_cutoff`) | 512 | 512 | 512 | 9
 | Base conversion: input ladder leaf, chunks (`fast_input_basecase_chunks`) | 512 | 512 | 512 | 16
@@ -204,79 +274,186 @@ Toom-3 would refuse the shape.
 length, while the Toom ladder is smooth, so a single cutoff is wrong inside every
 transform-length band. The FFT tier is chosen by an integer cost model: use the
 FFT when the shorter operand has at least `fft_mul_min_limbs` limbs and
-`L * log2(L) * den <= num * max * isqrt(min)`, where `L` is the transform length.
-The model is on for the integer x86-64 and AArch64 builds (the floor is then only
-an early-out) and covers unbalanced shapes through `max`; the SIMD configurations
-were not retuned and still use a plain floor. Sliced pieces consult the same gate.
+`L * log2(L) * den <= num * max * isqrt(min)`, where `L` is the transform length
+(the integer AVX-512 IFMA build uses a steeper shape, see below). The model is on
+for the integer x86-64 and AArch64 builds and covers unbalanced shapes through
+`max`. With the SIMD FFT it is on for AArch64 and for the AVX-512 IFMA build
+(`num/den` 15/64 for multiplication and 75/512 for squaring, floors 16,000 and
+8,000); the generic and BMI2/ADX SIMD configurations were not retuned and still
+use a plain floor. Sliced pieces consult the same gate.
 The model matters on x86-64: the earlier single floors (24,000 limbs for generic
 and BMI2/ADX) sent products to the scalar NTT although Toom-Cook 8.5 stays faster
 until about 40,000 to 75,000 limbs balanced (a balanced 28,809-limb product was
-2.0x (generic) and 2.3x (BMI2/ADX) slower with the FFT).
+2.0x (generic) and 2.3x (BMI2/ADX) slower with the FFT). With the IFMA basecase,
+Toom-Cook 8.5 stays faster than the integer NTT up to about 720,000 limbs
+balanced, and than the SIMD FFT up to about 80,000 (see the
+<<benchmarks_multiplication_progression,tier timings>> below).
+
+Both AVX-512 IFMA gates were fitted to the forced Toom-Cook 8.5 and FFT tiers
+(balanced, up to 3,276,000 limbs) and to FFT-against-Toom timings of unbalanced
+products (1:1.5 to 1:16). Whether the FFT wins depends on how full its
+power-of-two transform is, so it can win, lose and win again as the longer
+operand grows: with a 300,000-limb shorter operand the integer NTT is 1.2x faster
+at 1:4, 1.3x slower at 1:6 and on par at 1:8.
+
+* With the SIMD FFT the model keeps its square-root shape. The earlier constants
+were fitted to balanced sizes only and left the FFT unused on unbalanced products
+where it is up to 1.3x faster (100,000 x 150,000 limbs, for example). The refit
+picks the faster tier on 99% of the balanced sizes and 93% of 67 unbalanced shapes
+(shorter operands of 16,000 to 1,300,000 limbs, longer ones up to 6,400,000), and
+the rest are within 1.12x. The balanced sizes it gets wrong are near-ties: at
+50,000 and 80,000 limbs the FFT is 3% to 4% slower end to end, but no constant
+avoids them without also giving up unbalanced products that are up to 1.3x
+faster with the FFT. On 10 held-out shapes it picked the faster path for 7; the
+other three (45,000 x 180,000, 75,000 x 600,000 and 120,000 x 240,000) lose 1.07x
+to 1.15x, because a product the gate rejects is sliced and its pieces then take
+the FFT one by one.
+* The integer IFMA build crosses over at millions of limbs, where the NTT's time
+grows about 2.4x per transform length (memory traffic) instead of the 2.1x of
+`L * log2(L)`, and sliced Toom-Cook 8.5 grows like `max * min^0.35`. With the
+square-root shape no single constant fits: the break-even value drifts by about
+0.8x per transform length, and the earlier 7/64 and 6/64 took the NTT at every
+band start from about 900,000 limbs on, up to 1.9x (multiplication) and 2.1x
+(squaring) slower. This build therefore compares `L * log2(L)^3 * den` against
+`num * max * cbrt(min)` (`num/den` 298 for multiplication and 268 for squaring).
+On the fitting data it picks the faster tier for 93% of the balanced sizes and 94%
+of 52 unbalanced shapes (shorter operands of 300,000 to 1,600,000 limbs, longer ones
+up to 8,000,000), and the rest are within 1.13x. The multiplication floor of 300,000 limbs is the
+smallest shape measured, below which the NTT loses anyway. The squaring floor of
+500,000 is below the first square the model accepts (788,000).
+
+Checked end to end on shapes that were not part of the fit, the integer IFMA gate
+picked the faster path for all 16 products (within 1%; for 750,000 x 3,000,000 the
+dispatcher's own split beats both forced paths) and was never slower than the old
+gate beyond noise. Times are the median of three rounds, in milliseconds:
+
+[cols="2,1,1,1", options="header"]
+|===
+| Operation, 64-bit limbs | Old gate | New gate | Faster forced path
+
+| `*`, 900,000 x 900,000 | 1,600 | 928 | 926 (Toom)
+| `*`, 1,100,000 x 1,100,000 | 1,620 | 1,200 | 1,200 (Toom)
+| `*`, 1,550,000 x 1,550,000 | 1,640 | 1,650 | 1,640 (FFT)
+| `*`, 2,200,000 x 2,200,000 | 3,980 | 3,010 | 3,000 (Toom)
+| `*`, 350,000 x 1,400,000 | 1,230 | 1,060 | 1,060 (Toom)
+| `*`, 750,000 x 3,000,000 | 3,940 | 2,680 | 2,890 (Toom)
+| `*`, 1,200,000 x 6,000,000 | 8,990 | 6,770 | 6,770 (Toom)
+| `x * x`, 700,000 | 484 | 438 |
+| `x * x`, 2,500,000 | 2,870 | 2,420 |
+|===
 
 The hand-written `x86-64` BMI2/ADX and AVX-512 IFMA kernels (see
 xref:build_and_usage.adoc#build_and_usage_avx512_ifma[the build guide]) move
 these thresholds; the IFMA schoolbook gate is itself shape-aware, taking the IFMA
 kernel earlier the more lopsided the operands are.
 
-To isolate a single tier, only the `big_int` multiplication itself is timed: a
-stopwatch is read immediately before and after the multiplication, and the times
-are summed and averaged over many trials. Runs use limb counts chosen both to
-straddle crossover points (for example the Karatsuba-to-Toom-Cook boundary) and
-to land squarely inside one algorithm's range, so its complexity can be observed
-in as isolated a way as possible. By temporarily overriding the compiled-in
-cutoffs, individual tiers can be excluded and then added back -- schoolbook only,
-then Karatsuba only, then Karatsuba plus Toom-Cook 3, and so on.
-
-* All runs were numerically correct.
-* Toom-Cook 3 and 4 become clearly beneficial a few hundred to a few thousand
-limbs in, depending on the configuration (see the crossover table above).
-* Higher Toom-Cook orders show similar trends; rather than tabulating each, they
-are summarized by the empirical timings below.
-
 [#benchmarks_multiplication_progression]
-==== Algorithm-tier progression
+==== Tier-by-tier timings
 
-The table below shows the time per multiplication as successive tiers are enabled
-at increasing operand widths. It comes from an early measurement that predates
-the hand-written kernels, the retuned crossovers and the slicing dispatch, so it
-illustrates how the tiers scale rather than the current thresholds. Times are microseconds per multiplication;
-`n/a` marks a tier not measured at that width.
+To isolate each tier, a stress benchmark
+(https://github.com/eisenwave/std-big-int/blob/main/tests/beman/big_int/multiplication_stress_bench.test.cpp[multiplication_stress_bench.test.cpp])
+calls the kernels directly on balanced operands, bypassing the dispatcher. The
+schoolbook tier is the runtime basecase kernel (the IFMA kernel here). Every
+higher tier is forced at the top level through its benchmark-only
+`cutoff_override`. Its sub-products recurse in the same tier down to that tier's
+own cutoff and then drop to the lower tiers at the production cutoffs, so the
+Toom-Cook 4 column, for example, is the ladder up to Toom-Cook 4. The FFT column
+is the SIMD FFT alone. Each point is the mean over enough back-to-back calls to fill a
+fraction of a second. A forced tier also runs at sizes where the dispatcher would
+never choose it, and only balanced shapes are timed, so the crossovers read off
+these curves are not the shipped thresholds. Those were tuned end to end through
+the public operators on balanced and unbalanced shapes.
 
-[cols="1,1,1,1,1,1,1", options="header"]
+The table shows microseconds per multiplication. The fastest tier at each width is
+in bold; `n/a` marks a tier not measured at that width.
+
+[cols="1,1,1,1,1,1,1,1,1", options="header"]
 |===
-| 64-bit limbs | Binary digit width | Schoolbook | With Karatsuba | Up to Toom-Cook 3 | Up to Toom-Cook 4 | Up to Toom-Cook 6.5
+| 64-bit limbs | Binary digit width | Schoolbook | Karatsuba | Toom-Cook 3 | Toom-Cook 4 | Toom-Cook 6.5 | Toom-Cook 8.5 | FFT (NTT)
 
-| 700--1,400 | 44,800--89,600 | 1,270 | 380 | 370 | n/a | n/a
-| 6,000--8,000 | 384,000--512,000 | n/a | 8,220 | 6,240 | n/a | n/a
-| 10,000--12,000 | 640,000--768,000 | n/a | 15,700 | 11,800 | n/a | n/a
-| 21,000--23,000 | 1,344,000--1,472,000 | n/a | n/a | 33,100 | 27,800 | n/a
-| 43,000--45,000 | 2,752,000--2,880,000 | n/a | n/a | n/a | 72,300 | 59,700
+| 256 | 16,384 | 6.16 | *5.86* | n/a | n/a | n/a | n/a | n/a
+| 1,000 | 64,000 | 90.4 | *60.3* | 61.3 | 72.6 | 79.6 | n/a | 431
+| 2,000 | 128,000 | 361 | 188 | *180* | 198 | 201 | 223 | 904
+| 10,000 | 640,000 | n/a | 2,470 | 2,220 | 2,270 | 2,040 | *1,980* | 4,080
+| 32,000 | 2,048,000 | n/a | n/a | 12,800 | 12,000 | 10,800 | *10,200* | 16,300
+| 80,000 | 5,120,000 | n/a | n/a | n/a | 45,300 | 37,800 | 35,200 | *35,200*
+| 100,000 | 6,400,000 | n/a | n/a | n/a | n/a | 53,100 | 48,200 | *37,600*
+| 300,000 | 19,200,000 | n/a | n/a | n/a | n/a | 228,000 | 209,000 | *148,000*
+| 800,000 | 51,200,000 | n/a | n/a | n/a | n/a | n/a | 778,000 | *356,000*
+| 1,000,000 | 64,000,000 | n/a | n/a | n/a | n/a | n/a | 1,050,000 | *725,000*
 |===
+
+* The IFMA schoolbook kernel stays fastest up to about 240 limbs, close to the
+shipped Karatsuba cutoff of 260.
+* Each higher tier first wins a few sizes before it stays ahead for good, because
+of noise and each tier's split-size steps. Toom-Cook 3 stays ahead of Karatsuba
+from about 2,700 limbs, and Toom-Cook 6.5 ahead of Toom-Cook 4 from about 3,300.
+Toom-Cook 8.5 pulls ahead of Toom-Cook 6.5 from about 8,000 limbs; the two stay
+within a few percent up to about 21,000. Toom-Cook 4 only overtakes Toom-Cook 3
+for good at about 11,800 limbs, above where Toom-Cook 6.5 has already taken over. This is consistent with the IFMA ladder giving Toom-Cook 4 and 6.5 the
+same cutoff (4,000 limbs), which leaves no Toom-Cook 4 zone.
+* The FFT time is a step function of the power-of-two transform length, and the
+FFT cost model accounts for these steps. The SIMD FFT first matches Toom-Cook 8.5
+at the top of the band that ends near 51,000 limbs (18.6 ms each at 50,000). It
+loses again just past the step (33.2 vs 26.7 ms at 65,000) and stays ahead from
+about 80,000 limbs: 1.3x faster at 100,000, 1.4x at 300,000 and 2.2x at 800,000.
+* The integer NTT of the default build is about 2x slower than the SIMD FFT (673
+vs 356 ms at 800,000 limbs). With the IFMA basecase it only overtakes Toom-Cook
+8.5 at about 720,000 limbs, and only in the upper part of each band, which the
+IFMA build's gate handles as described above. On the
+generic and BMI2/ADX builds, whose basecase is slower, the integer NTT takes over
+at about 40,000 to 75,000 limbs balanced (see above).
 
 [#benchmarks_multiplication_complexity]
-==== Empirical complexity of the Toom-Cook tiers
+==== Empirical complexity
 
-The empirical order of complexity `x` follows from the ratio of the last two rows
-for each tier, treated as a doubling of the operand width (`2^x = t_2 / t_1`):
+The empirical order `x` in `t ~ n^x` is the least-squares slope of log time
+against log size over the upper half of each tier's measured range, from the same
+data:
 
-* *Toom-Cook 3*: `2^x = 33,100 / 11,800`, giving `x` approximately `1.49`, against
-a theoretical `log_3(5)` approximately `1.465` -- in good agreement.
-* *Toom-Cook 4*: `2^x = 72,300 / 27,800`, giving `x` approximately `1.39`, against
-a theoretical `log_4(7)` approximately `1.404` -- again in good agreement.
+[cols="2,2,1,2", options="header"]
+|===
+| Tier | Fitted over (limbs) | Empirical `x` | Theoretical `x`
 
-The plot below shows multiplication time against operand limb count across many
-orders of magnitude. It predates the retuning above, so its crossover points are
-those of the earlier tuning, not the values in the table.
+| Schoolbook | 192 -- 2,000 | 1.97 | 2
+| Karatsuba | 700 -- 10,000 | 1.62 | `log_2(3)` approximately 1.585
+| Toom-Cook 3 | 2,700 -- 32,000 | 1.53 | `log_3(5)` approximately 1.465
+| Toom-Cook 4 | 3,000 -- 80,000 | 1.48 | `log_4(7)` approximately 1.404
+| Toom-Cook 6.5 | 6,000 -- 300,000 | 1.40 | `log_6.5(12)` approximately 1.328
+| Toom-Cook 8.5 | 14,000 -- 1,000,000 | 1.35 | `log_8.5(16)` approximately 1.294
+| FFT (SIMD) | 7,500 -- 1,000,000 | 1.03 | 1 (times `log n`)
+|===
 
-.Multiplication time vs operand limb count, with the algorithm-tier crossovers
+Karatsuba and the Toom-Cook tiers fit 0.04 to 0.08 above their theoretical
+exponents. A tier's sub-products below its own cutoff run the lower tiers, which
+have higher exponents, and the linear evaluation and interpolation passes add to
+it. The
+FFT's `n log n` shows up as an exponent slightly above 1.
+
+The plots below show the same data from 2 to 1,000,000 limbs: the time per
+operation of each tier (top) and its time relative to the fastest tier measured
+at that size (bottom). Vertical lines mark the size after which each tier stays
+ahead of the tier below it.
+
+.Multiplication time per tier vs operand limb count, balanced operands
 image::crossover_main.png[Multiplication algorithm crossover plot,align=center]
+
+Squaring has its own ladder with the same tiers, built on the dedicated square
+kernels, with the cutoffs listed in the crossover table above. The IFMA square
+kernel works natively up to 256 limbs, so the schoolbook squaring curve jumps just
+above that, exactly where the shipped squaring Karatsuba cutoff (257) takes over.
+Toom-Cook 8.5 squaring is harder for the FFT to beat than Toom-Cook 8.5
+multiplication: the SIMD FFT square stays ahead only from about 270,000 limbs.
+
+.Squaring time per tier vs operand limb count
+image::crossover_square.png[Squaring algorithm crossover plot,align=center]
 
 [#benchmarks_multiplication_vs]
 ==== `big_int` vs `cpp_int` vs `gmp_int`
 
 The result of a multiplication adds the widths of its operands, so each row
-multiplies two operands of the stated width and the product is twice as wide.
-Source:
+multiplies two operands of the stated width and the product is twice as wide. The
+times include allocating the result, for all three libraries. Source:
 https://github.com/eisenwave/std-big-int/blob/main/tests/beman/big_int/perf/mul_big_int_vs_gmp_cpp.perf.cpp[mul_big_int_vs_gmp_cpp.perf.cpp];
 pass an operand width in limbs (and optionally a trial count) on the command line
 to reproduce a row.
@@ -285,63 +462,131 @@ to reproduce a row.
 |===
 | 64-bit limbs | Bit width | Approx base-10 digits | us per mul `big_int` | us per mul `cpp_int` | us per mul `gmp_int`
 
-| 128 | 8,192 | 2,500 | 9.8 [2.2] | 8.2 [1.9] | 4.4 [1.0]
-| 512 | 32,768 | 9,900 | 67 [2.5] | 64 [2.4] | 27 [1.0]
-| 1,024 | 65,536 | 20,000 | 199 [2.7] | 190 [2.6] | 73 [1.0]
-| 2,048 | 131,072 | 39,000 | 564 [3.0] | 580 [3.0] | 190 [1.0]
-| 8,192 | 524,288 | 160,000 | 4,100 [3.2] | 5,200 [4.1] (see 2) | 1,300 [1.0]
-| 32,768 | 2,097,152 | 631,000 | 17,000 [3.2] | 47,000 [8.8] | 5,300 [1.0]
-| 131,072 | 8,388,608 | 2,525,000 | 72,000 [2.7] (see 1) | 420,000 [15.7] | 27,000 [1.0]
+| 128 | 8,192 | 2,500 | 1.85 [1.0] (see 1) | 7.21 [3.9] | 2.84 [1.5]
+| 512 | 32,768 | 9,900 | 19.8 [1.0] | 65.3 [3.3] | 21.3 [1.1]
+| 1,024 | 65,536 | 20,000 | 62.6 [1.1] | 196 [3.5] | 56.8 [1.0]
+| 2,048 | 131,072 | 39,000 | 228 [1.5] | 593 [3.9] | 154 [1.0]
+| 8,192 | 524,288 | 158,000 | 1,590 [1.8] | 5,280 [6.1] | 872 [1.0]
+| 32,768 | 2,097,152 | 631,000 | 10,900 [2.5] | 47,100 [11] | 4,350 [1.0]
+| 131,072 | 8,388,608 | 2,525,000 | 72,300 [3.4] (see 2) | 426,000 [20] (see 3) | 21,500 [1.0]
+| 524,288 | 33,554,432 | 10,100,000 | 340,000 [3.1] | 3,780,000 [34] | 110,000 [1.0]
 |===
 
-. With its FFT tier, `big_int` tracks GMP's asymptotic complexity and stays within
-roughly 3x of GMP across the entire range, including the largest sizes where it
-previously fell behind (about 5.3x at 131,072 limbs before the FFT existed).
+. With the IFMA basecase, `big_int` is faster than GMP from about 32 to 512 limbs
+(1.6x at 64 limbs, 1.5x at 128) and within 1.1x of it at 1,024 limbs.
+. Above that, GMP pulls ahead gradually, to 1.8x at 8,192 limbs and 3.4x at
+131,072, a near-tie between the SIMD FFT and Toom-Cook 8.5 (see the cost model
+above). From there the SIMD FFT keeps the gap from growing: 3.0x at 262,144 limbs
+and 3.1x at 524,288.
 . `cpp_int` only reaches as high as Karatsuba multiplication, so both `big_int`
 and `gmp_int` pull ahead at medium-high digit counts; the lead `big_int` has over
-`cpp_int` grows to roughly 6x by 131,072 limbs.
+`cpp_int` grows to about 6x at 131,072 limbs and 11x at 524,288.
 
-A finer-grained sweep over mixed limb counts (4 to 30,000 limbs) shows the same
-trend, with `big_int` within roughly 2x--3x of GMP across the whole range; many
-millions of trials were run with both performance and numerical-correctness
-checks. See
+.Multiplication time and time relative to GMP vs operand limb count
+image::vs_libraries_mul.png[big_int vs cpp_int vs gmp_int multiplication plot,align=center]
+
+A mixed sweep of 16,384 products with random widths from 4 to 16,384 limbs (the
+second operand 0.5x to 1.5x as wide as the first) checks every result against GMP
+and averages 2.2x GMP's time, a mean dominated by the widest operands (all below
+the FFT gate). See
 https://github.com/eisenwave/std-big-int/blob/main/tests/beman/big_int/perf/mul_big_int_vs_gmp_cpp.limbs.cpp[mul_big_int_vs_gmp_cpp.limbs.cpp].
 
 [#benchmarks_division]
 === Division
 
-Division uses Knuth long division for small limb counts and crosses over to the
+Division uses Knuth long division for small divisors and crosses over to the
 Burnikel-Ziegler algorithm at a divisor of 40 limbs (AArch64) or 160 limbs
 (x86-64), and to Barrett (reciprocal-based) division for long dividends; above
 that its performance is driven by the underlying multiplication. The gates are
-listed in the crossover table above. As with multiplication,
-only the `big_int` division itself is timed, with a stopwatch read immediately
-before and after the operation and the times summed and averaged over many
-trials. Each row divides an pass:[N]-digit numerator by an pass:[N/2]-digit
-denominator, producing an pass:[N/2]-digit quotient. Source:
+listed in the crossover table above.
+
+[#benchmarks_division_tiers]
+==== Tier-by-tier timings
+
+A stress benchmark
+(https://github.com/eisenwave/std-big-int/blob/main/tests/beman/big_int/division_stress_bench.test.cpp[division_stress_bench.test.cpp])
+calls the three kernels directly, including their scratch setup, and takes the
+median over three random operand pairs of the best of five repetitions. On
+balanced 2n / n shapes:
+
+* Burnikel-Ziegler called below its gate runs the schoolbook kernel, so the two
+curves coincide up to 128-limb divisors. From the 160-limb gate on it pulls away:
+1.6x faster at 192 limbs, 2.6x at 512 and 8.8x at 4,096.
+* Barrett is 2x to 3x slower than Burnikel-Ziegler on balanced shapes up to
+32,768-limb divisors, narrowing to 1.15x at 262,144 limbs, where both run on the
+SIMD FFT. It is only used when the dividend is much longer than the divisor, where the reciprocal is
+computed once and reused over many blocks. With a 16,384-limb dividend it is 1.8x
+faster than Burnikel-Ziegler at a 512-limb divisor, 1.5x at 1,024 and 1.2x at
+2,048, and slower again at 4,096.
+
+.Division time per tier vs divisor limb count, balanced 2n / n
+image::crossover_division.png[Division algorithm crossover plot,align=center]
+
+[#benchmarks_division_vs]
+==== `big_int` vs `cpp_int` vs `gmp_int`
+
+As with multiplication, only the division itself is timed, with a stopwatch read
+immediately before and after the operation and the times summed and averaged over
+many trials. Each row divides an pass:[N]-digit numerator by an
+pass:[N/2]-digit denominator, producing an pass:[N/2]-digit quotient. Source:
 https://github.com/eisenwave/std-big-int/blob/main/tests/beman/big_int/perf/div_big_int_vs_gmp_cpp.perf.cpp[div_big_int_vs_gmp_cpp.perf.cpp].
 
 [cols="1,1,1,1,1,1", options="header"]
 |===
 | 64-bit limbs | Bit width | Approx base-10 digits | us per div `big_int` | us per div `cpp_int` | us per div `gmp_int`
 
-| 128 | 8,192 | 2,500 | 4.2 [2.5] | 10.4 [6.1] | 1.7 [1.0]
-| 512 | 32,768 | 9,900 | 32 [1.7] | 120 [6.7] | 18 [1.0]
-| 1,024 | 65,536 | 20,000 | 120 [2.3] | 420 [7.9] | 53 [1.0]
-| 2,048 | 131,072 | 39,000 | 360 [3.0] | 1,500 [13] (see 1) | 120 [1.0]
-| 8,192 | 524,288 | 160,000 | 2,800 [2.9] | 23,000 [24] | 950 [1.0]
-| 32,768 | 2,097,152 | 631,000 | 23,000 [3.8] | 370,000 [62] | 6,000 [1.0]
+| 128 | 8,192 | 2,500 | 3.70 [3.0] (see 1) | 6.72 [5.4] | 1.25 [1.0]
+| 512 | 32,768 | 9,900 | 24.8 [1.9] | 80.0 [6.2] | 12.9 [1.0]
+| 1,024 | 65,536 | 20,000 | 66.5 [1.7] | 303 [7.9] | 38.6 [1.0]
+| 2,048 | 131,072 | 39,000 | 199 [1.8] | 1,250 [11] (see 2) | 110 [1.0]
+| 8,192 | 524,288 | 158,000 | 1,210 [1.6] | 18,300 [25] | 736 [1.0]
+| 32,768 | 2,097,152 | 631,000 | 9,060 [2.2] | 302,000 [75] | 4,040 [1.0]
+| 131,072 | 8,388,608 | 2,525,000 | 67,200 [3.3] | 4,990,000 [242] | 20,600 [1.0]
 |===
 
+. Below the Burnikel-Ziegler gate GMP is 1.6x to 3.3x faster. The gap peaks at
+3.3x for a 256-limb dividend (a 128-limb divisor, just below the 160-limb gate).
+From 512 limbs on, `big_int` stays within 1.6x to 3.3x of GMP.
 . `cpp_int` uses a variant of Knuth long division at all limb counts, which is
 quadratic, so `big_int` and `gmp_int` pull ahead rapidly at medium-high digit
-counts; the lead `big_int` has over `cpp_int` grows to roughly 8x by 8,192 limbs.
+counts; the lead `big_int` has over `cpp_int` grows to about 15x at 8,192 limbs
+and 74x at 131,072.
 
-A finer-grained sweep over mixed limb counts (4 to 30,000 limbs) shows the same
-trend, with `big_int` within roughly 2x--4x of GMP across the whole range; again
-many millions of trials were run with both performance and numerical-correctness
-checks. See
+.Division time and time relative to GMP vs dividend limb count
+image::vs_libraries_div.png[big_int vs cpp_int vs gmp_int division plot,align=center]
+
+A mixed sweep of 16,384 quotients with divisors of 4 to 16,384 limbs and
+dividends 1.1x to 2.1x as wide checks every result against GMP and averages 2.0x
+GMP's time. See
 https://github.com/eisenwave/std-big-int/blob/main/tests/beman/big_int/perf/div_big_int_vs_gmp_cpp.limbs.cpp[div_big_int_vs_gmp_cpp.limbs.cpp].
+
+[#benchmarks_reproducing]
+=== Reproducing the measurements
+
+The two stress benchmarks are test executables that only run their sweep when
+`BEMAN_BIG_INT_RUN_BENCHMARKS` is defined, and they print CSV:
+
+[source,bash]
+----
+cmake --preset gcc-release -DBEMAN_BIG_INT_X86_64_AVX512_IFMA=ON -DBEMAN_BIG_INT_SIMD_MUL=ON \
+    -DCMAKE_CXX_FLAGS=-DBEMAN_BIG_INT_RUN_BENCHMARKS=1
+cmake --build build/gcc-release --target beman.big_int.tests.multiplication_stress_bench \
+    beman.big_int.tests.division_stress_bench
+cd build/gcc-release/tests/beman/big_int
+taskset -c 2 ./beman.big_int.tests.multiplication_stress_bench | grep -E '^[a-z0-9.-]+,' > crossover_tuning_data.csv
+taskset -c 2 ./beman.big_int.tests.division_stress_bench | grep -E '^[a-z-]+,' > division_tuning_data.csv
+python3 <source-dir>/tests/beman/big_int/perf/plot_crossover.py crossover_tuning_data.csv \
+    --division division_tuning_data.csv
+----
+
+The `*.perf.cpp` and `*.limbs.cpp` programs need Boost.Multiprecision and GMP and
+are compiled by hand against the library, with the same kernel macros as the
+library build (here `-DBEMAN_BIG_INT_X86_64_BMI2_ADX=1
+-DBEMAN_BIG_INT_X86_64_AVX512_IFMA=1 -DBEMAN_BIG_INT_SIMD_MUL`). `plot_vs_libraries.py` plots a CSV of
+their results (columns `op,limbs,trials,big_int_us,cpp_int_us,gmp_int_us`). The
+data behind the figures on this page is kept next to the scripts as
+`crossover_tuning_data.csv`, `division_tuning_data.csv` and
+`vs_libraries_data.csv`.
 
 [#benchmarks_base_conversion]
 == Base conversion and string representations
@@ -594,4 +839,16 @@ https://github.com/eisenwave/std-big-int/tree/main/tests/beman/big_int/perf[test
 
 | https://github.com/eisenwave/std-big-int/blob/main/tests/beman/big_int/perf/shape_sweep.cpp[shape_sweep.cpp]
 | End-to-end timing harness used for tuning: multiplication, squaring and division through the public operators over a list of operand shapes (balanced and unbalanced), with residue checks and an optional GMP column. Built as the `beman.big_int.benchmarks.shape_sweep` target.
+
+| https://github.com/eisenwave/std-big-int/blob/main/tests/beman/big_int/multiplication_stress_bench.test.cpp[multiplication_stress_bench.test.cpp]
+| Each multiplication and squaring tier (schoolbook kernels through FFT) forced at the top level on balanced operands; CSV output for `plot_crossover.py`.
+
+| https://github.com/eisenwave/std-big-int/blob/main/tests/beman/big_int/division_stress_bench.test.cpp[division_stress_bench.test.cpp]
+| The schoolbook, Burnikel-Ziegler and Barrett division kernels called directly on balanced, quotient-length and unbalanced shapes; CSV output for `plot_crossover.py --division`.
+
+| https://github.com/eisenwave/std-big-int/blob/main/tests/beman/big_int/perf/plot_crossover.py[plot_crossover.py]
+| Plots the tier timings and crossovers of multiplication, squaring and division, and fits their empirical complexity.
+
+| https://github.com/eisenwave/std-big-int/blob/main/tests/beman/big_int/perf/plot_vs_libraries.py[plot_vs_libraries.py]
+| Plots `big_int` against `cpp_int` and `gmp_int` for multiplication and division.
 |===

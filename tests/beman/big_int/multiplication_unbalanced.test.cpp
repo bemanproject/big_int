@@ -563,14 +563,37 @@ TEST(MultiplicationUnbalanced, FftModelWorthwhileIsExact) {
                     const big           rhs  = big{num} * big{max_size} * big{root};
                     EXPECT_EQ(detail::fft_model_worthwhile(length, num, den, max_size, min_size), lhs <= rhs)
                         << "L=" << length << " " << num << "/" << den << " max=" << max_size << " min=" << min_size;
+                    // The other model shapes: log2(L)^p for p = 1..4 against a square or cube root.
+                    const std::uint64_t croot = detail::icbrt_floor(min_size);
+                    for (unsigned p = 1; p <= 4; ++p) {
+                        big k_pow{1};
+                        for (unsigned i = 0; i < p; ++i) {
+                            k_pow = k_pow * big{k};
+                        }
+                        const big lhs_p = big{length} * k_pow * big{den};
+                        const big rhs_c = big{num} * big{max_size} * big{croot};
+                        EXPECT_EQ(detail::fft_model_worthwhile(length, num, den, max_size, min_size, p, 2),
+                                  den == 0 || lhs_p <= rhs)
+                            << "p=" << p << " L=" << length << " max=" << max_size << " min=" << min_size;
+                        EXPECT_EQ(detail::fft_model_worthwhile(length, num, den, max_size, min_size, p, 3),
+                                  den == 0 || lhs_p <= rhs_c)
+                            << "p=" << p << " cbrt L=" << length << " max=" << max_size << " min=" << min_size;
+                    }
                 }
             }
         }
     }
-    // The root itself is exact at the overflow-adjacent sizes: root^2 <= x < (root + 1)^2.
+    // The roots themselves are exact at the overflow-adjacent sizes: root^2 <= x < (root + 1)^2, likewise cubed.
     for (const std::uint64_t x : sizes) {
         const big root{detail::isqrt_floor(x)};
         EXPECT_TRUE(root * root <= big{x} && big{x} < (root + 1) * (root + 1)) << x;
+        const big croot{detail::icbrt_floor(x)};
+        EXPECT_TRUE(croot * croot * croot <= big{x} && big{x} < (croot + 1) * (croot + 1) * (croot + 1)) << x;
+    }
+    for (std::uint64_t x = 0; x < 5000; ++x) {
+        const std::uint64_t c = detail::icbrt_floor(x);
+        EXPECT_LE(c * c * c, x);
+        EXPECT_GT((c + 1) * (c + 1) * (c + 1), x);
     }
 }
 

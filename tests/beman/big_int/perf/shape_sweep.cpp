@@ -147,6 +147,8 @@ std::string const_line() {
     kv(s, "square_fft_min_limbs", dt::square_fft_min_limbs);
     kv(s, "square_fft_model_num", dt::square_fft_model_num);
     kv(s, "square_fft_model_den", dt::square_fft_model_den);
+    kv(s, "fft_model_log_power", dt::fft_model_log_power);
+    kv(s, "fft_model_root_degree", dt::fft_model_root_degree);
 #else
     kv(s, "fft_mul_cutoff", dt::fft_mul_cutoff);
     kv(s, "square_fft_cutoff", dt::square_fft_cutoff);

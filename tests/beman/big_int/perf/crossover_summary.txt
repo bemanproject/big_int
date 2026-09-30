@@ -1,19 +1,63 @@
-Multiplication algorithm crossover summary
+Multiplication tier crossover summary
 ==================================================
 
 Empirical complexity (log-log slope of upper-half data)
 --------------------------------------------------
-algorithm        empirical   theoretical
-schoolbook           2.123         2.000
-karatsuba            1.621         1.585
-toom-cook-3          1.501         1.465
-toom-cook-4          1.454         1.404
-toom-cook-6.5        1.394         1.328
+tier               empirical   theoretical
+schoolbook             1.974         2.000
+karatsuba              1.624         1.585
+toom-cook-3            1.533         1.465
+toom-cook-4            1.481         1.404
+toom-cook-6.5          1.398         1.328
+toom-cook-8.5          1.351         1.296
+fft                    1.032       n log n
 
-Crossover points (first limb count where right is faster than left)
+Crossover points in limbs (first: right is first faster; stable: right stays faster)
+------------------------------------------------------------------
+left              -> right                    first       stable
+schoolbook        -> karatsuba                  186          238
+karatsuba         -> toom-cook-3               1172         2722
+toom-cook-3       -> toom-cook-4               4543        11761
+toom-cook-4       -> toom-cook-6.5             1682         3306
+toom-cook-6.5     -> toom-cook-8.5             4816        20886
+toom-cook-8.5     -> fft                      49404        79812
+
+Squaring tier crossover summary
+==================================================
+
+Empirical complexity (log-log slope of upper-half data)
 --------------------------------------------------
-left            -> right              crossover
-schoolbook      -> karatsuba           12 limbs
-karatsuba       -> toom-cook-3        300 limbs
-toom-cook-3     -> toom-cook-4        387 limbs
-toom-cook-4     -> toom-cook-6.5     1000 limbs
+tier               empirical   theoretical
+schoolbook             2.402         2.000
+karatsuba              1.631         1.585
+toom-cook-3            1.547         1.465
+toom-cook-4            1.486         1.404
+toom-cook-6.5          1.424         1.328
+toom-cook-8.5          1.372         1.296
+fft                    1.015       n log n
+
+Crossover points in limbs (first: right is first faster; stable: right stays faster)
+------------------------------------------------------------------
+left              -> right                    first       stable
+schoolbook        -> karatsuba                  259          259
+karatsuba         -> toom-cook-3               2230         7550
+toom-cook-3       -> toom-cook-4               7226        25362
+toom-cook-4       -> toom-cook-6.5             2152         3705
+toom-cook-6.5     -> toom-cook-8.5            12284        68792
+toom-cook-8.5     -> fft                     165375       268030
+
+Division tier crossover summary
+==================================================
+
+Empirical complexity (log-log slope of upper-half data)
+--------------------------------------------------
+tier               empirical   theoretical
+schoolbook             1.991         2.000
+burnikel-ziegler       1.456           n/a
+barrett                1.316           n/a
+
+Crossover points in limbs (first: right is first faster; stable: right stays faster)
+------------------------------------------------------------------
+left              -> right                    first       stable
+schoolbook        -> burnikel-ziegler            30          129
+burnikel-ziegler  -> barrett           not observed not observed
