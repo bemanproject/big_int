@@ -242,7 +242,7 @@ auto main(int argc, char** argv) -> int {
         strm << '\n';
         strm << "Summary                            : " << trial << " trials, " << limbs << " limbs" << '\n';
         strm << "result_total_is_ok                 : " << std::boolalpha << result_total_is_ok << '\n';
-        strm << std::fixed << std::setprecision(1);
+        strm << std::fixed << std::setprecision(3);
         strm << "us per op big_int / cpp_int / gmp : " << avg_bn << " / " << avg_cp << " / " << avg_gm << '\n';
 
         std::cout << strm.str() << std::endl;

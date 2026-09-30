@@ -470,31 +470,31 @@ struct algorithm_runner {
 
 constexpr algorithm_runner algorithms[] = {
     {"schoolbook", 2, 200, run_long_at},
-    {"multiply-long-runtime", 2, 400, run_multiply_long_runtime_at},
+    {"multiply-long-runtime", 2, 2000, run_multiply_long_runtime_at},
 #if defined(BEMAN_BIG_INT_ARCH_X86_64)
     {"multiply-long-runtime-generic", 2, 400, run_multiply_long_runtime_generic_at},
     {"multiply-long-runtime-bmi2-adx", 2, 400, run_multiply_long_runtime_bmi2_adx_at},
     {"multiply-long-runtime-avx512-ifma", 2, 400, run_multiply_long_runtime_avx512_ifma_at},
 #endif
-    {"karatsuba", 4, 2000, run_karatsuba_at},
-    {"toom-cook-3", 300, 10000, run_toom_cook_3_at},
-    {"toom-cook-4", 300, 30000, run_toom_cook_4_at},
-    {"toom-cook-6.5", 1000, 80000, run_toom_cook_6_5_at},
-    {"toom-cook-8.5", 2000, 300000, run_toom_cook_8_5_at},
-    {"fft", 800, 300000, run_fft_at},
+    {"karatsuba", 4, 10000, run_karatsuba_at},
+    {"toom-cook-3", 300, 32000, run_toom_cook_3_at},
+    {"toom-cook-4", 300, 80000, run_toom_cook_4_at},
+    {"toom-cook-6.5", 1000, 300000, run_toom_cook_6_5_at},
+    {"toom-cook-8.5", 2000, 1000000, run_toom_cook_8_5_at},
+    {"fft", 800, 1000000, run_fft_at},
     {"square-long", 4, 400, run_square_long_at},
-    {"square-long-runtime", 2, 400, run_square_long_runtime_at},
+    {"square-long-runtime", 2, 2000, run_square_long_runtime_at},
 #if defined(BEMAN_BIG_INT_ARCH_X86_64)
     {"square-long-runtime-generic", 2, 400, run_square_long_runtime_generic_at},
     {"square-long-runtime-bmi2-adx", 2, 400, run_square_long_runtime_bmi2_adx_at},
     {"square-long-runtime-avx512-ifma", 2, 400, run_square_long_runtime_avx512_ifma_at},
 #endif
-    {"square-karatsuba", 32, 2000, run_square_karatsuba_at},
-    {"square-toom-cook-3", 200, 10000, run_square_toom_cook_3_at},
-    {"square-toom-cook-4", 300, 30000, run_square_toom_cook_4_at},
-    {"square-toom-cook-6.5", 1000, 80000, run_square_toom_cook_6_5_at},
-    {"square-toom-cook-8.5", 2000, 300000, run_square_toom_cook_8_5_at},
-    {"square-fft", 800, 300000, run_square_fft_at},
+    {"square-karatsuba", 32, 10000, run_square_karatsuba_at},
+    {"square-toom-cook-3", 200, 32000, run_square_toom_cook_3_at},
+    {"square-toom-cook-4", 300, 80000, run_square_toom_cook_4_at},
+    {"square-toom-cook-6.5", 1000, 300000, run_square_toom_cook_6_5_at},
+    {"square-toom-cook-8.5", 2000, 1000000, run_square_toom_cook_8_5_at},
+    {"square-fft", 800, 1000000, run_square_fft_at},
 };
 
 // Limb counts to sample. Dense coverage at the low end for the
@@ -599,6 +599,11 @@ constexpr std::size_t sweep_limbs[] = {
     200000,
     260000,
     300000,
+    400000,
+    500000,
+    650000,
+    800000,
+    1000000,
 };
 
 // Aim for ~0.2-1 second per data point. Trial counts taper as the cost per
