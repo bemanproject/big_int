@@ -128,9 +128,15 @@ built using AVX-512 IFMA (`vpmadd52luq`/`vpmadd52huq`, a vectorized
 52x52->104-bit multiply-add at radix pass:[2^52]) together with BMI2/ADX.
 Selection is still compile-time, with no runtime dispatch cost, but it adds a
 size gate on top of the BMI2/ADX-or-generic choice above: operands below the
-gate (tuned end to end at 18 limbs for multiply; squaring uses a placeholder
-threshold until its own kernel exists) still go through the BMI2/ADX-or-generic
-kernel, since the IFMA kernel only wins on larger operands.
+gate still go through the BMI2/ADX-or-generic kernel, since the IFMA kernel only
+wins on larger operands. The multiply gate is shape-aware: the IFMA kernel is
+never taken below 6 limbs of the shorter operand and always from 20 limbs; in
+between it is taken once the product of the two lengths reaches 900 (shorter
+operand 6 to 7 limbs), 450 (8 to 12 limbs) or 330 (13 to 19 limbs), because its
+cost follows the shorter operand while the BMI2/ADX kernel's follows the whole
+product. Squaring uses the IFMA kernel from 16 limbs, natively up to 256 limbs.
+Because the IFMA kernels move the schoolbook crossover, IFMA builds also use
+their own Karatsuba and Toom thresholds (see the crossover table in xref:benchmarks.adoc#benchmarks_crossovers[the benchmarks]).
 
 When you compile with flags that define `__AVX512IFMA__`, `__AVX512VL__`,
 `__AVX512BW__`, `__AVX512VBMI__`, `__BMI2__`, and `__ADX__` (for example
