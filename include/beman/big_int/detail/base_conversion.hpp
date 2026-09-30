@@ -63,7 +63,7 @@ namespace beman::big_int::detail {
 // Tuned with the base_conversion_bench crossover sweep (RelWithDebInfo,
 // min-of-reps / median-of-samples, M4-class AArch64 + i9-11900K x86-64,
 // 2026-06-12). AArch64: splitting ties the pure Horner at 64-chunk inputs
-// and wins 8-15% by 128, leaves of 32 the best measured. x86-64's stronger
+// and wins 8-15% by 128, leaves of 32 the best measured then (re-measured below). x86-64's stronger
 // mul_1 keeps the basecase ahead much longer: po2-aligned splits first win
 // at 512 chunks (leaves 128, +5%), but arbitrary counts in the 300-700 band
 // lose 15-40% to the basecase for every leaf size tried, and 512-chunk
@@ -73,7 +73,11 @@ namespace beman::big_int::detail {
 // (Algorithm 1.25's unmultiplied top element) costs ~15% at the worst single
 // point on both architectures; GMP-style balanced splitting was considered
 // and deferred - the penalty amortizes to noise at neighboring sizes.
-#if defined(__x86_64__) || defined(_M_X64) || defined(__amd64__)
+// AArch64 was re-measured on 2026-09-30 (M4 Max, appleclang-release, from_chars 228..155648 digits; measured on M4
+// only, also used for other AArch64 cores and MSVC ARM64): leaves of 16 chunks beat 32 by 5.5% on average.
+#if defined(BEMAN_BIG_INT_ARCH_AARCH64)
+inline constexpr std::size_t fast_input_basecase_chunks = 16;
+#elif defined(__x86_64__) || defined(_M_X64) || defined(__amd64__)
 inline constexpr std::size_t fast_input_basecase_chunks = 512;
 #else
 inline constexpr std::size_t fast_input_basecase_chunks = 32;
@@ -416,9 +420,14 @@ enum class digit_padding : unsigned char {
 // i9-11900K x86-64, 2026-06-12): both architectures agree - the basecase
 // wins 16-chunk inputs by 10-18%, splitting wins 32-chunk inputs by 6-9%
 // and grows from there (the division basecase is far costlier than the
-// input direction's mul_1 Horner, so the ladder pays much earlier and no
-// per-arch split is warranted).
+// input direction's mul_1 Horner, so the ladder pays much earlier and one value
+// serves both; AArch64 has its own branch so x86 tuning cannot change it). Re-checked on
+// AArch64 2026-09-30 (M4 Max): 16 stays best.
+#if defined(BEMAN_BIG_INT_ARCH_AARCH64)
 inline constexpr std::size_t fast_output_basecase_chunks = 16;
+#else
+inline constexpr std::size_t fast_output_basecase_chunks = 16;
+#endif
 
 static_assert(std::has_single_bit(fast_output_basecase_chunks) && fast_output_basecase_chunks >= 2,
               "output fields must tile the power-of-two chain and leave room to recurse");
@@ -475,8 +484,17 @@ inline constexpr std::size_t fast_output_preinv_min_limbs = barrett_balanced_cut
 // AArch64 + i9-11900K x86-64, 2026-06-15): both arches break even at 2-4 chunks
 // and the kernel wins >= 1.6x by 8 chunks, growing from there. 8 (~150 base-10
 // digits) keeps small-number parsing on the zero-allocation inline path with
-// margin above the noisy floor.
+// margin above the noisy floor. On AArch64 the 2026-09-30 re-measurement (M4 Max,
+// from_chars 3..1000 digits, end to end) moved it to 3: the kernel already wins by
+// ~3 chunks, and 8 was 1.5-2.2x slower at 57-133 digits. Measured on M4 only,
+// also used for other AArch64 cores and MSVC ARM64. from_chars uses the kernel
+// only when the value cannot fit the target's in-place storage, which keeps
+// parsing of in-place values allocation-free.
+#if defined(BEMAN_BIG_INT_ARCH_AARCH64)
+inline constexpr std::size_t fast_input_charconv_min_chunks = 3;
+#else
 inline constexpr std::size_t fast_input_charconv_min_chunks = 8;
+#endif
 
 [[nodiscard]] constexpr bool fast_digits_to_limbs_profitable(const std::size_t digit_count, const int base) noexcept {
     return is_fast_conversion_base(base) &&
