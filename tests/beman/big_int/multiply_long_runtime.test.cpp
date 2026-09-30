@@ -354,7 +354,8 @@ std::vector<limb> low_bits_ones(std::size_t nbits) {
 
 // Boundary shapes around the IFMA kernel's internal tiering: multiples of 8
 // limbs (the AVX-512 register packs 8 limbs), the neighborhood of the
-// 18-limb dispatch gate, and very unbalanced huge-by-small shapes.
+// IFMA dispatch gate (both sides of each tier of ifma_multiply_worthwhile), and very
+// unbalanced huge-by-small shapes.
 TEST_P(MultiplyLongRuntime, Avx512IfmaBoundaryShapes) {
     const multiply_fn fn = GetParam().fn;
 
@@ -376,6 +377,28 @@ TEST_P(MultiplyLongRuntime, Avx512IfmaBoundaryShapes) {
         expect_multiply_matches(fn, random_vec(1000), random_vec(lb), "ifma-boundary-la-1000");
         expect_multiply_matches(fn, random_vec(4099), random_vec(lb), "ifma-boundary-la-4099");
     }
+
+#if defined(BEMAN_BIG_INT_ARCH_X86_64)
+    // Both sides of the IFMA dispatch gate: for each short length around its tiers, the last la the gate refuses
+    // and the first it accepts (found through the gate itself), in both operand orders.
+    namespace d = ::beman::big_int::detail;
+    for (std::size_t lo = d::ifma_multiply_min_limbs - 1; lo <= d::ifma_multiply_always_limbs + 1; ++lo) {
+        if (lo == 0) {
+            continue;
+        }
+        for (std::size_t la = lo; la <= 2000; ++la) {
+            if (d::ifma_multiply_worthwhile(la, lo)) {
+                for (const std::size_t n : {la - 1, la}) {
+                    if (n >= lo) {
+                        expect_multiply_matches(fn, random_vec(n), random_vec(lo), "ifma-gate-boundary");
+                        expect_multiply_matches(fn, random_vec(lo), random_vec(n), "ifma-gate-boundary-swapped");
+                    }
+                }
+                break;
+            }
+        }
+    }
+#endif
 
     for (std::size_t t = 0; t <= 12; ++t) {
         for (std::size_t lb = 1; lb <= 20; ++lb) {

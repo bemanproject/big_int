@@ -135,33 +135,38 @@ TEST(ToomCook8_5, Squaring) {
     }
 }
 
-// ---- Two-level recursion: above 112000 limbs the sub-products clear the 14000
-// cutoff and run Toom-8.5 again. Reference is the independent Toom-6.5 kernel.
-// (One case only; 2-level Toom needs >112000 limbs and is slow under MaxSan.) ----
-TEST(ToomCook8_5, DeepRecursionVsToom65) { expect_mul_matches(113000, 113000, /*big_ref=*/true); }
+// ---- Two-level recursion: from 8 * toom_cook_8_5_cutoff limbs the sub-products clear the cutoff and run
+// Toom-8.5 again. Reference is the independent Toom-6.5 kernel.
+// (One case only; 2-level Toom needs many limbs and is slow under MaxSan.) ----
+TEST(ToomCook8_5, DeepRecursionVsToom65) {
+    const std::size_t n = 8 * ::beman::big_int::detail::toom_cook_8_5_cutoff + 1000;
+    expect_mul_matches(n, n, /*big_ref=*/true);
+}
 
-// ---- Public-API integration: operator* must dispatch into Toom-8.5 at/above the
-// cutoff and agree with Boost.Multiprecision. ----
+// ---- Public-API integration: operator* must agree with Boost.Multiprecision at and above the Toom-8.5 cutoff
+// (the FFT gate may take the product first, depending on the configuration). ----
 TEST(ToomCook8_5, DispatchAtCutoff) {
-    // 15000 == toom_cook_8_5_cutoff: operator* must dispatch into Toom-8.5.
-    const std::string a = bmp::random_big_int(15000 * limb_bits);
-    const std::string b = bmp::random_big_int(15000 * limb_bits);
+    const std::size_t cutoff = ::beman::big_int::detail::toom_cook_8_5_cutoff;
+    const std::string a      = bmp::random_big_int(cutoff * limb_bits);
+    const std::string b      = bmp::random_big_int(cutoff * limb_bits);
     EXPECT_TRUE(bmp::check_cpp_int_equal(std::multiplies<>{}, a, b));
 }
 
 TEST(ToomCook8_5, DispatchAboveCutoffAndSquare) {
-    const std::string a = bmp::random_big_int(16000 * limb_bits);
-    const std::string b = bmp::random_big_int(17000 * limb_bits);
+    const std::size_t cutoff = ::beman::big_int::detail::toom_cook_8_5_cutoff;
+    const std::string a      = bmp::random_big_int((cutoff + 1000) * limb_bits);
+    const std::string b      = bmp::random_big_int((cutoff + 2000) * limb_bits);
     EXPECT_TRUE(bmp::check_cpp_int_equal(std::multiplies<>{}, a, b));
 
     // x * x at >= square_toom_cook_8_5_cutoff routes through square_dispatch ->
-    // square_toom_cook_8_5.
-    const std::string c = bmp::random_big_int(24000 * limb_bits);
+    // square_toom_cook_8_5 (or the square FFT).
+    const std::string c = bmp::random_big_int(::beman::big_int::detail::square_toom_cook_8_5_cutoff * limb_bits);
     EXPECT_TRUE(bmp::check_cpp_int_equal(std::multiplies<>{}, c, c));
 }
 
 TEST(ToomCook8_5, DispatchSignedOperands) {
-    const std::string a = bmp::random_big_int(16000 * limb_bits, /*negative=*/true);
-    const std::string b = bmp::random_big_int(16000 * limb_bits, /*negative=*/false);
+    const std::size_t n = ::beman::big_int::detail::toom_cook_8_5_cutoff + 1000;
+    const std::string a = bmp::random_big_int(n * limb_bits, /*negative=*/true);
+    const std::string b = bmp::random_big_int(n * limb_bits, /*negative=*/false);
     EXPECT_TRUE(bmp::check_cpp_int_equal(std::multiplies<>{}, a, b));
 }

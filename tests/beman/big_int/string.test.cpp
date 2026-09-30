@@ -712,8 +712,9 @@ TEST(ToWString, DefaultBaseIsTen) {
 
 // Large-input coverage for the sub-quadratic to_chars path that backs both
 // to_string and to_wstring. The fast kernel only engages above the per-arch
-// gate (~1216 base-10 digits on AArch64, ~19456 on x86-64), so the fixed-value
-// tests above exercise only the inline fallback. These round-trips push past
+// gate (more than fast_output_basecase_chunks chunks: ~300 base-10 digits on
+// every configuration), so the fixed-value tests above exercise only the inline
+// fallback. These round-trips push past
 // both gates across several bases, validating the digit transcode, the
 // result/scratch sizing, sign handling, and (for to_wstring) the widening.
 TEST(ToString, FastPathRoundTrip) {

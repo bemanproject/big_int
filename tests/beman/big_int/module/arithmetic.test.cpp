@@ -9,21 +9,19 @@
 // inline templates.
 //
 // The kernel-reach sizes below were picked by reading detail/mul_impl.hpp and
-// detail/div_impl.hpp on this build (AArch64, 64-bit limbs, BEMAN_BIG_INT_SIMD_MUL
-// off) and confirming against src/mul_dispatch.cpp's actual tier ladder:
+// detail/div_impl.hpp (64-bit limbs) and src/mul_dispatch.cpp's tier ladder for
+// one build; the cutoffs are per-configuration tuning constants, so other
+// configurations may route a given size to a neighbouring tier. That is fine
+// here: every tier lives in the static library, and the point is that the
+// module target links it.
 //   `x * x` (same object on both sides of operator*, including `x *= x`) is
 //   detected by a pointer/size compare in multiply_runtime and dispatched to
 //   square_runtime, which uses a DIFFERENT ladder than `x * y` for distinct `x`
-//   and `y`:
-//     square_karatsuba_cutoff   =    72 limbs   (general karatsuba_cutoff = 48)
-//     square_toom_cook_3_cutoff =   300 limbs   (general toom_cook_3_cutoff = 400)
-//     square_toom_cook_4_cutoff =  2000 limbs   (general toom_cook_4_cutoff = 1600)
-//     square_fft_cutoff         =  4500 limbs   (general fft_mul_cutoff = 4500)
+//   and `y` (the square_* cutoffs in detail/mul_impl.hpp).
 //   Division's tier gate (divide_dispatch in detail/div_impl.hpp) routes to
-//   Burnikel-Ziegler once the divisor is at least burnikel_ziegler_cutoff = 40
-//   limbs and the dividend is at least burnikel_ziegler_offset = 10 limbs wider,
-//   provided it stays below the Barrett gates (the lowest of which needs a
-//   512-limb divisor).
+//   Burnikel-Ziegler once the divisor is at least burnikel_ziegler_cutoff limbs
+//   and the dividend is at least burnikel_ziegler_offset limbs wider, provided
+//   it stays below the Barrett gates (barrett_march_cutoff and up).
 
 #include <cstddef>
 #include <limits>
@@ -203,28 +201,28 @@ TEST(Arithmetic, DivRemToZeroAgreesAcrossSignQuadrants) {
 // square_* cutoffs, not the general multiply ones -- see the file header.
 
 TEST(Arithmetic, KaratsubaTierSquare) {
-    constexpr std::size_t k       = 9600; // 150 limbs: in [72, 300), the Karatsuba squaring band.
+    constexpr std::size_t k       = 9600; // 150 limbs: a Karatsuba-tier square on most configurations.
     const big_int         m       = (big_int{1} << k) - 1;
     const big_int         squared = m * m;
     EXPECT_EQ(squared, (big_int{1} << (2 * k)) - (big_int{1} << (k + 1)) + 1);
 }
 
 TEST(Arithmetic, ToomCook3TierSquare) {
-    constexpr std::size_t k       = 51200; // 800 limbs: in [300, 2000), the Toom-3 squaring band.
+    constexpr std::size_t k       = 51200; // 800 limbs: a Toom-3-tier square on most configurations.
     const big_int         m       = (big_int{1} << k) - 1;
     const big_int         squared = m * m;
     EXPECT_EQ(squared, (big_int{1} << (2 * k)) - (big_int{1} << (k + 1)) + 1);
 }
 
 TEST(Arithmetic, ToomCook4TierSquare) {
-    constexpr std::size_t k       = 140800; // 2200 limbs: in [2000, 2400), the Toom-4 squaring band.
+    constexpr std::size_t k       = 140800; // 2200 limbs: a Toom-4-tier square on most configurations.
     const big_int         m       = (big_int{1} << k) - 1;
     const big_int         squared = m * m;
     EXPECT_EQ(squared, (big_int{1} << (2 * k)) - (big_int{1} << (k + 1)) + 1);
 }
 
-// FFT tier: two DISTINCT operands (no squaring aliasing), both at or above
-// fft_mul_cutoff (4500 limbs), checked by round-tripping through division
+// FFT tier: two DISTINCT operands (no squaring aliasing), large enough to reach the FFT
+// on the AArch64 and portable configurations, checked by round-tripping through division
 // rather than a closed-form literal.
 TEST(Arithmetic, FftTierMultiply) {
     const big_int x       = (big_int{1} << 320000) - 1; // 5000 limbs.
@@ -237,9 +235,9 @@ TEST(Arithmetic, FftTierMultiply) {
 }
 
 // Burnikel-Ziegler division tier: divisor size (100 limbs) clears
-// burnikel_ziegler_cutoff (40) while staying well below every Barrett gate
-// (the lowest needs a 512-limb divisor), and the dividend is more than
-// burnikel_ziegler_offset (10) limbs wider.
+// burnikel_ziegler_cutoff on every configuration and the dividend is more than
+// burnikel_ziegler_offset limbs wider, while staying below the Barrett march
+// line (dividend under 16x the divisor) and every other Barrett gate.
 TEST(Arithmetic, BurnikelZieglerTierDivide) {
     const big_int divisor  = (big_int{1} << 6400) - 1;  // 100 limbs.
     const big_int dividend = (big_int{1} << 9600) - 12; // 150 limbs.
@@ -258,7 +256,7 @@ TEST(Arithmetic, BurnikelZieglerTierDivide) {
 // ----- aliasing at kernel sizes -----
 
 TEST(Arithmetic, AliasingMultiplyAssign) {
-    constexpr std::size_t k = 25600; // 400 limbs: inside the Toom-3 squaring band.
+    constexpr std::size_t k = 25600; // 400 limbs: a Karatsuba- or Toom-3-tier square, depending on the configuration.
     big_int               x = (big_int{1} << k) - 1;
     x *= x;
     EXPECT_EQ(x, (big_int{1} << (2 * k)) - (big_int{1} << (k + 1)) + 1);

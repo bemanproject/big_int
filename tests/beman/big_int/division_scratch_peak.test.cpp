@@ -15,6 +15,7 @@
 
 #include <gtest/gtest.h>
 
+#include <algorithm>
 #include <cstddef>
 #include <cstdint>
 #include <memory>
@@ -158,6 +159,15 @@ TEST(DivisionScratchPeak, BarrettWithinBudget) {
                 probe_barrett(m, s, thr);
             }
         }
+    }
+}
+
+// Shapes at the Barrett march gate itself (divisor = barrett_march_cutoff), where the default dispatch marches.
+TEST(DivisionScratchPeak, BarrettAtMarchGateWithinBudget) {
+    constexpr std::size_t c = detail::barrett_march_cutoff;
+    for (const std::size_t thr : {std::size_t{0}, std::size_t{2}}) {
+        probe_barrett(16 * c + 5, c, thr);
+        probe_barrett(std::min<std::size_t>(1000 * c, 60000), c, thr);
     }
 }
 

@@ -16,7 +16,8 @@ using random_engine_length_type =
 
 random_engine_length_type generator_limb_length{static_cast<typename random_engine_length_type::result_type>(67)};
 
-// Toom-Cook 6.5 cutoff is 3000 limbs. Sizes 3100..6500 exercise the algorithm:
+// Sizes 3100..6500 sit above detail::toom_cook_6_5_cutoff on some configurations and below it on others;
+// they exercise the algorithm where they clear the cutoff:
 // balanced pairs enter Toom-6.5 directly, asymmetric pairs may fall back to
 // Toom-4 (max > 7*k or min <= 5*k), so both paths get coverage.
 std::uniform_int_distribution distribution_limb_length{std::size_t{UINT16_C(3100)}, std::size_t{UINT16_C(6500)}};

@@ -144,18 +144,53 @@ TEST(FftMul, SquareDifferential) {
     }
 }
 
-// End-to-end through the public API: operands sized just above the cutoff route
-// through the FFT branch of multiply_dispatch / square_dispatch. Tied to the
-// cutoff constants so they keep exercising FFT after the cutoffs are tuned.
+// End-to-end through the public API: operands sized just above the FFT floor
+// (and, when the cost model is on, at the first size where the model picks the
+// FFT) route through the FFT branch of multiply_dispatch / square_dispatch.
+// Tied to the gate helpers so they keep exercising FFT after the gates are tuned.
 namespace bmp = ::beman::big_int::boost_mp_testing;
 
+namespace {
+
+// Balanced sizes above this are skipped: the cost model takes the FFT only that late on some configurations, and the
+// quadratic Boost reference would dominate the run (the FFT dispatch is still covered by multiplication_unbalanced).
+constexpr std::size_t max_reference_limbs = 50'000;
+
+// Smallest n above `floor` (stepping about 1/8 at a time) for which the gate accepts an n x n product.
+template <class Gate>
+std::size_t first_size_taking_fft(const std::size_t floor, Gate&& gate) {
+    std::size_t n = floor + 1;
+    while (!gate(n)) {
+        n += n / 8 + 1;
+        if (n > 64 * floor) {
+            ADD_FAILURE() << "the FFT gate accepts no size up to 64 * floor";
+            break;
+        }
+    }
+    return n;
+}
+
+} // namespace
+
 TEST(FftMul, DispatchIntegrationMultiply) {
-    const std::size_t bits = (::beman::big_int::detail::fft_mul_cutoff + 1) * limb_bits;
+    const std::size_t n = first_size_taking_fft(::beman::big_int::detail::fft_mul_min_limbs, [](const std::size_t m) {
+        return ::beman::big_int::detail::fft_mul_worthwhile(m, m);
+    });
+    if (n > max_reference_limbs) {
+        GTEST_SKIP() << "the gate takes the FFT only from " << n << " limbs here: too large for the Boost reference";
+    }
+    const std::size_t bits = n * limb_bits;
     EXPECT_TRUE(bmp::check_cpp_int_equal(std::multiplies<>{}, bmp::random_big_int(bits), bmp::random_big_int(bits)));
 }
 
 TEST(FftMul, DispatchIntegrationSquare) {
-    const std::size_t bits = (::beman::big_int::detail::square_fft_cutoff + 1) * limb_bits;
+    const std::size_t n =
+        first_size_taking_fft(::beman::big_int::detail::square_fft_min_limbs,
+                              [](const std::size_t m) { return ::beman::big_int::detail::square_fft_worthwhile(m); });
+    if (n > max_reference_limbs) {
+        GTEST_SKIP() << "the gate takes the FFT only from " << n << " limbs here: too large for the Boost reference";
+    }
+    const std::size_t bits = n * limb_bits;
     // A single object squared (v * v) takes the square_dispatch path.
     EXPECT_TRUE(bmp::check_cpp_int_equal_unary([](const auto& v) { return v * v; }, bmp::random_big_int(bits)));
 }
