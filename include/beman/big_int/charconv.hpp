@@ -470,8 +470,12 @@ from_chars(const char* const begin, const char* const end, basic_big_int<b, L, A
     // sub-quadratic FastIntegerInput kernel replaces the Horner loop. Smaller
     // inputs (and constant evaluation) keep the inline path below, whose fixed
     // overhead is lower than the kernel's temp buffer plus owned scratch arena.
+    // The kernel also allocates, so it runs only when the value cannot fit the
+    // in-place storage anyway; values that fit keep the zero-allocation path.
     if BEMAN_BIG_INT_IS_NOT_CONSTEVAL {
-        if (detail::fast_digits_to_limbs_profitable(static_cast<std::size_t>(digit_count), base)) {
+        if (detail::fast_digits_to_limbs_profitable(static_cast<std::size_t>(digit_count), base) &&
+            detail::base_conversion_limb_bound(static_cast<std::size_t>(digit_count), base) >
+                basic_big_int<b, L, A>::inplace_capacity) {
             // Transcode the already-validated ASCII run into MSD-first digit
             // VALUES (0..base-1), then run the kernel straight into out's limbs.
             auto                           alloc = out.get_allocator();

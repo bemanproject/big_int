@@ -16,9 +16,10 @@ using random_engine_length_type =
 
 random_engine_length_type generator_limb_length{static_cast<typename random_engine_length_type::result_type>(53)};
 
-// Toom-Cook 4 cutoff is 4500 limbs. Sizes 4600..6500 exercise the algorithm:
-// balanced pairs enter Toom-4 directly, asymmetric pairs may fall back to
-// Toom-3 (min <= 3*k), so both paths get coverage.
+// Sizes 4600..6500 sit above detail::toom_cook_4_cutoff on some configurations and below it on others;
+// they exercise the algorithm where they clear the cutoff: balanced pairs enter
+// Toom-4 directly, asymmetric pairs may fall back to Toom-3 (min <= 3*k). Where
+// these sizes lie past Toom-4's zone (AArch64) they are routed to a higher tier.
 std::uniform_int_distribution distribution_limb_length{std::size_t{UINT16_C(4600)}, std::size_t{UINT16_C(6500)}};
 
 } // namespace detail
@@ -40,7 +41,7 @@ auto test_one_multiplication() -> void {
 
 TEST(Multiplication, ToomCook4Exercise01) {
     // Trial count kept small because each multiplication operates on
-    // large (2500-4000 limb) operands to clear the Toom-4 cutoff.
+    // large (4600-6500 limb) operands to clear the Toom-4 cutoff.
     constexpr unsigned trials{16U};
 
     for (unsigned index{0U}; index < trials; ++index) {

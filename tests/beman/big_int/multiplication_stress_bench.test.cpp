@@ -548,7 +548,7 @@ constexpr std::size_t sweep_limbs[] = {
     1200,
     1300,
     1400,
-    // Toom-3 -> Toom-4 transition (cutoff 1400; densify to resolve the dip).
+    // Toom-3 -> Toom-4 transition (detail::toom_cook_4_cutoff; densify to resolve the dip).
     1500,
     1600,
     1700,
@@ -562,7 +562,7 @@ constexpr std::size_t sweep_limbs[] = {
     2500,
     2700,
     2900,
-    // Toom-4 -> Toom-6.5 transition (cutoff 3000; densify likewise).
+    // Toom-4 -> Toom-6.5 transition (detail::toom_cook_6_5_cutoff; densify likewise).
     3000,
     3100,
     3300,

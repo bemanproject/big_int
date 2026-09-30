@@ -142,14 +142,81 @@ https://github.com/eisenwave/std-big-int/blob/main/tests/beman/big_int/perf/elli
 === Multiplication
 
 Multiplication graduates to successively higher-order algorithms as the operand
-limb count grows. Below 48 limbs it uses schoolbook multiplication; above 48
-limbs it crosses over to Karatsuba. On `AArch64`, where the assembly basecase
-stays ahead longer, that crossover is at 112 limbs (see
-<<benchmarks_arch_opts_aarch64>>). Successive Toom-Cook orders of 3, 4, 6.5, and
-8.5 cross over at 400, 1,600, 2,400, and 15,000 limbs respectively on the
-non-SIMD path. The FFT tier (a small-prime number-theoretic transform) crosses
-over at 24,000 limbs on the non-SIMD path and at 4,500 limbs on the SIMD path --
-so the SIMD path does not use Toom-Cook 8.5 at all.
+limb count grows: schoolbook, Karatsuba, Toom-Cook 3, 4, 6.5 and 8.5, and finally
+an FFT tier (a small-prime number-theoretic transform). Where each tier takes over
+depends on the machine and on which basecase kernel is in use, so the crossovers
+are per-configuration constants in `detail/mul_impl.hpp`; the table below lists the
+values the library currently ships (the shorter operand's limb count, integer
+non-SIMD path). The `BEMAN_BIG_INT_SIMD_MUL` (floating-point NTT) configurations
+were not retuned and keep their earlier FFT floors (with the Toom thresholds of
+the table).
+
+[#benchmarks_crossovers]
+==== Current crossovers
+
+[cols="3,1,1,1,1", options="header"]
+|===
+| Constant (limbs) | x86-64 generic | x86-64 BMI2/ADX | x86-64 AVX-512 IFMA | AArch64
+
+| Karatsuba (`karatsuba_cutoff`) | 48 | 47 | 260 | 112
+| Karatsuba leaf (`karatsuba_fallback`) | 40 | 40 | 230 | 80
+| Toom-Cook 3 (`toom_cook_3_cutoff`) | 400 | 400 | 1,600 | 300
+| Toom-Cook 4 (`toom_cook_4_cutoff`) | 1,400 | 1,600 | 4,000 | 1,400
+| Toom-Cook 6.5 (`toom_cook_6_5_cutoff`) | 1,400 | 1,800 | 4,000 | 1,400
+| Toom-Cook 8.5 (`toom_cook_8_5_cutoff`) | 1,400 | 7,000 | 6,000 | 15,000 (rarely reached)
+| FFT floor (`fft_mul_min_limbs`) | 3,000 (cost model) | 3,000 (cost model) | 16,000 (cost model) | 1,400 (cost model)
+| Slicing: Karatsuba-zone ratio; large zone from (ratio) | 7/4; 12,000 (9/8) | 7/4; 16,000 (9/8) | 7/4; 30,000 (4/3) | 7/4; 1,400 (3/2)
+| Squaring: schoolbook below (`square_long_cutoff`) | 5 | 10 | 10 | 5
+| Squaring: Karatsuba (`square_karatsuba_cutoff`) | 72 | 120 | 257 | 168
+| Squaring: Toom-Cook 3 (`square_toom_cook_3_cutoff`) | 300 | 440 | 4,200 | 500
+| Squaring: FFT floor (`square_fft_min_limbs`) | 3,000 (cost model) | 3,000 (cost model) | 8,000 (cost model) | 1,400 (cost model)
+| Division: Burnikel-Ziegler divisor / quotient gate | 160 / 64 | 160 / 64 | 160 / 64 | 40 / 10
+| Division: Barrett from divisor of (`barrett_march_cutoff`) | 512 | 512 | 512 | 9
+| Base conversion: input ladder leaf, chunks (`fast_input_basecase_chunks`) | 512 | 512 | 512 | 16
+| Base conversion: `from_chars` kernel from, chunks (`fast_input_charconv_min_chunks`) | 8 | 8 | 8 | 3
+|===
+
+The AArch64 column was measured on an Apple M4 Max end to end through the public
+operators (balanced and unbalanced shapes, September 2026) and is also used for
+other AArch64 cores. The x86-64 columns were tuned the same way on an Intel(R)
+Core(TM) i9-11900K (GCC, `gcc-release`, September 2026), except the division and
+base-conversion rows, which keep the earlier per-machine values. The AVX-512 IFMA
+column raises the Karatsuba and Toom thresholds because the IFMA schoolbook kernel
+stays ahead much longer. On generic x86-64 the Toom-4, 6.5 and 8.5 cutoffs coincide
+at 1,400, so the ladder is Toom-Cook 3 up to 1,400 limbs and Toom-Cook 8.5 above.
+The hand-written x86-64 schoolbook kernels can also run tens of percent slower for
+a few relative buffer alignments (4 KiB aliasing), which shows up as noise in
+timings at some sizes.
+
+Two mechanisms make these thresholds shape-aware rather than functions of the
+shorter operand alone:
+
+* *Slicing.* The Toom-Cook kernels only accept near-balanced operands (Toom-3
+up to 3:2, Toom-4 up to 4:3, Toom-6.5 up to 7:6, Toom-8.5 up to 9:8), and an
+unbalanced product outside that range used to cascade all the way down to
+Karatsuba. Instead, a product whose long/short ratio exceeds a per-size limit is
+cut into pieces as long as the shorter operand; each piece is a balanced
+product handled by the normal ladder (or the FFT) and the partial results are
+accumulated. The limit comes from a small table of size zones per configuration
+(`mul_slice_z*` in `detail/mul_impl.hpp`), and a product is also sliced whenever
+Toom-3 would refuse the shape.
+* *FFT cost model.* The FFT time is a step function of the power-of-two transform
+length, while the Toom ladder is smooth, so a single cutoff is wrong inside every
+transform-length band. The FFT tier is chosen by an integer cost model: use the
+FFT when the shorter operand has at least `fft_mul_min_limbs` limbs and
+`L * log2(L) * den <= num * max * isqrt(min)`, where `L` is the transform length.
+The model is on for the integer x86-64 and AArch64 builds (the floor is then only
+an early-out) and covers unbalanced shapes through `max`; the SIMD configurations
+were not retuned and still use a plain floor. Sliced pieces consult the same gate.
+The model matters on x86-64: the earlier single floors (24,000 limbs for generic
+and BMI2/ADX) sent products to the scalar NTT although Toom-Cook 8.5 stays faster
+until about 40,000 to 75,000 limbs balanced (a balanced 28,809-limb product was
+2.0x (generic) and 2.3x (BMI2/ADX) slower with the FFT).
+
+The hand-written `x86-64` BMI2/ADX and AVX-512 IFMA kernels (see
+xref:build_and_usage.adoc#build_and_usage_avx512_ifma[the build guide]) move
+these thresholds; the IFMA schoolbook gate is itself shape-aware, taking the IFMA
+kernel earlier the more lopsided the operands are.
 
 To isolate a single tier, only the `big_int` multiplication itself is timed: a
 stopwatch is read immediately before and after the multiplication, and the times
@@ -161,7 +228,8 @@ cutoffs, individual tiers can be excluded and then added back -- schoolbook only
 then Karatsuba only, then Karatsuba plus Toom-Cook 3, and so on.
 
 * All runs were numerically correct.
-* Around 300--400 limbs, Toom-Cook 3 and 4 already become clearly beneficial.
+* Toom-Cook 3 and 4 become clearly beneficial a few hundred to a few thousand
+limbs in, depending on the configuration (see the crossover table above).
 * Higher Toom-Cook orders show similar trends; rather than tabulating each, they
 are summarized by the empirical timings below.
 
@@ -169,7 +237,9 @@ are summarized by the empirical timings below.
 ==== Algorithm-tier progression
 
 The table below shows the time per multiplication as successive tiers are enabled
-at increasing operand widths. Times are microseconds per multiplication;
+at increasing operand widths. It comes from an early measurement that predates
+the hand-written kernels, the retuned crossovers and the slicing dispatch, so it
+illustrates how the tiers scale rather than the current thresholds. Times are microseconds per multiplication;
 `n/a` marks a tier not measured at that width.
 
 [cols="1,1,1,1,1,1,1", options="header"]
@@ -195,8 +265,8 @@ a theoretical `log_3(5)` approximately `1.465` -- in good agreement.
 a theoretical `log_4(7)` approximately `1.404` -- again in good agreement.
 
 The plot below shows multiplication time against operand limb count across many
-orders of magnitude. The crossover points between successive schemes were chosen
-to optimize multiplication speed across the whole range of limb counts.
+orders of magnitude. It predates the retuning above, so its crossover points are
+those of the earlier tuning, not the values in the table.
 
 .Multiplication time vs operand limb count, with the algorithm-tier crossovers
 image::crossover_main.png[Multiplication algorithm crossover plot,align=center]
@@ -241,8 +311,10 @@ https://github.com/eisenwave/std-big-int/blob/main/tests/beman/big_int/perf/mul_
 === Division
 
 Division uses Knuth long division for small limb counts and crosses over to the
-Burnikel-Ziegler algorithm between roughly 40 and 100 limbs; above that its
-performance is driven by the underlying multiplication. As with multiplication,
+Burnikel-Ziegler algorithm at a divisor of 40 limbs (AArch64) or 160 limbs
+(x86-64), and to Barrett (reciprocal-based) division for long dividends; above
+that its performance is driven by the underlying multiplication. The gates are
+listed in the crossover table above. As with multiplication,
 only the `big_int` division itself is timed, with a stopwatch read immediately
 before and after the operation and the times summed and averaged over many
 trials. Each row divides an pass:[N]-digit numerator by an pass:[N/2]-digit
@@ -318,7 +390,10 @@ of nearly the entire library can be achieved.
 A proof of concept is included for the popular `x86_64` architecture
 in its generic form. We have implemented basecase schoolbook long multiplication
 in hand-coded assembly for `x86_64` on compiler systems GCC, clang and MSVC,
-the detections of which happen at compile time.
+the detections of which happen at compile time. Beyond the generic kernels, BMI2/ADX
+and AVX-512 IFMA variants are selected at compile time when the target supports
+them (see xref:build_and_usage.adoc#build_and_usage_avx512_ifma[the build guide]); the
+table below predates them and shows the generic kernel only.
 
 An overview of multiplication performance is shown in the table below.
 Multiplication operations performed over a wide range of limb counts
@@ -333,10 +408,10 @@ For this measurement, an Intel(R) Core(TM) i9-11900K at 3.50GHz has been used.
 
 [cols="1,1,1,1,1", options="header"]
 |===
-|  system               | time C++ [us/mul] | time ASM [us/mul] | improvement [percent] | ratio ASM/`gmp_int`
+|  system               | time pass:[C++] [us/mul] | time ASM [us/mul] | improvement [percent] | ratio ASM/`gmp_int`
 
-| `big_int` (GCC/GAS)   |  305              |  210              | 32                    | 2.2
-| `big_int` (MSVC/MASM) |  380              |  230              | 60                    | 2.4
+| `big_int` (GCC/GAS)   |  305              |  210              | 31                    | 2.2
+| `big_int` (MSVC/MASM) |  380              |  230              | 39                    | 2.4
 | `gmp_int` (GCC/GAS)   |  ---              |   95              | ---                   |   1
 |===
 
@@ -371,9 +446,10 @@ instructions only, with no SSE, AVX, BMI2 or ADX. It builds each cross product
 the multiplication routine but each row only as long as the limbs above `a[i]`.
 A single final pass then doubles the triangle and adds the diagonal squares
 `a[i]^2`, which roughly halves the widening multiplies of a general product.
-The routine handles `x * x` from 5 limbs up to the Karatsuba squaring
+The routine handles `x * x` from `square_long_cutoff` limbs (5 on generic
+`x86_64`, 10 with the BMI2/ADX kernel) up to the Karatsuba squaring
 threshold and the leaves of the Karatsuba squaring recursion, so the
-Toom-Cook squaring tiers built on top of them speed up too. Below 5 limbs,
+Toom-Cook squaring tiers built on top of them speed up too. Below that,
 `x * x` keeps using the multiplication routine, which is as fast or faster
 there once the whole dispatch is measured. On architectures without a
 hand-coded kernel (anything other than `x86_64` and `AArch64`), a portable
@@ -461,8 +537,10 @@ https://github.com/eisenwave/std-big-int/blob/main/src/square_long_runtime_aarch
 
 With these basecases, `AArch64` uses schoolbook multiplication up to 112 limbs
 (the shorter operand's length) instead of 48, and the squaring basecase up to
-256 limbs instead of 72. Both cutoffs were tuned end to end on the M4 Max,
-including unbalanced products. The Karatsuba recursion keeps its 40-limb leaves.
+168 limbs instead of 72. Both cutoffs, and the Karatsuba leaf size (80 limbs),
+were tuned end to end on the M4 Max, including unbalanced products; see the
+<<benchmarks_crossovers,crossover table>>. The tables in this section were
+measured before that final tuning and show the kernels, not the dispatch.
 
 [#benchmarks_arch_opts_aarch64_neon]
 ==== NEON, SVE2 and SME
@@ -503,14 +581,17 @@ https://github.com/eisenwave/std-big-int/tree/main/tests/beman/big_int/perf[test
 | Elliptic-curve cryptography (ECDSA) overall performance gauge at modest limb counts.
 
 | https://github.com/eisenwave/std-big-int/blob/main/tests/beman/big_int/perf/mul_big_int_vs_gmp_cpp.perf.cpp[mul_big_int_vs_gmp_cpp.perf.cpp]
-| Multiplication performance with mixed limb counts, with timing and numerical-correctness checks.
-
-| https://github.com/eisenwave/std-big-int/blob/main/tests/beman/big_int/perf/mul_big_int_vs_gmp_cpp.limbs.cpp[mul_big_int_vs_gmp_cpp.limbs.cpp]
 | Multiplication performance with fixed limb counts and timing.
 
+| https://github.com/eisenwave/std-big-int/blob/main/tests/beman/big_int/perf/mul_big_int_vs_gmp_cpp.limbs.cpp[mul_big_int_vs_gmp_cpp.limbs.cpp]
+| Multiplication performance with mixed limb counts, with timing and numerical-correctness checks.
+
 | https://github.com/eisenwave/std-big-int/blob/main/tests/beman/big_int/perf/div_big_int_vs_gmp_cpp.perf.cpp[div_big_int_vs_gmp_cpp.perf.cpp]
-| Division performance with mixed limb counts, with timing and numerical-correctness checks.
+| Division performance with fixed limb counts and timing.
 
 | https://github.com/eisenwave/std-big-int/blob/main/tests/beman/big_int/perf/div_big_int_vs_gmp_cpp.limbs.cpp[div_big_int_vs_gmp_cpp.limbs.cpp]
-| Division performance with fixed limb counts and timing.
+| Division performance with mixed limb counts, with timing and numerical-correctness checks.
+
+| https://github.com/eisenwave/std-big-int/blob/main/tests/beman/big_int/perf/shape_sweep.cpp[shape_sweep.cpp]
+| End-to-end timing harness used for tuning: multiplication, squaring and division through the public operators over a list of operand shapes (balanced and unbalanced), with residue checks and an optional GMP column. Built as the `beman.big_int.benchmarks.shape_sweep` target.
 |===

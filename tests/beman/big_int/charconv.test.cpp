@@ -6,6 +6,8 @@
 #include <cstddef>
 #include <cstdint>
 #include <limits>
+#include <memory>
+#include <memory_resource>
 #include <random>
 #include <string>
 #include <utility>
@@ -871,9 +873,12 @@ TEST(ToChars, HugeValueTooLarge) {
 
 // ---------------------------------------------------------------------------
 // Large-input coverage for the sub-quadratic from_chars / to_chars path. The
-// fast kernel only engages above the per-arch gate (~1216 base-10 digits on
-// AArch64, ~19456 on x86-64), so all the fixed-value tests above exercise only
-// the inline fallback. The tests below push past the gate to cover from_chars
+// from_chars kernel engages from fast_input_charconv_min_chunks chunks when the
+// value cannot fit in place, and its divide-and-conquer ladder only above the
+// per-arch basecase (~608 base-10 digits on AArch64, ~19456 on x86-64; the
+// to_chars ladder starts near 300 digits everywhere), so the small
+// fixed-value tests above mostly exercise the inline path. The tests
+// below push past the gates to cover from_chars
 // stopping at an invalid character and the to_chars value_too_large path; the
 // large round-trip correctness checks live with the to_string / to_wstring
 // tests in string.test.cpp.
@@ -1096,6 +1101,90 @@ TEST(ToCharsRvalue, ConstantEvaluation) {
     static_assert(render_moved(-(1_n << 200), 7) ==
                   "-141246066533632643213232344050606053061443446006544361632102630555343054");
     static_assert(render_moved(1_n << 200, 32) == "10000000000000000000000000000000000000000");
+}
+
+// ---------------------------------------------------------------------------
+// from_chars keeps parsing allocation-free for values that fit the target's in-place storage: the sub-quadratic
+// kernel (which allocates a digit buffer and scratch) is used only when the value cannot fit in place anyway.
+// ---------------------------------------------------------------------------
+
+template <class T>
+struct counting_alloc {
+    using value_type = T;
+
+    std::size_t* count = nullptr;
+
+    counting_alloc() = default;
+    explicit counting_alloc(std::size_t* c) : count(c) {}
+    template <class U>
+    counting_alloc(const counting_alloc<U>& other) : count(other.count) {}
+
+    T* allocate(const std::size_t n) {
+        ++*count;
+        return std::allocator<T>{}.allocate(n);
+    }
+    void deallocate(T* p, const std::size_t n) noexcept { std::allocator<T>{}.deallocate(p, n); }
+
+    template <class U>
+    bool operator==(const counting_alloc<U>& other) const {
+        return count == other.count;
+    }
+};
+
+// A deterministic digit string whose first digit is nonzero.
+[[nodiscard]] std::string digits_of_length(const std::size_t n, const int base) {
+    std::string s(n, '0');
+    for (std::size_t i = 0; i < n; ++i) {
+        const int d = static_cast<int>((i * 7 + 3) % static_cast<std::size_t>(base));
+        s[i]        = static_cast<char>(d < 10 ? '0' + d : 'a' + (d - 10));
+    }
+    s[0] = '7';
+    return s;
+}
+
+TEST(FromCharsInPlace, ValuesThatFitDoNotAllocate) {
+    using wide_int = basic_big_int<512, uint_multiprecision_t, counting_alloc<uint_multiprecision_t>>;
+    for (const auto& [base, lengths] :
+         {std::pair<int, std::vector<std::size_t>>{10, {40, 77, 100}}, {16, {30, 80, 120}}}) {
+        for (const std::size_t n : lengths) {
+            for (const bool negative : {false, true}) {
+                std::size_t count = 0;
+                wide_int    x{counting_alloc<uint_multiprecision_t>{&count}};
+                std::string text = digits_of_length(n, base);
+                if (negative) {
+                    text.insert(text.begin(), '-');
+                }
+                const auto [p, ec] = from_chars(text.data(), text.data() + text.size(), x, base);
+                EXPECT_EQ(ec, std::errc{}) << "base " << base << " digits " << n;
+                EXPECT_EQ(p, text.data() + text.size());
+                EXPECT_EQ(count, 0u) << "parsing allocated: base " << base << " digits " << n;
+                EXPECT_EQ(to_string(x, base), text) << "base " << base << " digits " << n;
+            }
+        }
+    }
+}
+
+TEST(FromCharsInPlace, PmrNullResourceParsesInPlaceValues) {
+    using pmr_wide = beman::big_int::pmr::basic_big_int<512>;
+    for (const auto& [base, n] : {std::pair<int, std::size_t>{10, 100}, {10, 40}, {16, 120}}) {
+        pmr_wide          x{std::pmr::polymorphic_allocator<uint_multiprecision_t>{std::pmr::null_memory_resource()}};
+        const std::string text = digits_of_length(n, base);
+        std::from_chars_result r{};
+        EXPECT_NO_THROW(r = from_chars(text.data(), text.data() + text.size(), x, base))
+            << "a null resource throws on any allocation: base " << base << " digits " << n;
+        EXPECT_EQ(r.ec, std::errc{});
+        EXPECT_EQ(to_string(x, base), text);
+    }
+}
+
+TEST(FromCharsInPlace, DefaultBigIntStillParsesWideValues) {
+    // The default big_int holds one limb in place, so wider values leave the in-place path (and, past the gate, take
+    // the kernel); they must still parse to the exact value.
+    EXPECT_EQ(parse("1000000000000000000000000000000", 10), pow(big_int{10}, 30));
+    for (const std::size_t n : {std::size_t{57}, std::size_t{100}, std::size_t{200}, std::size_t{700}}) {
+        const std::string text = digits_of_length(n, 10);
+        EXPECT_EQ(to_string(parse(text, 10)), text) << "digits " << n;
+    }
 }
 
 } // namespace

@@ -88,8 +88,8 @@ TEST(RingAllocator, AllDivisionMethodsThroughEveryTier) {
         }
     }
 
-    // Barrett march (s >= 512, m >= 16 s): the Newton reciprocal and the
-    // wrapped block products run inside, all through the ring's rebinds.
+    // Barrett march (s = 512 is at or above barrett_march_cutoff on every configuration, m >= 16 s): the Newton
+    // reciprocal and the wrapped block products run inside, all through the ring's rebinds.
     check_division_methods(random_value(8400, rng, false), random_value(512, rng, true));
 
     // Exact multiple at dc sizes: drives divide_quotient's verify branch.

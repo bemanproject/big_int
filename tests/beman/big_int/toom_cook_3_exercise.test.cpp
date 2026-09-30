@@ -16,7 +16,8 @@ using random_engine_length_type =
 
 random_engine_length_type generator_limb_length{static_cast<typename random_engine_length_type::result_type>(53)};
 
-// Toom-Cook 3 cutoff is 800 limbs. Sizes 810..1500 exercise the algorithm:
+// Sizes 810..1500 sit above detail::toom_cook_3_cutoff on some configurations and below it on others;
+// they exercise the algorithm where they clear the cutoff:
 // balanced pairs enter Toom-3 directly, asymmetric pairs may fall back to
 // Karatsuba (min <= 2*k), so both paths get coverage.
 std::uniform_int_distribution distribution_limb_length{std::size_t{UINT16_C(810)}, std::size_t{UINT16_C(1500)}};

@@ -367,11 +367,13 @@ constexpr void divide_unsigned_approx(const std::span<uint_multiprecision_t>    
 // either bound the schoolbook kernel wins. Java's BigInteger draws the same
 // divisor line at 80 32-bit words. Tuned via division_stress_bench medians
 // and direct probes, per architecture (2026-06-10):
-//   - AArch64 (M4 Max): parity right at 40/10 (re-confirmed after the
-//     Knuth-D preinv basecase replacement; the quotient-gate crossover
-//     measures 8-10 limbs). Beyond the gates divide-and-conquer pulls ahead
-//     monotonically: ~1.2x at a 2x-cutoff balanced division, ~2.2x at 512
-//     limbs, ~7.5x at 8192.
+//   - AArch64 (M4 Max): parity right at 40/10, re-confirmed 2026-09-30 (s = 8..384
+//     plus large balanced shapes): cutoffs 20-32 speed divrem by 3-4% but slow
+//     div by 26-31% at s = 48-144; offset 6 speeds div by 10.8% but slows divrem
+//     by 4.6% (worst +75% at q = 6). Beyond the gates
+//     divide-and-conquer pulls ahead monotonically: ~1.2x at a 2x-cutoff balanced
+//     division, ~2.2x at 512 limbs, ~7.5x at 8192. Measured on M4 only, also used
+//     for other AArch64 cores and MSVC ARM64.
 //   - x86-64 (11900K): the preinv basecase rides the 1-instruction 64x64
 //     mul and fast div so far that divide-and-conquer first wins a balanced
 //     shape at ~144-160 divisor limbs (1.02-1.06; schoolbook wins 0.86-0.99
@@ -381,7 +383,10 @@ constexpr void divide_unsigned_approx(const std::span<uint_multiprecision_t>    
 // The 32-bit-limb values are scaled from the 64-bit AArch64 line (Java's
 // precedent); no 32-bit hardware target has been measured.
 #if BEMAN_BIG_INT_LIMB_WIDTH == 64
-    #if defined(__x86_64__) || defined(_M_X64) || defined(__amd64__)
+    #if defined(BEMAN_BIG_INT_ARCH_AARCH64)
+inline constexpr std::size_t burnikel_ziegler_cutoff = 40;
+inline constexpr std::size_t burnikel_ziegler_offset = 10;
+    #elif defined(__x86_64__) || defined(_M_X64) || defined(__amd64__)
 inline constexpr std::size_t burnikel_ziegler_cutoff = 160;
 inline constexpr std::size_t burnikel_ziegler_offset = 64;
     #else
@@ -685,8 +690,11 @@ void divide_quotient(const std::span<uint_multiprecision_t>       quotient,
 // division_stress_bench plus direct divide_barrett-vs-divide_burnikel_ziegler
 // probes (release builds, min-of-reps, M4 Max and i9-11900K, 2026-06-10):
 //
-//   march    (m/16 >= s, s >= march_cutoff):    0.81-0.95x everywhere from
-//            512-limb divisors up; unchanged from the phase C tuning.
+//   march    (m/16 >= s, s >= march_cutoff):    x86-64: 0.81-0.95x from
+//            512-limb divisors up (phase C tuning). AArch64 (M4 Max,
+//            2026-09-30, s = 2..13 x m/s 16..256): Barrett already wins from a
+//            9-limb divisor, the one-row division basecase being slow per
+//            limb-product.
 //   march8   (m/8 >= s, s >= march8_cutoff):    pays once the divisor wrap
 //            rides the cyclic NTT (AArch64: 0.93 at 16384/2048) or, on
 //            x86-64, once the reciprocal amortizes anyway (0.94-0.97 at
@@ -694,7 +702,9 @@ void divide_quotient(const std::span<uint_multiprecision_t>       quotient,
 //   quarter  (m/4 >= s, m >= quarter_cutoff):   0.57-0.67x (M4) and
 //            0.62-0.82x (11900K FP/AVX2) from m = 49152; break-even or worse
 //            at m = 32768 on both. The x86-64 integer NTT loses these
-//            shapes (1.04-1.29) -- disabled there.
+//            shapes (1.04-1.29) -- disabled there. AArch64 integer moved to
+//            24576 on 2026-09-30 (m 8192..49152, m/s 4..7.5: div 1.0220 ->
+//            1.0112); AArch64 SIMD keeps 49152.
 //   balanced (m - s >= s, m >= balanced_cutoff): M4 crosses between m =
 //            98304 (1.00) and 131072 (0.89, then 0.79/0.64 at 262144/524288).
 //            11900K FP/AVX2 is break-even-to-winning at 131072 (1.00 probe,
@@ -717,7 +727,18 @@ void divide_quotient(const std::span<uint_multiprecision_t>       quotient,
 // q*D subtrahend costs a full mulmod(s) no matter how small the inverse
 // is). Revisit only if those mid-short-quotient shapes at scale become a
 // measured workload.
-#if defined(__x86_64__) || defined(_M_X64) || defined(__amd64__)
+#if defined(BEMAN_BIG_INT_ARCH_AARCH64)
+// M4 Max, appleclang-release, 2026-09-30, end to end via division_stress_bench and shape_sweep div/divrem; measured
+// on M4 only, also used for other AArch64 cores and MSVC ARM64.
+inline constexpr std::size_t barrett_march_cutoff  = 9;
+inline constexpr std::size_t barrett_march8_cutoff = 2048;
+    #if defined(BEMAN_BIG_INT_SIMD_MUL)
+inline constexpr std::size_t barrett_quarter_cutoff = 49152;
+    #else
+inline constexpr std::size_t barrett_quarter_cutoff = 24576;
+    #endif
+inline constexpr std::size_t barrett_balanced_cutoff = 131072;
+#elif defined(__x86_64__) || defined(_M_X64) || defined(__amd64__)
 inline constexpr std::size_t barrett_march_cutoff  = 512;
 inline constexpr std::size_t barrett_march8_cutoff = 4096;
     #if defined(BEMAN_BIG_INT_SIMD_MUL)
@@ -734,8 +755,8 @@ inline constexpr std::size_t barrett_quarter_cutoff  = 49152;
 inline constexpr std::size_t barrett_balanced_cutoff = 131072;
 #endif
 
-static_assert(barrett_march_cutoff >= burnikel_ziegler_cutoff,
-              "the dispatch chain assumes Barrett sits above the divide-and-conquer tier");
+// Barrett may sit below the divide-and-conquer gate (AArch64 marches from 9 limbs); it only needs a real divisor.
+static_assert(barrett_march_cutoff >= 2, "divide_barrett needs a divisor of at least 2 limbs");
 static_assert(barrett_march8_cutoff >= barrett_march_cutoff,
               "the half-depth march rule must not undercut the full-depth one");
 
@@ -746,7 +767,9 @@ static_assert(barrett_march8_cutoff >= barrett_march_cutoff,
 // x86-64's strong schoolbook prefers 512 (7-8% faster whole-reciprocal at
 // n = 512-1024, the common Barrett divisor sizes; pure schoolbook only
 // loses from n = 1024 up).
-#if defined(__x86_64__) || defined(_M_X64) || defined(__amd64__)
+#if defined(BEMAN_BIG_INT_ARCH_AARCH64)
+inline constexpr std::size_t reciprocal_span_cutoff = 64; // M4 Max, 2026-09-30: kept (ties)
+#elif defined(__x86_64__) || defined(_M_X64) || defined(__amd64__)
 inline constexpr std::size_t reciprocal_span_cutoff = 512;
 #else
 inline constexpr std::size_t reciprocal_span_cutoff = 64;
@@ -885,9 +908,10 @@ void divide_barrett_preinv(std::span<uint_multiprecision_t>       quotient,
                            scratch_allocator_base&                scratch);
 
 // ---------------------------------------------------------------------------
-// Top-level division dispatcher (counterpart of multiply_dispatch): the
-// divide-and-conquer path needs both a large divisor and a long quotient to
-// pay off; everything else takes the schoolbook kernel. Constant evaluation
+// Top-level division dispatcher (counterpart of multiply_dispatch): the Barrett
+// gates above are checked first, then the divide-and-conquer path, which needs
+// both a large divisor and a long quotient to pay off; everything else takes
+// the schoolbook kernel. Constant evaluation
 // always takes the schoolbook kernel for the same reason multiply_dispatch
 // avoids its recursive tiers there (consteval step limits).
 // Same contract as divide_unsigned. `scratch` must provide at least

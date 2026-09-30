@@ -17,7 +17,7 @@ auto run_one_mersenne(const unsigned p2) -> void {
 
     // Mersenne value (2^p2 - 1) computed via square-and-multiply pow().
     // The exponents below produce limb counts well above the Toom-Cook 3
-    // cutoff (120) at multiple recursion depths.
+    // cutoff (detail::toom_cook_3_cutoff) at multiple recursion depths.
 
     const cpp_int_type cpp_int_two{2};
     const cpp_int_type cpp_int_mersenne{cpp_int_type{beman::big_int::pow(cpp_int_two, p2)} - 1};
@@ -60,8 +60,8 @@ auto run_one_mersenne(const unsigned p2) -> void {
 }
 
 // Mersenne primes large enough to drive multiple Toom-Cook 3 recursion levels.
-// At 64-bit limbs, p2/64 limbs are needed; at toom_cook_3_cutoff = 800 limbs
-// (~51200 bits), Toom-3 still recurses several levels for these exponents
+// At 64-bit limbs, p2/64 limbs are needed; with the toom_cook_3_cutoff of a few
+// hundred limbs, Toom-3 still recurses several levels for these exponents
 // (e.g. 13466917 bits = ~210k limbs, recurses ~5-6 levels before falling
 // through to Karatsuba). Dropped the two largest exponents from the
 // karatsuba-era list to keep test wall time under control now that each

@@ -9,8 +9,9 @@
 #        python3 generate_division_test_data.py dc > division_dc.test.cpp
 #
 # The "dc" suite targets the Burnikel-Ziegler divide-and-conquer path: sizes
-# straddle burnikel_ziegler_cutoff/offset (40/20 in 64-bit limbs) and the
-# block-decomposition shapes of the top-level driver. Under 32-bit limbs the
+# straddle burnikel_ziegler_cutoff/offset (40/10 in 64-bit limbs on AArch64 and
+# portable builds, 160/64 on x86-64) and the block-decomposition shapes of the
+# top-level driver. Under 32-bit limbs the
 # same vectors remain valid, just at different boundary positions.
 
 import random

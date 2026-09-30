@@ -195,7 +195,7 @@ auto main(int argc, char** argv) -> int {
         std::vector<char> vec_char_result(std::size_t{result_length_in_ascii_chars}, '\0');
 
         static_cast<void>(to_chars(
-            vec_char_result.data(), vec_char_result.data() + std::size_t{result_length_in_ascii_chars}, bn_b, 16));
+            vec_char_result.data(), vec_char_result.data() + std::size_t{result_length_in_ascii_chars}, bn_a, 16));
 
         const std::string bn_str(vec_char_result.data());
 
@@ -204,7 +204,7 @@ auto main(int argc, char** argv) -> int {
         {
             std::stringstream strm{};
 
-            strm << std::hex << ctrl_b;
+            strm << std::hex << ctrl_a;
 
             ctrl_str = strm.str();
         }

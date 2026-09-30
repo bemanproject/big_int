@@ -21,13 +21,14 @@ void multiply_toom_cook_3(const std::span<uint_multiprecision_t>       result,
 
     // Partition at k = ceil(max(an, bn) / 3).
     const std::size_t min_size         = std::min(a.size(), b.size());
-    const std::size_t k                = (std::max(a.size(), b.size()) + 2) / 3;
+    const std::size_t max_size         = std::max(a.size(), b.size());
+    const std::size_t k                = (max_size + 2) / 3;
     const std::size_t effective_cutoff = cutoff_override == 0 ? toom_cook_3_cutoff : cutoff_override;
 
     // Fall through to Karatsuba (and on through to schoolbook) when the smaller
     // operand is below the performance cutoff or below the algorithm's 2*k
     // invariant (Toom-Cook 3 needs both a2 and b2 non-empty).
-    if (min_size < effective_cutoff || min_size <= 2 * k) {
+    if (min_size < effective_cutoff || toom_cook_3_refuses_shape(min_size, max_size)) {
         multiply_karatsuba(result, a, b, scratch);
         return;
     }

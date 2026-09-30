@@ -30,14 +30,45 @@ extern "C" void beman_big_int_multiply_long_runtime_avx512_ifma(beman::big_int::
 
 namespace beman::big_int::detail {
 
-// Below this many limbs (in EITHER operand) the AVX-512 IFMA kernel routes
-// back to the BMI2/ADX-or-generic choice. Tuned end to end (x * y through
-// big_int, i9-11900K): below 18 limbs the IFMA kernel's fixed overhead costs
-// more than it saves (worst case ~15% slower, at 16 limbs); from 18 on it
-// wins, increasingly so, up to ~2.5x by a few hundred limbs.
-inline constexpr std::size_t ifma_multiply_min_limbs = 18;
+// The AVX-512 IFMA kernel has a fixed set-up cost, so it pays off from a size that shrinks as the operands get more
+// lopsided (its cost follows the shorter operand in 8-digit blocks, the BMI2/ADX kernel's the whole product). Tuned
+// on the i9-11900K, 2026-09-29, at the crossover of the two kernels timed with the buffers away from 4 KiB
+// aliasing: about 18 limbs balanced, 16x20 at 5:4, 13x26 at 2:1, 12x36 at 3:1, 8x64 at 8:1, 7x112 at 16:1 and
+// 6x192 at 32:1. Below ifma_multiply_min_limbs the BMI2/ADX kernel always wins.
+inline constexpr std::size_t ifma_multiply_min_limbs        = 6;
+inline constexpr std::size_t ifma_multiply_mid_limbs        = 8;
+inline constexpr std::size_t ifma_multiply_high_limbs       = 13;
+inline constexpr std::size_t ifma_multiply_always_limbs     = 20;
+inline constexpr std::size_t ifma_multiply_min_product_low  = 900;
+inline constexpr std::size_t ifma_multiply_min_product_mid  = 450;
+inline constexpr std::size_t ifma_multiply_min_product_high = 330;
+
+static_assert(ifma_multiply_min_limbs <= ifma_multiply_mid_limbs);
+static_assert(ifma_multiply_mid_limbs <= ifma_multiply_high_limbs);
+static_assert(ifma_multiply_high_limbs <= ifma_multiply_always_limbs);
+
+constexpr bool ifma_multiply_worthwhile(const std::size_t len_a, const std::size_t len_b) noexcept {
+    const std::size_t lo = len_a < len_b ? len_a : len_b;
+    if (lo < ifma_multiply_min_limbs) {
+        return false;
+    }
+    if (lo >= ifma_multiply_always_limbs) {
+        return true;
+    }
+    const std::size_t product = len_a * len_b;
+    if (lo >= ifma_multiply_high_limbs) {
+        return product >= ifma_multiply_min_product_high;
+    }
+    if (lo >= ifma_multiply_mid_limbs) {
+        return product >= ifma_multiply_min_product_mid;
+    }
+    return product >= ifma_multiply_min_product_low;
+}
 
 } // namespace beman::big_int::detail
+
+    // Feature macro for tools that print the gate constants above.
+    #define BEMAN_BIG_INT_HAS_IFMA_MULTIPLY_GATE 1
 
 inline void beman_big_int_multiply_long_runtime(beman::big_int::uint_multiprecision_t*       p_result,
                                                 const beman::big_int::uint_multiprecision_t* p_a,
@@ -45,8 +76,7 @@ inline void beman_big_int_multiply_long_runtime(beman::big_int::uint_multiprecis
                                                 const beman::big_int::uint_multiprecision_t* p_b,
                                                 const std::size_t                            len_b) noexcept {
     #if BEMAN_BIG_INT_X86_64_AVX512_IFMA
-    if (len_a >= beman::big_int::detail::ifma_multiply_min_limbs &&
-        len_b >= beman::big_int::detail::ifma_multiply_min_limbs) {
+    if (beman::big_int::detail::ifma_multiply_worthwhile(len_a, len_b)) {
         beman_big_int_multiply_long_runtime_avx512_ifma(p_result, p_a, len_a, p_b, len_b);
         return;
     }
