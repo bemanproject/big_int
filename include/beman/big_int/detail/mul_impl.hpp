@@ -10,8 +10,10 @@
 
 #ifndef BEMAN_BIG_INT_BUILD_MODULE
     #include <algorithm>
+    #include <array>
     #include <bit>
     #include <compare>
+    #include <limits>
     #include <cstdint>
     #include <memory>
     #include <span>
@@ -125,9 +127,10 @@ inline constexpr std::size_t square_long_cutoff = 10;
 #elif defined(BEMAN_BIG_INT_ARCH_X86_64)
 inline constexpr std::size_t square_long_cutoff = 5;
 #elif defined(BEMAN_BIG_INT_ARCH_AARCH64)
-// Tuned end to end on x * x (M4 Max): cutoffs 3-6 are within noise of each
-// other, so the AArch64 assembly keeps the portable value.
-inline constexpr std::size_t square_long_cutoff = 4;
+// x * x, n = 2..14: at n = 4 the multiply kernel is 9.5% faster than the square kernel, from 5 on the square
+// kernel wins or ties. M4 Max, appleclang-release, 2026-09-30, end to end (shape_sweep sqr); measured on M4 only,
+// also used for other AArch64 cores and MSVC ARM64.
+inline constexpr std::size_t square_long_cutoff = 5;
 #else
 inline constexpr std::size_t square_long_cutoff = 4;
 #endif
@@ -135,8 +138,9 @@ inline constexpr std::size_t square_long_cutoff = 4;
 // Minimum number of limbs for Karatsuba to be worthwhile
 // Directly from Boost, and reconfirmed as correct on x86_64 and the portable kernel.
 #if defined(BEMAN_BIG_INT_ARCH_AARCH64)
-// Tuned end to end (x * y through big_int, M4 Max) with the 2-row AArch64
-// schoolbook kernel; 96-112 is a noisy transition zone.
+// x * y, min 84..132 in one-limb steps: 104-112 tie with the 2-row AArch64 schoolbook kernel and karatsuba_fallback
+// 80. M4 Max, appleclang-release, 2026-09-30, end to end (shape_sweep), balanced and unbalanced ratios; measured on M4
+// only, also used for other AArch64 cores and MSVC ARM64.
 inline constexpr std::size_t karatsuba_cutoff = 112;
 #elif defined(BEMAN_BIG_INT_ARCH_X86_64) && BEMAN_BIG_INT_X86_64_AVX512_IFMA
 inline constexpr std::size_t karatsuba_cutoff = 260;
@@ -145,7 +149,12 @@ inline constexpr std::size_t karatsuba_cutoff = 47;
 #else
 inline constexpr std::size_t karatsuba_cutoff = 48;
 #endif
-#if defined(BEMAN_BIG_INT_ARCH_X86_64) && BEMAN_BIG_INT_X86_64_AVX512_IFMA
+#if defined(BEMAN_BIG_INT_ARCH_AARCH64)
+// Leaf size of the Karatsuba recursion: min 96..399 x ratios 1..4, leaves 40..144; 72-112 tie, 80 is 5.7% faster than
+// 40 on average. M4 Max, appleclang-release, 2026-09-30, end to end (shape_sweep), balanced and unbalanced ratios;
+// measured on M4 only, also used for other AArch64 cores and MSVC ARM64.
+inline constexpr std::size_t karatsuba_fallback = 80;
+#elif defined(BEMAN_BIG_INT_ARCH_X86_64) && BEMAN_BIG_INT_X86_64_AVX512_IFMA
 inline constexpr std::size_t karatsuba_fallback = 230;
 #else
 inline constexpr std::size_t karatsuba_fallback = 40;
@@ -189,9 +198,10 @@ void multiply_karatsuba(const std::span<uint_multiprecision_t>       result,
 // against general Karatsuba (the same SQR/MUL threshold ratio GMP observes).
 // Tuned via multiplication_stress_bench.
 #if defined(BEMAN_BIG_INT_ARCH_AARCH64)
-// Tuned end to end (x * x through big_int, M4 Max) with the 2-row AArch64
-// squaring kernel: a Karatsuba split only wins consistently from ~256 limbs.
-inline constexpr std::size_t square_karatsuba_cutoff = 256;
+// x * x, n = 64..400: a Karatsuba split wins from about 170 limbs with the 2-row AArch64 squaring kernel (160-176
+// tie). M4 Max, appleclang-release, 2026-09-30, end to end (shape_sweep sqr); measured on M4 only, also used for
+// other AArch64 cores and MSVC ARM64.
+inline constexpr std::size_t square_karatsuba_cutoff = 168;
 #elif defined(BEMAN_BIG_INT_ARCH_X86_64) && BEMAN_BIG_INT_X86_64_AVX512_IFMA
 inline constexpr std::size_t square_karatsuba_cutoff = 257;
 #elif defined(BEMAN_BIG_INT_ARCH_X86_64) && BEMAN_BIG_INT_X86_64_BMI2_ADX
@@ -215,10 +225,16 @@ void square_karatsuba(const std::span<uint_multiprecision_t>       result,
                       scratch_allocator_base&                      scratch,
                       const std::size_t                            cutoff_override = 0) noexcept;
 
-// Minimum number of limbs for Toom-Cook 3 to be worthwhile. Karatsuba still
-// wins at 300-350 limbs (~15%); Toom-3 reliably overtakes from ~400.
+// Minimum number of limbs for Toom-Cook 3 to be worthwhile. x86-64 and portable
+// provenance (AArch64 is tuned separately below): Karatsuba still wins at
+// 300-350 limbs (~15%); Toom-3 reliably overtakes from ~400.
 // Tuned via multiplication_stress_bench.
-#if defined(BEMAN_BIG_INT_ARCH_X86_64) && BEMAN_BIG_INT_X86_64_AVX512_IFMA
+#if defined(BEMAN_BIG_INT_ARCH_AARCH64)
+// min 300..399 (ratios 1..1.75): the leaf-80 Karatsuba loses to Toom-3 from 300 (275-250 tie). M4 Max,
+// appleclang-release, 2026-09-30, end to end (shape_sweep), balanced and unbalanced ratios; measured on M4 only, also
+// used for other AArch64 cores and MSVC ARM64.
+inline constexpr std::size_t toom_cook_3_cutoff = 300;
+#elif defined(BEMAN_BIG_INT_ARCH_X86_64) && BEMAN_BIG_INT_X86_64_AVX512_IFMA
 inline constexpr std::size_t toom_cook_3_cutoff = 1600;
 #else
 inline constexpr std::size_t toom_cook_3_cutoff = 400;
@@ -262,8 +278,17 @@ void multiply_toom_cook_3(const std::span<uint_multiprecision_t>       result,
 // Minimum number of limbs for the Toom-Cook 3 squaring variant; roughly twice
 // the general toom_cook_3_cutoff, mirroring the SQR/MUL threshold ratio.
 // Tuned via multiplication_stress_bench.
-#if defined(BEMAN_BIG_INT_ARCH_X86_64) && BEMAN_BIG_INT_X86_64_AVX512_IFMA
-inline constexpr std::size_t square_toom_cook_3_cutoff = 20000;
+#if defined(BEMAN_BIG_INT_ARCH_AARCH64)
+// x * x, n = 300..599: 500 scores 1.0069 against 1.0322 for the old 300. M4 Max, appleclang-release, 2026-09-30, end
+// to end (shape_sweep sqr); measured on M4 only, also used for other AArch64 cores and MSVC ARM64.
+inline constexpr std::size_t square_toom_cook_3_cutoff = 500;
+#elif defined(BEMAN_BIG_INT_ARCH_X86_64) && BEMAN_BIG_INT_X86_64_AVX512_IFMA
+inline constexpr std::size_t square_toom_cook_3_cutoff =
+    4200; // squares: i9-11900K, gcc-release, 2026-09-30, shape_sweep end to end, balanced and unbalanced ratios.
+#elif defined(BEMAN_BIG_INT_ARCH_X86_64) && BEMAN_BIG_INT_X86_64_BMI2_ADX
+inline constexpr std::size_t square_toom_cook_3_cutoff = 440; // same provenance
+#elif defined(BEMAN_BIG_INT_ARCH_X86_64)
+inline constexpr std::size_t square_toom_cook_3_cutoff = 300; // same provenance
 #else
 inline constexpr std::size_t square_toom_cook_3_cutoff = 300;
 #endif
@@ -284,11 +309,25 @@ void square_toom_cook_3(const std::span<uint_multiprecision_t>       result,
                         scratch_allocator_base&                      scratch,
                         const std::size_t                            cutoff_override = 0) noexcept;
 
-// Minimum number of limbs for Toom-Cook 4 to be worthwhile. Toom-3 still wins
-// at 1400 (~9%); Toom-4 reliably overtakes from ~1600.
+// Minimum number of limbs for Toom-Cook 4 to be worthwhile. x86-64 and portable
+// provenance (AArch64 is tuned separately below): Toom-3 still wins at 1400
+// (~9%); Toom-4 reliably overtakes from ~1600.
 // Tuned via multiplication_stress_bench.
-#if defined(BEMAN_BIG_INT_ARCH_X86_64) && BEMAN_BIG_INT_X86_64_AVX512_IFMA
-inline constexpr std::size_t toom_cook_4_cutoff = 4000;
+#if defined(BEMAN_BIG_INT_ARCH_AARCH64)
+// Toom-4 and Toom-6.5 share one cutoff (the Toom-4 zone is empty in the ladder; Toom-4 is still reached through
+// Toom-6.5's own ratio fallback): Toom-3 to Toom-6.5 crossover scan 900..1700, 1400 has no balanced regression.
+// M4 Max, appleclang-release, 2026-09-30, end to end (shape_sweep), balanced and unbalanced ratios; measured on M4
+// only, also used for other AArch64 cores and MSVC ARM64.
+inline constexpr std::size_t toom_cook_4_cutoff = 1400;
+#elif defined(BEMAN_BIG_INT_ARCH_X86_64) && BEMAN_BIG_INT_X86_64_AVX512_IFMA
+inline constexpr std::size_t toom_cook_4_cutoff =
+    4000; // i9-11900K, gcc-release, 2026-09-30, shape_sweep end to end, balanced and unbalanced ratios.
+#elif defined(BEMAN_BIG_INT_ARCH_X86_64) && BEMAN_BIG_INT_X86_64_BMI2_ADX
+inline constexpr std::size_t toom_cook_4_cutoff = 1600; // same provenance
+#elif defined(BEMAN_BIG_INT_ARCH_X86_64)
+// Generic x86-64: Toom-4, 6.5 and 8.5 share 1400, so the ladder is Toom-3 up to 1400 and Toom-8.5 above
+// (the other Toom orders added nothing). Same provenance.
+inline constexpr std::size_t toom_cook_4_cutoff = 1400;
 #else
 inline constexpr std::size_t toom_cook_4_cutoff = 1600;
 #endif
@@ -333,8 +372,14 @@ void multiply_toom_cook_4(const std::span<uint_multiprecision_t>       result,
 // Minimum number of limbs for the Toom-Cook 4 squaring variant; roughly twice
 // the general toom_cook_4_cutoff, mirroring the SQR/MUL threshold ratio.
 // Tuned via multiplication_stress_bench.
-#if defined(BEMAN_BIG_INT_ARCH_X86_64) && BEMAN_BIG_INT_X86_64_AVX512_IFMA
-inline constexpr std::size_t square_toom_cook_4_cutoff = 20000;
+#if defined(BEMAN_BIG_INT_ARCH_AARCH64)
+inline constexpr std::size_t square_toom_cook_4_cutoff = 2000; // kept; ties within 1% (see toom_cook_4_cutoff)
+#elif defined(BEMAN_BIG_INT_ARCH_X86_64) && BEMAN_BIG_INT_X86_64_AVX512_IFMA
+inline constexpr std::size_t square_toom_cook_4_cutoff = 6000; // same provenance as square_toom_cook_3_cutoff
+#elif defined(BEMAN_BIG_INT_ARCH_X86_64) && BEMAN_BIG_INT_X86_64_BMI2_ADX
+inline constexpr std::size_t square_toom_cook_4_cutoff = 2000;
+#elif defined(BEMAN_BIG_INT_ARCH_X86_64)
+inline constexpr std::size_t square_toom_cook_4_cutoff = 1500; // generic squares: Toom-3 up to 1500, then Toom-8.5
 #else
 inline constexpr std::size_t square_toom_cook_4_cutoff = 2000;
 #endif
@@ -353,12 +398,18 @@ void square_toom_cook_4(const std::span<uint_multiprecision_t>       result,
                         scratch_allocator_base&                      scratch,
                         const std::size_t                            cutoff_override = 0) noexcept;
 
-// See tests/beman/big_int/perf crossover_speedup.png. Toom-6.5 overtakes Toom-4
-// cleanly and monotonically from ~2400 limbs (re-measured 2026-06-04; the old
-// 3000 left a ~2400-3000 band on the slower Toom-4).
+// x86-64 and portable provenance (AArch64 is tuned separately below): Toom-6.5
+// overtakes Toom-4 cleanly and monotonically from ~2400 limbs (re-measured
+// 2026-06-04; the old 3000 left a ~2400-3000 band on the slower Toom-4).
 // Tuned via multiplication_stress_bench.
-#if defined(BEMAN_BIG_INT_ARCH_X86_64) && BEMAN_BIG_INT_X86_64_AVX512_IFMA
+#if defined(BEMAN_BIG_INT_ARCH_AARCH64)
+inline constexpr std::size_t toom_cook_6_5_cutoff = 1400; // see toom_cook_4_cutoff
+#elif defined(BEMAN_BIG_INT_ARCH_X86_64) && BEMAN_BIG_INT_X86_64_AVX512_IFMA
 inline constexpr std::size_t toom_cook_6_5_cutoff = 4000;
+#elif defined(BEMAN_BIG_INT_ARCH_X86_64) && BEMAN_BIG_INT_X86_64_BMI2_ADX
+inline constexpr std::size_t toom_cook_6_5_cutoff = 1800; // see toom_cook_4_cutoff
+#elif defined(BEMAN_BIG_INT_ARCH_X86_64)
+inline constexpr std::size_t toom_cook_6_5_cutoff = 1400; // see toom_cook_4_cutoff
 #else
 inline constexpr std::size_t toom_cook_6_5_cutoff = 2400;
 #endif
@@ -414,8 +465,14 @@ void multiply_toom_cook_6_5(const std::span<uint_multiprecision_t>       result,
 // Minimum number of limbs for the Toom-6.5 squaring variant; roughly twice
 // the general toom_cook_6_5_cutoff, mirroring the SQR/MUL threshold ratio.
 // Tuned via multiplication_stress_bench.
-#if defined(BEMAN_BIG_INT_ARCH_X86_64) && BEMAN_BIG_INT_X86_64_AVX512_IFMA
-inline constexpr std::size_t square_toom_cook_6_5_cutoff = 20000;
+#if defined(BEMAN_BIG_INT_ARCH_AARCH64)
+inline constexpr std::size_t square_toom_cook_6_5_cutoff = 2400; // kept; ties within 1% (see toom_cook_4_cutoff)
+#elif defined(BEMAN_BIG_INT_ARCH_X86_64) && BEMAN_BIG_INT_X86_64_AVX512_IFMA
+inline constexpr std::size_t square_toom_cook_6_5_cutoff = 9000;
+#elif defined(BEMAN_BIG_INT_ARCH_X86_64) && BEMAN_BIG_INT_X86_64_BMI2_ADX
+inline constexpr std::size_t square_toom_cook_6_5_cutoff = 2000;
+#elif defined(BEMAN_BIG_INT_ARCH_X86_64)
+inline constexpr std::size_t square_toom_cook_6_5_cutoff = 1500;
 #else
 inline constexpr std::size_t square_toom_cook_6_5_cutoff = 2400;
 #endif
@@ -442,8 +499,15 @@ void square_toom_cook_6_5(const std::span<uint_multiprecision_t>       result,
 // multiplication_stress_bench (two runs, AppleClang): below ~15000 Toom-6.5
 // ties or wins; from 15000 Toom-8.5 overtakes cleanly and monotonically, and
 // decisively (~5-8%) beyond ~24000.
-#if defined(BEMAN_BIG_INT_ARCH_X86_64) && BEMAN_BIG_INT_X86_64_AVX512_IFMA
+#if defined(BEMAN_BIG_INT_ARCH_AARCH64)
+inline constexpr std::size_t toom_cook_8_5_cutoff =
+    15000; // kept; rarely reached on AArch64 (only where the FFT model refuses), not retuned
+#elif defined(BEMAN_BIG_INT_ARCH_X86_64) && BEMAN_BIG_INT_X86_64_AVX512_IFMA
 inline constexpr std::size_t toom_cook_8_5_cutoff = 6000;
+#elif defined(BEMAN_BIG_INT_ARCH_X86_64) && BEMAN_BIG_INT_X86_64_BMI2_ADX
+inline constexpr std::size_t toom_cook_8_5_cutoff = 7000; // see toom_cook_4_cutoff
+#elif defined(BEMAN_BIG_INT_ARCH_X86_64)
+inline constexpr std::size_t toom_cook_8_5_cutoff = 1400; // see toom_cook_4_cutoff
 #else
 inline constexpr std::size_t toom_cook_8_5_cutoff = 15000;
 #endif
@@ -486,8 +550,15 @@ void multiply_toom_cook_8_5(const std::span<uint_multiprecision_t>       result,
 // multiplication_stress_bench (two runs): square-Toom-6.5 stays competitive
 // longer than the multiply kernel, with a reproducible ~1% square-Toom-8.5 dip
 // near 20000, so the cutoff sits above it where 8.5 overtakes cleanly.
-#if defined(BEMAN_BIG_INT_ARCH_X86_64) && BEMAN_BIG_INT_X86_64_AVX512_IFMA
-inline constexpr std::size_t square_toom_cook_8_5_cutoff = 40000;
+#if defined(BEMAN_BIG_INT_ARCH_AARCH64)
+inline constexpr std::size_t square_toom_cook_8_5_cutoff =
+    24000; // kept; rarely reached on AArch64 (only where the FFT model refuses), not retuned
+#elif defined(BEMAN_BIG_INT_ARCH_X86_64) && BEMAN_BIG_INT_X86_64_AVX512_IFMA
+inline constexpr std::size_t square_toom_cook_8_5_cutoff = 14000;
+#elif defined(BEMAN_BIG_INT_ARCH_X86_64) && BEMAN_BIG_INT_X86_64_BMI2_ADX
+inline constexpr std::size_t square_toom_cook_8_5_cutoff = 5000;
+#elif defined(BEMAN_BIG_INT_ARCH_X86_64)
+inline constexpr std::size_t square_toom_cook_8_5_cutoff = 1500;
 #else
 inline constexpr std::size_t square_toom_cook_8_5_cutoff = 24000;
 #endif
@@ -678,55 +749,197 @@ constexpr std::size_t fft_cyclic_storage_size(const fft_cyclic_params& p) noexce
 }
 #endif
 
-// Minimum limb count (of the smaller operand) at which FFT overtakes Toom-Cook 8.5.
-// These crossovers were measured with multiplication_stress_bench (release) on
-// Apple Silicon (ARM64) and a native x86-64 box, and they vary strongly by BOTH the
-// transform (integer vs the BEMAN_BIG_INT_SIMD_MUL FP NTT) and the architecture.
-// FFT cost steps at power-of-two transform-length band boundaries, so each cutoff
-// sits just above the boundary where FFT first wins for the bulk of that band:
+// Balanced-product crossovers at which the FFT overtakes Toom-Cook 8.5, measured with multiplication_stress_bench
+// (release). They are the starting floors of the x86-64 branches below; FFT cost steps at power-of-two transform
+// length band boundaries, so each floor sits just above the boundary where the FFT first wins for the bulk of a band:
 //
 //   config                     fft_mul   square_fft
-//   integer, x86-64              24000      24000   x86's fast 64x64 mul makes Toom
-//                                                   dominate the scalar NTT to ~24k
-//   integer, x86-64 AVX-512 IFMA 400000+   400000+   IFMA speeds up every Toom tier's
-//                                                   basecase but not the NTT itself
-//                                                   (plain modular arithmetic), so the
-//                                                   gap only widens; Toom-8.5 still
-//                                                   won every size tested, up to
-//                                                   300000 -- this is a measured floor,
-//                                                   not a pinned crossover
-//   integer, AArch64 / other      4500       4500   NTT competitive with Toom here
 //   FP (SIMD), x86-64 AVX2        6000      11000   AVX2 makes the FFT viable early
-//   FP (SIMD), x86-64 AVX2 IFMA  50000     (untuned) same effect as the integer path;
-//                                                   spot-checked 3000-60000, noisy
-//                                                   crossover around 40000-50000
-//   FP (SIMD), AArch64 NEON       6000       6000
+//   FP (SIMD), x86-64 AVX2 IFMA  50000     (untuned)
 //
-// (On AArch64 the FP/NEON NTT is actually a little slower than the integer NTT -- the
-// 3-prime FP transform costs more than the 2-prime integer one and NEON's 2-wide does
-// not recover it -- so SIMD multiply mainly benefits x86-64.)
+// The integer x86-64 builds used floors of 24000 (generic, BMI2/ADX) and 400000 (IFMA) before the cost model: x86's
+// fast 64x64 multiply makes Toom-Cook 8.5 beat the scalar NTT until about 40000-75000 limbs balanced.
+//
+// The integer x86-64 and AArch64 builds use the cost model below instead of a single crossover. Its constants come
+// from M4 Max measurements (2026-09-30, shape_sweep end to end, integer 249 and SIMD 238 mixed shapes including
+// ratios 1.1-8): the isqrt model is fitted to the measured Toom and FFT curves, the floors are limited by the data at
+// 1400, and the SIMD floor of 3300 removes band-top false positives. FFT entry gates. The FFT time is a step function
+// of the power-of-two transform length L while the Toom ladder is smooth, so a bare `min >= cutoff` is wrong inside
+// every L band. The gate is a floor plus an integer cost model (fft_mul_worthwhile / square_fft_worthwhile below): use
+// the FFT iff the shorter operand has at least *_min_limbs limbs and L * log2(L) * den <= num * max * isqrt(min). A
+// den of 0 switches the model off, leaving the plain floor (the SIMD and portable branches, whose models are not tuned
+// yet). The square gate is checked ahead of the square Toom chain; the model-off square floors (SIMD and portable) are
+// at least square_toom_cook_6_5_cutoff, which is where the FFT used to be reachable.
 #if defined(BEMAN_BIG_INT_SIMD_MUL)
     #if defined(BEMAN_BIG_INT_ARCH_X86_64) && BEMAN_BIG_INT_X86_64_AVX512_IFMA
-inline constexpr std::size_t fft_mul_cutoff    = 50000;
-inline constexpr std::size_t square_fft_cutoff = 11000;
+inline constexpr std::size_t fft_mul_min_limbs    = 50000;
+inline constexpr std::size_t fft_mul_model_num    = 1;
+inline constexpr std::size_t fft_mul_model_den    = 0;
+inline constexpr std::size_t square_fft_min_limbs = 20000;
+inline constexpr std::size_t square_fft_model_num = 1;
+inline constexpr std::size_t square_fft_model_den = 0;
+    #elif defined(__x86_64__) || defined(_M_X64) || defined(__amd64__)
+inline constexpr std::size_t fft_mul_min_limbs    = 6000;
+inline constexpr std::size_t fft_mul_model_num    = 1;
+inline constexpr std::size_t fft_mul_model_den    = 0;
+inline constexpr std::size_t square_fft_min_limbs = 11000;
+inline constexpr std::size_t square_fft_model_num = 1;
+inline constexpr std::size_t square_fft_model_den = 0;
+    #elif defined(BEMAN_BIG_INT_ARCH_AARCH64)
+inline constexpr std::size_t fft_mul_min_limbs    = 3300;
+inline constexpr std::size_t fft_mul_model_num    = 5;
+inline constexpr std::size_t fft_mul_model_den    = 8;
+inline constexpr std::size_t square_fft_min_limbs = 3300;
+inline constexpr std::size_t square_fft_model_num = 7;
+inline constexpr std::size_t square_fft_model_den = 16;
     #else
-inline constexpr std::size_t fft_mul_cutoff = 6000;
-        #if defined(__x86_64__) || defined(_M_X64) || defined(__amd64__)
-inline constexpr std::size_t square_fft_cutoff = 11000;
-        #else
-inline constexpr std::size_t square_fft_cutoff = 6000;
-        #endif
+inline constexpr std::size_t fft_mul_min_limbs    = 6000;
+inline constexpr std::size_t fft_mul_model_num    = 1;
+inline constexpr std::size_t fft_mul_model_den    = 0;
+inline constexpr std::size_t square_fft_min_limbs = 6000;
+inline constexpr std::size_t square_fft_model_num = 1;
+inline constexpr std::size_t square_fft_model_den = 0;
     #endif
+// x86-64 integer (non-SIMD): i9-11900K, gcc-release, 2026-09-30, shape_sweep end to end, balanced and unbalanced
+// ratios. The scalar NTT is a step function of the transform length, so the cost model replaces the old floors (24000
+// for generic and BMI2/ADX, 400000 for IFMA); the floors here are only an early-out, the model rejects small shapes
+// itself.
 #elif defined(BEMAN_BIG_INT_ARCH_X86_64) && BEMAN_BIG_INT_X86_64_AVX512_IFMA
-inline constexpr std::size_t fft_mul_cutoff    = 400000;
-inline constexpr std::size_t square_fft_cutoff = 400000;
+inline constexpr std::size_t fft_mul_min_limbs    = 16000;
+inline constexpr std::size_t fft_mul_model_num    = 7;
+inline constexpr std::size_t fft_mul_model_den    = 64;
+inline constexpr std::size_t square_fft_min_limbs = 8000;
+inline constexpr std::size_t square_fft_model_num = 6;
+inline constexpr std::size_t square_fft_model_den = 64;
+#elif defined(BEMAN_BIG_INT_ARCH_X86_64) && BEMAN_BIG_INT_X86_64_BMI2_ADX
+inline constexpr std::size_t fft_mul_min_limbs    = 3000;
+inline constexpr std::size_t fft_mul_model_num    = 12;
+inline constexpr std::size_t fft_mul_model_den    = 64;
+inline constexpr std::size_t square_fft_min_limbs = 3000;
+inline constexpr std::size_t square_fft_model_num = 8;
+inline constexpr std::size_t square_fft_model_den = 64;
+#elif defined(BEMAN_BIG_INT_ARCH_X86_64)
+inline constexpr std::size_t fft_mul_min_limbs    = 3000;
+inline constexpr std::size_t fft_mul_model_num    = 15;
+inline constexpr std::size_t fft_mul_model_den    = 64;
+inline constexpr std::size_t square_fft_min_limbs = 3000;
+inline constexpr std::size_t square_fft_model_num = 10;
+inline constexpr std::size_t square_fft_model_den = 64;
 #elif defined(__x86_64__) || defined(_M_X64) || defined(__amd64__)
-inline constexpr std::size_t fft_mul_cutoff    = 24000;
-inline constexpr std::size_t square_fft_cutoff = 24000;
+inline constexpr std::size_t fft_mul_min_limbs    = 24000;
+inline constexpr std::size_t fft_mul_model_num    = 1;
+inline constexpr std::size_t fft_mul_model_den    = 0;
+inline constexpr std::size_t square_fft_min_limbs = 24000;
+inline constexpr std::size_t square_fft_model_num = 1;
+inline constexpr std::size_t square_fft_model_den = 0;
+#elif defined(BEMAN_BIG_INT_ARCH_AARCH64)
+inline constexpr std::size_t fft_mul_min_limbs    = 1400;
+inline constexpr std::size_t fft_mul_model_num    = 13;
+inline constexpr std::size_t fft_mul_model_den    = 16;
+inline constexpr std::size_t square_fft_min_limbs = 1400;
+inline constexpr std::size_t square_fft_model_num = 7;
+inline constexpr std::size_t square_fft_model_den = 10;
 #else
-inline constexpr std::size_t fft_mul_cutoff    = 4500;
-inline constexpr std::size_t square_fft_cutoff = 4500;
+inline constexpr std::size_t fft_mul_min_limbs    = 4500;
+inline constexpr std::size_t fft_mul_model_num    = 1;
+inline constexpr std::size_t fft_mul_model_den    = 0;
+inline constexpr std::size_t square_fft_min_limbs = 4500;
+inline constexpr std::size_t square_fft_model_num = 1;
+inline constexpr std::size_t square_fft_model_den = 0;
 #endif
+
+static_assert(karatsuba_cutoff <= fft_mul_min_limbs, "the FFT gate is checked after the schoolbook gate");
+// Model-off square floors keep the pre-model behaviour, where the FFT was only reachable from the Toom-6.5 tier up.
+static_assert(square_fft_model_den != 0 || square_fft_min_limbs >= square_toom_cook_6_5_cutoff);
+
+// Floor of the square root, exact for every 64-bit input.
+[[nodiscard]] constexpr std::uint64_t isqrt_floor(const std::uint64_t x) noexcept {
+    if (x < 2) {
+        return x;
+    }
+    std::uint64_t r = std::uint64_t{1} << ((static_cast<unsigned>(std::bit_width(x)) + 1) / 2); // >= sqrt(x)
+    for (;;) {
+        const std::uint64_t y = (r + x / r) / 2;
+        if (y >= r) {
+            return r;
+        }
+        r = y;
+    }
+}
+
+// A 192-bit product of three 64-bit values, for the exact cost-model comparison (MSVC has no __int128).
+struct fft_u192 {
+    std::uint64_t w0;
+    std::uint64_t w1;
+    std::uint64_t w2;
+};
+
+[[nodiscard]] constexpr fft_u192
+fft_mul3(const std::uint64_t a, const std::uint64_t b, const std::uint64_t c) noexcept {
+    const auto          ab = widening_mul(a, b);
+    const auto          p0 = widening_mul(ab.low_bits, c);
+    const auto          p1 = widening_mul(ab.high_bits, c);
+    const std::uint64_t w1 = p0.high_bits + p1.low_bits;
+    const std::uint64_t cy = w1 < p0.high_bits ? 1 : 0;
+    return {p0.low_bits, w1, p1.high_bits + cy};
+}
+
+// FFT cost-model test: length * log2(length) * den <= num * max_size * isqrt(min_size), compared exactly as 192-bit
+// products. `length` is a power of two, so log2(length) = bit_width - 1. A den of 0 is "model off".
+[[nodiscard]] constexpr bool fft_model_worthwhile(const std::uint64_t length,
+                                                  const std::uint64_t num,
+                                                  const std::uint64_t den,
+                                                  const std::uint64_t max_size,
+                                                  const std::uint64_t min_size) noexcept {
+    if (den == 0) {
+        return true;
+    }
+    const std::uint64_t k   = static_cast<std::uint64_t>(std::bit_width(length)) - 1;
+    const fft_u192      lhs = fft_mul3(length, k, den);
+    const fft_u192      rhs = fft_mul3(num, max_size, isqrt_floor(min_size));
+    if (lhs.w2 != rhs.w2) {
+        return lhs.w2 < rhs.w2;
+    }
+    if (lhs.w1 != rhs.w1) {
+        return lhs.w1 < rhs.w1;
+    }
+    return lhs.w0 <= rhs.w0;
+}
+
+// True when a min_size x max_size product (min_size <= max_size) should take the FFT (64-bit limbs only).
+[[nodiscard]] constexpr bool fft_mul_worthwhile(const std::size_t min_size, const std::size_t max_size) noexcept {
+    return min_size >= fft_mul_min_limbs &&
+           fft_model_worthwhile(
+               fft_transform_length(min_size, max_size), fft_mul_model_num, fft_mul_model_den, max_size, min_size);
+}
+
+// True when an n-limb square should take the FFT (64-bit limbs only).
+[[nodiscard]] constexpr bool square_fft_worthwhile(const std::size_t n) noexcept {
+    return n >= square_fft_min_limbs &&
+           fft_model_worthwhile(fft_transform_length(n, n), square_fft_model_num, square_fft_model_den, n, n);
+}
+
+// Feature macro for tools that print the cost-model constants above.
+#define BEMAN_BIG_INT_HAS_FFT_COST_MODEL 1
+
+static_assert(isqrt_floor(0) == 0 && isqrt_floor(1) == 1 && isqrt_floor(15) == 3 && isqrt_floor(16) == 4);
+static_assert(isqrt_floor(std::numeric_limits<std::uint64_t>::max()) == 0xFFFFFFFFULL);
+static_assert(isqrt_floor(std::uint64_t{1} << 62) == std::uint64_t{1} << 31);
+static_assert(isqrt_floor((std::uint64_t{1} << 40) - 1) == (std::uint64_t{1} << 20) - 1);
+// Model off: the gate is the floor alone. Below the floor it is never taken; an enormous right side always is.
+static_assert(!fft_mul_worthwhile(fft_mul_min_limbs - 1, fft_mul_min_limbs - 1));
+static_assert(fft_mul_model_den != 0 || fft_mul_worthwhile(fft_mul_min_limbs, fft_mul_min_limbs));
+static_assert(fft_model_worthwhile(std::uint64_t{1} << 30,
+                                   13,
+                                   16,
+                                   std::numeric_limits<std::uint64_t>::max(),
+                                   std::numeric_limits<std::uint64_t>::max()));
+static_assert(fft_model_worthwhile(1024, 1, 0, 1, 1));
+// Left side overflowing 64 bits (2^62 * 62 * 16) against a tiny right side: exactly false.
+static_assert(!fft_model_worthwhile(std::uint64_t{1} << 62, 1, 16, 1, 1));
+// Both sides beyond 64 bits are compared, not assumed: 2^62 * 62 * 16 (about 2^72) against 1 * 2^63 * 2^31.
+static_assert(fft_model_worthwhile(std::uint64_t{1} << 62, 1, 16, std::uint64_t{1} << 63, std::uint64_t{1} << 62));
+static_assert(!fft_model_worthwhile(std::uint64_t{1} << 20, 1, 1, 10, 10));
 
 // Entry size for the cyclic NTT tier of multiply_mod_bnm1: at and above it
 // the wrapped product runs one length-L transform set instead of the CRT
@@ -742,12 +955,17 @@ inline constexpr std::size_t square_fft_cutoff = 4500;
 //                                      band bottom; w=32768 is break-even and
 //                                      w=26624 loses at 1.29 (Toom dominates
 //                                      the scalar NTT until the CRT split's
-//                                      internal products near fft_mul_cutoff)
+//                                      internal products near the FFT floor)
 //   FP (SIMD), x86-64 AVX2      8192   0.93 at w=8192, 0.82 at the w=13312
 //                                      band bottom; w=6656 loses at 1.24
-//                                      (AArch64 SIMD builds, test-only, share
-//                                      the value)
-#if defined(BEMAN_BIG_INT_SIMD_MUL)
+#if defined(BEMAN_BIG_INT_ARCH_AARCH64)
+    // AArch64 (M4 Max, 108 chooser wrap sizes, 2026-09-30): integer 2048 (2560 ties), SIMD 8192 (4500-5000 tie); kept.
+    #if defined(BEMAN_BIG_INT_SIMD_MUL)
+inline constexpr std::size_t fft_cyclic_cutoff = 8192;
+    #else
+inline constexpr std::size_t fft_cyclic_cutoff = 2048;
+    #endif
+#elif defined(BEMAN_BIG_INT_SIMD_MUL)
 inline constexpr std::size_t fft_cyclic_cutoff = 8192;
 #elif defined(__x86_64__) || defined(_M_X64) || defined(__amd64__)
 inline constexpr std::size_t fft_cyclic_cutoff = 36864;
@@ -802,6 +1020,229 @@ void multiply_fft_cyclic(std::span<uint_multiprecision_t>       result,
                          std::span<std::uint64_t>               workspace) noexcept;
 #endif
 
+// Scratch limbs for the Karatsuba / Toom ladder chosen by the shorter operand's
+// size `min_size`, for a product whose longer operand has `s` limbs.
+constexpr std::size_t toom_ladder_storage_size(const std::size_t min_size, const std::size_t s) noexcept {
+    if (min_size < toom_cook_3_cutoff) {
+        return karatsuba_storage_size(s);
+    }
+    if (min_size < toom_cook_4_cutoff) {
+        return toom_cook_3_storage_size(s);
+    }
+    if (min_size < toom_cook_6_5_cutoff) {
+        return toom_cook_4_storage_size(s);
+    }
+    if (min_size < toom_cook_8_5_cutoff) {
+        return toom_cook_6_5_storage_size(s);
+    }
+    return toom_cook_8_5_storage_size(s);
+}
+
+// Unbalanced products are cut into pieces as long as the shorter operand and
+// multiplied piece by piece (multiply_runtime). A product enters slicing once
+// long / short >= num / den (the entry threshold). The ratio depends on the size
+// of the shorter operand through a table of zones {min_limbs, num, den}, sorted by
+// min_limbs: the entry with the largest min_limbs <= the shorter operand applies.
+// Zones exist because each Toom tier only takes shapes up to its own ratio (8.5:
+// 9/8, 6.5: 7/6, 4: 4/3, 3: 3/2) and a product outside it cascades to a slower
+// tier, which slicing avoids. Once slicing, pieces are min-sized except the last,
+// which is below 2m (see multiply_sliced).
+// Every value is its own named constant (so a driver can edit each one), six zone
+// slots per configuration, the first mul_slice_zone_count of them in use; slots
+// beyond the count are ignored. One branch per configuration so each can be tuned
+// alone. AArch64 (M4 Max) and x86-64 (i9-11900K) are tuned (2026-09-30); the portable
+// branch is a placeholder that reproduces the pre-table three-zone behaviour
+// (Karatsuba, Toom-3/4, Toom-6.5/8.5).
+#if defined(BEMAN_BIG_INT_ARCH_AARCH64)
+// AArch64 (M4 Max, 2026-09-30): R = 7/4 in the Karatsuba zone; 3/2 in both Toom zones (any ratio >= 3/2 behaves the
+// same with the Toom-3 refusal term, and both zones are kept so the table mirrors the ladder).
+inline constexpr std::size_t mul_slice_z0_min     = 112;
+inline constexpr std::size_t mul_slice_z0_num     = 7;
+inline constexpr std::size_t mul_slice_z0_den     = 4;
+inline constexpr std::size_t mul_slice_z1_min     = 300;
+inline constexpr std::size_t mul_slice_z1_num     = 3;
+inline constexpr std::size_t mul_slice_z1_den     = 2;
+inline constexpr std::size_t mul_slice_z2_min     = 1400;
+inline constexpr std::size_t mul_slice_z2_num     = 3;
+inline constexpr std::size_t mul_slice_z2_den     = 2;
+inline constexpr std::size_t mul_slice_z3_min     = 0;
+inline constexpr std::size_t mul_slice_z3_num     = 3;
+inline constexpr std::size_t mul_slice_z3_den     = 2;
+inline constexpr std::size_t mul_slice_z4_min     = 0;
+inline constexpr std::size_t mul_slice_z4_num     = 3;
+inline constexpr std::size_t mul_slice_z4_den     = 2;
+inline constexpr std::size_t mul_slice_z5_min     = 0;
+inline constexpr std::size_t mul_slice_z5_num     = 3;
+inline constexpr std::size_t mul_slice_z5_den     = 2;
+inline constexpr std::size_t mul_slice_zone_count = 3;
+#elif defined(BEMAN_BIG_INT_ARCH_X86_64) && BEMAN_BIG_INT_X86_64_AVX512_IFMA
+// x86-64 (i9-11900K, gcc-release, 2026-09-30, shape_sweep end to end, balanced and unbalanced ratios.) R = 7/4 in the
+// Karatsuba zone, 3/2 from the Toom-3 zone (Toom-3 refuses from about 1.5 anyway), then the ratio falls with the size
+// because each larger Toom order accepts only a narrower band (Toom-8.5: 9/8).
+inline constexpr std::size_t mul_slice_z0_min     = 260;
+inline constexpr std::size_t mul_slice_z0_num     = 7;
+inline constexpr std::size_t mul_slice_z0_den     = 4;
+inline constexpr std::size_t mul_slice_z1_min     = 1600;
+inline constexpr std::size_t mul_slice_z1_num     = 3;
+inline constexpr std::size_t mul_slice_z1_den     = 2;
+inline constexpr std::size_t mul_slice_z2_min     = 30000;
+inline constexpr std::size_t mul_slice_z2_num     = 4;
+inline constexpr std::size_t mul_slice_z2_den     = 3;
+inline constexpr std::size_t mul_slice_z3_min     = 0;
+inline constexpr std::size_t mul_slice_z3_num     = 3;
+inline constexpr std::size_t mul_slice_z3_den     = 2;
+inline constexpr std::size_t mul_slice_z4_min     = 0;
+inline constexpr std::size_t mul_slice_z4_num     = 3;
+inline constexpr std::size_t mul_slice_z4_den     = 2;
+inline constexpr std::size_t mul_slice_z5_min     = 0;
+inline constexpr std::size_t mul_slice_z5_num     = 3;
+inline constexpr std::size_t mul_slice_z5_den     = 2;
+inline constexpr std::size_t mul_slice_zone_count = 3;
+#elif defined(BEMAN_BIG_INT_ARCH_X86_64) && BEMAN_BIG_INT_X86_64_BMI2_ADX
+inline constexpr std::size_t mul_slice_z0_min     = 47;
+inline constexpr std::size_t mul_slice_z0_num     = 7;
+inline constexpr std::size_t mul_slice_z0_den     = 4;
+inline constexpr std::size_t mul_slice_z1_min     = 400;
+inline constexpr std::size_t mul_slice_z1_num     = 3;
+inline constexpr std::size_t mul_slice_z1_den     = 2;
+inline constexpr std::size_t mul_slice_z2_min     = 16000;
+inline constexpr std::size_t mul_slice_z2_num     = 9;
+inline constexpr std::size_t mul_slice_z2_den     = 8;
+inline constexpr std::size_t mul_slice_z3_min     = 0;
+inline constexpr std::size_t mul_slice_z3_num     = 3;
+inline constexpr std::size_t mul_slice_z3_den     = 2;
+inline constexpr std::size_t mul_slice_z4_min     = 0;
+inline constexpr std::size_t mul_slice_z4_num     = 3;
+inline constexpr std::size_t mul_slice_z4_den     = 2;
+inline constexpr std::size_t mul_slice_z5_min     = 0;
+inline constexpr std::size_t mul_slice_z5_num     = 3;
+inline constexpr std::size_t mul_slice_z5_den     = 2;
+inline constexpr std::size_t mul_slice_zone_count = 3;
+#elif defined(BEMAN_BIG_INT_ARCH_X86_64)
+inline constexpr std::size_t mul_slice_z0_min     = 48;
+inline constexpr std::size_t mul_slice_z0_num     = 7;
+inline constexpr std::size_t mul_slice_z0_den     = 4;
+inline constexpr std::size_t mul_slice_z1_min     = 400;
+inline constexpr std::size_t mul_slice_z1_num     = 3;
+inline constexpr std::size_t mul_slice_z1_den     = 2;
+inline constexpr std::size_t mul_slice_z2_min     = 12000;
+inline constexpr std::size_t mul_slice_z2_num     = 9;
+inline constexpr std::size_t mul_slice_z2_den     = 8;
+inline constexpr std::size_t mul_slice_z3_min     = 0;
+inline constexpr std::size_t mul_slice_z3_num     = 3;
+inline constexpr std::size_t mul_slice_z3_den     = 2;
+inline constexpr std::size_t mul_slice_z4_min     = 0;
+inline constexpr std::size_t mul_slice_z4_num     = 3;
+inline constexpr std::size_t mul_slice_z4_den     = 2;
+inline constexpr std::size_t mul_slice_z5_min     = 0;
+inline constexpr std::size_t mul_slice_z5_num     = 3;
+inline constexpr std::size_t mul_slice_z5_den     = 2;
+inline constexpr std::size_t mul_slice_zone_count = 3;
+#else
+inline constexpr std::size_t mul_slice_z0_min     = 48;
+inline constexpr std::size_t mul_slice_z0_num     = 8;
+inline constexpr std::size_t mul_slice_z0_den     = 1;
+inline constexpr std::size_t mul_slice_z1_min     = 400;
+inline constexpr std::size_t mul_slice_z1_num     = 3;
+inline constexpr std::size_t mul_slice_z1_den     = 2;
+inline constexpr std::size_t mul_slice_z2_min     = 2400;
+inline constexpr std::size_t mul_slice_z2_num     = 3;
+inline constexpr std::size_t mul_slice_z2_den     = 2;
+inline constexpr std::size_t mul_slice_z3_min     = 0;
+inline constexpr std::size_t mul_slice_z3_num     = 3;
+inline constexpr std::size_t mul_slice_z3_den     = 2;
+inline constexpr std::size_t mul_slice_z4_min     = 0;
+inline constexpr std::size_t mul_slice_z4_num     = 3;
+inline constexpr std::size_t mul_slice_z4_den     = 2;
+inline constexpr std::size_t mul_slice_z5_min     = 0;
+inline constexpr std::size_t mul_slice_z5_num     = 3;
+inline constexpr std::size_t mul_slice_z5_den     = 2;
+inline constexpr std::size_t mul_slice_zone_count = 3;
+#endif
+
+struct mul_slice_ratio {
+    std::uint64_t num;
+    std::uint64_t den;
+};
+
+struct mul_slice_zone {
+    std::uint64_t min_limbs;
+    std::uint64_t num;
+    std::uint64_t den;
+};
+
+inline constexpr std::array<mul_slice_zone, 6> mul_slice_zones{
+    {{mul_slice_z0_min, mul_slice_z0_num, mul_slice_z0_den},
+     {mul_slice_z1_min, mul_slice_z1_num, mul_slice_z1_den},
+     {mul_slice_z2_min, mul_slice_z2_num, mul_slice_z2_den},
+     {mul_slice_z3_min, mul_slice_z3_num, mul_slice_z3_den},
+     {mul_slice_z4_min, mul_slice_z4_num, mul_slice_z4_den},
+     {mul_slice_z5_min, mul_slice_z5_num, mul_slice_z5_den}}};
+
+// The table must be usable for the dispatcher: 1 to 6 zones, the first at karatsuba_cutoff, sorted strictly by
+// min_limbs, and every ratio at or above 9/8 (which also means num > den). The lower bound keeps the Euclidean
+// remainder chain of a slicing product shrinking geometrically, which bounds the nesting depth of the tail
+// re-dispatch and guarantees the last piece is below 2m.
+[[nodiscard]] constexpr bool mul_slice_zones_valid() noexcept {
+    if (mul_slice_zone_count < 1 || mul_slice_zone_count > mul_slice_zones.size()) {
+        return false;
+    }
+    if (mul_slice_zones[0].min_limbs != karatsuba_cutoff) {
+        return false;
+    }
+    for (std::size_t i = 0; i < mul_slice_zone_count; ++i) {
+        const mul_slice_zone& z = mul_slice_zones[i];
+        if (z.den == 0 || z.num * 8 < z.den * 9 || z.num <= z.den) {
+            return false;
+        }
+        if (i > 0 && mul_slice_zones[i - 1].min_limbs >= z.min_limbs) {
+            return false;
+        }
+    }
+    return true;
+}
+static_assert(mul_slice_zones_valid(), "invalid slicing zone table (see mul_slice_zones_valid)");
+
+// Feature macro for tools that print the slicing zone table.
+#define BEMAN_BIG_INT_HAS_SLICE_ZONE_TABLE 1
+
+// The slicing ratio for a shorter operand of min_size limbs: the zone with the largest min_limbs <= min_size (the
+// first zone below the table), shared by the dispatcher and the tests.
+[[nodiscard]] constexpr mul_slice_ratio mul_slice_zone_ratio(const std::size_t min_size) noexcept {
+    std::size_t zone = 0;
+    for (std::size_t i = 1; i < mul_slice_zone_count; ++i) {
+        if (mul_slice_zones[i].min_limbs <= min_size) {
+            zone = i;
+        }
+    }
+    return {mul_slice_zones[zone].num, mul_slice_zones[zone].den};
+}
+
+// Toom-3's acceptance test: a min_size x max_size product is refused (and falls back to Karatsuba) when
+// min_size <= 2 * ceil(max_size / 3). Shared by the kernel (src/toom_cook_3.cpp) and mul_should_slice.
+[[nodiscard]] constexpr bool toom_cook_3_refuses_shape(const std::size_t min_size,
+                                                       const std::size_t max_size) noexcept {
+    return min_size <= 2 * ((max_size + 2) / 3);
+}
+
+// True when a min_size x max_size product (min_size <= max_size, both at or
+// above karatsuba_cutoff) enters slicing: the zone's ratio test fires or, in
+// the Toom zones, Toom-3 would refuse the shape (its k = ceil(max / 3) rounding
+// makes shapes just below 3:2 fall through to pure Karatsuba). The second term
+// needs max >= 3 * ceil(min / 2) - 2, so a cut piece always leaves a positive
+// remainder.
+[[nodiscard]] constexpr bool mul_should_slice(const std::size_t min_size, const std::size_t max_size) noexcept {
+    const mul_slice_ratio r = mul_slice_zone_ratio(min_size);
+    if (std::uint64_t{max_size} * r.den >= std::uint64_t{min_size} * r.num) {
+        return true;
+    }
+    return min_size >= toom_cook_3_cutoff && toom_cook_3_refuses_shape(min_size, max_size);
+}
+
+// Feature macro for tools (tests/beman/big_int/perf/shape_sweep.cpp) that need
+// the shape-aware dispatch names above.
+#define BEMAN_BIG_INT_HAS_SHAPE_DISPATCH 1
+
 // ---------------------------------------------------------------------------
 // Runtime multiplication tier ladders (src/mul_dispatch.cpp): operands must
 // be trimmed with at least two limbs; `result` pre-zeroed, sized for the
@@ -812,6 +1253,23 @@ std::size_t multiply_runtime(std::span<uint_multiprecision_t>       result,
                              std::span<const uint_multiprecision_t> a,
                              std::span<const uint_multiprecision_t> b,
                              const scratch_heap_source&             heap);
+
+// Benchmark/test-only variants of multiply_runtime, same contract. The
+// schoolbook (min < karatsuba_cutoff) and power-of-two shortcuts still apply in
+// both. _sliced forces slicing of the top-level product whenever max > min,
+// ignoring the ratio test, and skips the FFT gate even where it would take the
+// product (so --path sliced there times Toom pieces); the pieces' tails revert
+// to automatic dispatch and may take the FFT. _unsliced never slices; it keeps
+// the automatic FFT gate.
+std::size_t multiply_runtime_sliced(std::span<uint_multiprecision_t>       result,
+                                    std::span<const uint_multiprecision_t> a,
+                                    std::span<const uint_multiprecision_t> b,
+                                    const scratch_heap_source&             heap);
+
+std::size_t multiply_runtime_unsliced(std::span<uint_multiprecision_t>       result,
+                                      std::span<const uint_multiprecision_t> a,
+                                      std::span<const uint_multiprecision_t> b,
+                                      const scratch_heap_source&             heap);
 
 std::size_t square_runtime(std::span<uint_multiprecision_t>       result,
                            std::span<const uint_multiprecision_t> a,
@@ -943,8 +1401,13 @@ constexpr std::size_t multiply_dispatch(const std::span<uint_multiprecision_t>  
 
 // Below this wrap size the plain product plus a fold wins. Re-validated on
 // both tuning machines 2026-06-10: a floor of 8 ties within 2%, 32 and up
-// lose 2-25% at wraps of 32-256 limbs; not worth a per-arch split.
+// lose 2-25% at wraps of 32-256 limbs; one value serves both machines (AArch64 has its own
+// branch only so that x86 tuning cannot change it).
+#if defined(BEMAN_BIG_INT_ARCH_AARCH64)
+inline constexpr std::size_t multiply_mod_bnm1_cutoff = 16; // AArch64 (M4 Max, 2026-09-30): thresholds 8-32 are flat
+#else
 inline constexpr std::size_t multiply_mod_bnm1_cutoff = 16;
+#endif
 
 static_assert(multiply_mod_bnm1_cutoff >= 2, "the recursion must stop above single-limb wraps");
 
