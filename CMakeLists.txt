@@ -89,6 +89,34 @@ add_library(
 add_library(beman::big_int ALIAS beman.big_int)
 target_compile_features(beman.big_int PUBLIC cxx_std_23)
 
+# [CMAKE.NAMESPACE]
+# The namespace the library is declared in (BEMAN_BIG_INT_NAMESPACE in
+# detail/config.hpp), e.g. mylib::big_int for a project that wraps it. The
+# compiled sources and every consumer must agree on it, so a non-default value is
+# propagated PUBLICly.
+set(BEMAN_BIG_INT_NAMESPACE
+    "beman::big_int"
+    CACHE STRING
+    "Qualified namespace the library is declared in. Default: beman::big_int."
+)
+if(
+    NOT BEMAN_BIG_INT_NAMESPACE
+        MATCHES
+        "^[A-Za-z_][A-Za-z0-9_]*(::[A-Za-z_][A-Za-z0-9_]*)*$"
+)
+    message(
+        FATAL_ERROR
+        "BEMAN_BIG_INT_NAMESPACE must be a qualified namespace name such as "
+        "mylib::big_int, got '${BEMAN_BIG_INT_NAMESPACE}'."
+    )
+endif()
+if(NOT BEMAN_BIG_INT_NAMESPACE STREQUAL "beman::big_int")
+    target_compile_definitions(
+        beman.big_int
+        PUBLIC "BEMAN_BIG_INT_NAMESPACE=${BEMAN_BIG_INT_NAMESPACE}"
+    )
+endif()
+
 # [CMAKE.X86_64_BMI2_ADX]
 # x86-64 only: both the generic and BMI2+ADX schoolbook kernels are always
 # built, but which one the library calls is chosen at compile time (see
@@ -459,7 +487,12 @@ if(BEMAN_BIG_INT_BUILD_TESTS)
     endif()
 endif()
 
-if(BEMAN_BIG_INT_BUILD_EXAMPLES)
+# The examples are written against beman::big_int the way a user would spell it,
+# so they only build with the default namespace.
+if(
+    BEMAN_BIG_INT_BUILD_EXAMPLES
+    AND BEMAN_BIG_INT_NAMESPACE STREQUAL "beman::big_int"
+)
     add_subdirectory(examples)
 endif()
 
