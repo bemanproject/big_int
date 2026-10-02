@@ -187,6 +187,36 @@ This needs a newer toolchain than the header build, and is not available with
 AppleClang. See xref:modules.adoc[pass:[C++] Named Modules] for the full
 story.
 
+[#build_and_usage_namespace]
+=== Optional: a custom namespace
+
+Everything is declared in `beman::big_int` by default. A project that wraps the
+library can move it into a namespace of its own with the CMake option
+`BEMAN_BIG_INT_NAMESPACE`, which takes a qualified namespace name:
+
+[source,bash]
+----
+cmake --preset gcc-release -DBEMAN_BIG_INT_NAMESPACE=mylib::big_int
+----
+
+The library is partly compiled, so its sources and every consumer must agree on
+the namespace. CMake propagates a non-default value to consumers of the
+`beman::big_int` target. Without CMake, define the `BEMAN_BIG_INT_NAMESPACE`
+macro to the same value everywhere, both for the sources under `src/` and for
+every translation unit that includes the headers. The `*-release-namespace`
+presets build and run the whole test suite with
+`BEMAN_BIG_INT_NAMESPACE=wrapper::nested::big_int`. The examples use
+`beman::big_int` by name, so they are skipped with any other namespace.
+
+[NOTE]
+====
+The library declares its own `detail` and `literals` namespaces inside the
+chosen namespace, so pick one that another library does not already populate.
+`boost::multiprecision` currently collides with Boost.Multiprecision itself:
+both define `detail::make_signed` and `detail::make_unsigned`, and Boost's
+`literals` namespace is not `inline` while this library's is.
+====
+
 [#build_and_usage_install]
 == Installation
 
