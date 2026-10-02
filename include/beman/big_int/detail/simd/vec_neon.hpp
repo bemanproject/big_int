@@ -8,12 +8,15 @@
 
 #include <arm_neon.h>
 
+#include <beman/big_int/detail/config.hpp>
+
 // The AArch64 NEON (width-2) vector type. float64x2_t + vfmaq/vfmsq (single-
 // rounded FMA), vrndnq (round to nearest, ties to even), and the basic FP ops are
 // mandatory baseline on every AArch64 CPU, so this needs no runtime dispatch and
 // produces results bit-identical to vec1d.
 
-namespace beman::big_int::detail {
+BEMAN_BIG_INT_BEGIN_NAMESPACE
+namespace detail {
 
 struct vec2d {
     inline static constexpr std::size_t width = 2;
@@ -37,6 +40,7 @@ struct vec2d {
 }
 [[nodiscard]] inline vec2d vround(const vec2d a) noexcept { return vec2d{vrndnq_f64(a.v)}; }
 
-} // namespace beman::big_int::detail
+} // namespace detail
+BEMAN_BIG_INT_END_NAMESPACE
 
 #endif // BEMAN_BIG_INT_SIMD_VEC_NEON_HPP

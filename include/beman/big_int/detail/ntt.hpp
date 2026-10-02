@@ -10,7 +10,8 @@
 #include <beman/big_int/detail/config.hpp>
 #include <beman/big_int/detail/mod_arith.hpp>
 
-namespace beman::big_int::detail {
+BEMAN_BIG_INT_BEGIN_NAMESPACE
+namespace detail {
 
 // Three NTT-friendly primes p = c * 2^k + 1, all < 2^62 (the sub-62-bit
 // headroom leaves room for later lazy reduction). Their product ~ 2^186 bounds
@@ -57,6 +58,7 @@ void ntt_inverse(std::span<std::uint64_t>       data,
 // it composes with the bit-reversed layout between forward and inverse.
 void ntt_pointwise(std::span<std::uint64_t> a, std::span<const std::uint64_t> b, const ntt_modulus& mod) noexcept;
 
-} // namespace beman::big_int::detail
+} // namespace detail
+BEMAN_BIG_INT_END_NAMESPACE
 
 #endif // BEMAN_BIG_INT_NTT_HPP

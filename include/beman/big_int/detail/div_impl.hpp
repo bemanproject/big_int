@@ -19,7 +19,8 @@
     #include <span>
 #endif
 
-namespace beman::big_int::detail {
+BEMAN_BIG_INT_BEGIN_NAMESPACE
+namespace detail {
 
 // Selects whether a division routine should yield the quotient or the remainder.
 enum class division_op : unsigned char {
@@ -987,6 +988,7 @@ constexpr void divide_dispatch_q(const std::span<uint_multiprecision_t>       qu
     scratch.deallocate(m + 1);
 }
 
-} // namespace beman::big_int::detail
+} // namespace detail
+BEMAN_BIG_INT_END_NAMESPACE
 
 #endif // BEMAN_BIG_INT_DIV_IMPL_HPP

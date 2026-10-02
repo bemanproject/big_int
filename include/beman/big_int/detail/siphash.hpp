@@ -13,7 +13,8 @@
     #include <span>
 #endif
 
-namespace beman::big_int::detail {
+BEMAN_BIG_INT_BEGIN_NAMESPACE
+namespace detail {
 
 struct state_holder {
     std::uint64_t v0;
@@ -137,6 +138,7 @@ namespace impl {
     }
 }
 
-} // namespace beman::big_int::detail
+} // namespace detail
+BEMAN_BIG_INT_END_NAMESPACE
 
 #endif // BEMAN_BIG_INT_SIPHASH_HPP

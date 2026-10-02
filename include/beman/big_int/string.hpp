@@ -21,7 +21,7 @@ BEMAN_BIG_INT_DIAGNOSTIC_IGNORED_GCC("-Warray-bounds") // This causes way too ma
 BEMAN_BIG_INT_DIAGNOSTIC_IGNORED_GCC("-Wstringop-overflow")
 BEMAN_BIG_INT_DIAGNOSTIC_IGNORED_GCC("-Wstringop-overread")
 
-namespace beman::big_int {
+BEMAN_BIG_INT_BEGIN_NAMESPACE
 
 // [big.int.charconv], string conversions
 namespace detail {
@@ -100,7 +100,7 @@ BEMAN_BIG_INT_EXPORT template <std::size_t b, class L, class A>
     return detail::to_basic_string<wchar_t>(std::move(x), base);
 }
 
-} // namespace beman::big_int
+BEMAN_BIG_INT_END_NAMESPACE
 
 BEMAN_BIG_INT_DIAGNOSTIC_POP()
 

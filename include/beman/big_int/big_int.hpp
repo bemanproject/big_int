@@ -40,10 +40,10 @@ BEMAN_BIG_INT_DIAGNOSTIC_IGNORED_GCC("-Warray-bounds") // This causes way too ma
 BEMAN_BIG_INT_DIAGNOSTIC_IGNORED_GCC("-Wstringop-overflow")
 BEMAN_BIG_INT_DIAGNOSTIC_IGNORED_GCC("-Wstringop-overread")
 
-namespace beman::big_int {
+BEMAN_BIG_INT_BEGIN_NAMESPACE
 
 // alias uint_multiprecision_t
-using beman::big_int::uint_multiprecision_t;
+using BEMAN_BIG_INT_NAMESPACE::uint_multiprecision_t;
 
 // Forward decl so that we can define our concepts
 BEMAN_BIG_INT_EXPORT template <std::size_t min_inplace_bits,
@@ -3548,15 +3548,16 @@ BEMAN_BIG_INT_EXPORT using big_int = basic_big_int<64, uint_multiprecision_t, st
 BEMAN_BIG_INT_EXPORT namespace pmr {
 
     template <std::size_t b, class L = uint_multiprecision_t>
-    using basic_big_int = beman::big_int::basic_big_int<b, L, std::pmr::polymorphic_allocator<L>>;
+    using basic_big_int = BEMAN_BIG_INT_NAMESPACE::basic_big_int<b, L, std::pmr::polymorphic_allocator<L>>;
 
-    using big_int = basic_big_int<beman::big_int::big_int::inplace_bits>;
+    using big_int = basic_big_int<BEMAN_BIG_INT_NAMESPACE::big_int::inplace_bits>;
 
 } // namespace pmr
 
-} // namespace beman::big_int
+BEMAN_BIG_INT_END_NAMESPACE
 
-namespace beman::big_int::detail {
+BEMAN_BIG_INT_BEGIN_NAMESPACE
+namespace detail {
 
 // Occupies a rung of the hash ladder whose width the target's `_BitInt` cannot reach.
 // `std::hash` is disabled for it, so that rung is skipped.
@@ -3637,14 +3638,15 @@ template <class BigInt, std::size_t... i>
     return (hash_as_bit_int<hash_rung_t<i>>(x, width, negative, digest) || ...);
 }
 
-} // namespace beman::big_int::detail
+} // namespace detail
+BEMAN_BIG_INT_END_NAMESPACE
 
 // [big.int.hash], hash support
 template <std::size_t b, class L, class A>
-struct std::hash<beman::big_int::basic_big_int<b, L, A>> {
+struct std::hash<BEMAN_BIG_INT_NAMESPACE::basic_big_int<b, L, A>> {
 
-    std::size_t operator()(const beman::big_int::basic_big_int<b, L, A>& x) const noexcept {
-        namespace detail = beman::big_int::detail;
+    std::size_t operator()(const BEMAN_BIG_INT_NAMESPACE::basic_big_int<b, L, A>& x) const noexcept {
+        namespace detail = BEMAN_BIG_INT_NAMESPACE::detail;
 
         const bool negative = x.is_negative();
 

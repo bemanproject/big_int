@@ -26,7 +26,8 @@ BEMAN_BIG_INT_DIAGNOSTIC_IGNORED_GCC("-Wpadded")
     #endif
 #endif // BEMAN_BIG_INT_BUILD_MODULE
 
-namespace beman::big_int::detail {
+BEMAN_BIG_INT_BEGIN_NAMESPACE
+namespace detail {
 
 // Provides information about floating-point types.
 // Each specialization has the following members:
@@ -538,7 +539,8 @@ template <cv_unqualified_floating_point F>
     });
 }
 
-} // namespace beman::big_int::detail
+} // namespace detail
+BEMAN_BIG_INT_END_NAMESPACE
 
 BEMAN_BIG_INT_DIAGNOSTIC_POP()
 

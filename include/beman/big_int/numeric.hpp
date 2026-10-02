@@ -18,7 +18,7 @@
 #include <beman/big_int/big_int.hpp>
 #include <beman/big_int/detail/gcd_impl.hpp>
 
-namespace beman::big_int {
+BEMAN_BIG_INT_BEGIN_NAMESPACE
 
 // [c.math.abs]
 // Returns the absolute value (magnitude) of `j`.
@@ -569,6 +569,6 @@ BEMAN_BIG_INT_EXPORT template <class M, std::size_t b, class L, class A>
     return detail::midpoint_impl(std::forward<M>(m), n);
 }
 
-} // namespace beman::big_int
+BEMAN_BIG_INT_END_NAMESPACE
 
 #endif // BEMAN_BIG_INT_NUMERIC_HPP

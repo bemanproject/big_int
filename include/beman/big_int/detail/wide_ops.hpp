@@ -16,7 +16,8 @@
     #endif
 #endif
 
-namespace beman::big_int::detail {
+BEMAN_BIG_INT_BEGIN_NAMESPACE
+namespace detail {
 
 // Maps an integer type to the integer type of twice its width and the same
 // signedness. SFINAE-friendly: when no such type exists (e.g. 64 -> 128 on a
@@ -818,6 +819,7 @@ div_3by2_preinv(const T u2, const T u1, const T u0, const T d1, const T d0, cons
     return {q1, {.low_bits = r0, .high_bits = r1}};
 }
 
-} // namespace beman::big_int::detail
+} // namespace detail
+BEMAN_BIG_INT_END_NAMESPACE
 
 #endif // BEMAN_BIG_INT_WIDE_OPS_HPP

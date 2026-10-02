@@ -20,7 +20,8 @@
     #include <vector>
 #endif
 
-namespace beman::big_int::detail {
+BEMAN_BIG_INT_BEGIN_NAMESPACE
+namespace detail {
 
 // ---------------------------------------------------------------------------
 // Long (classical) O(n*m) multiplication. Writes exactly `a.size() + b.size()`
@@ -1585,6 +1586,7 @@ void multiply_mod_bnm1(std::span<uint_multiprecision_t>       r,
                        scratch_allocator_base&                scratch,
                        std::size_t                            cutoff_override = 0);
 
-} // namespace beman::big_int::detail
+} // namespace detail
+BEMAN_BIG_INT_END_NAMESPACE
 
 #endif // BEMAN_BIG_INT_MUL_IMPL_HPP

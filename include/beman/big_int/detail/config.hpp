@@ -26,7 +26,7 @@
 #endif
 
 #ifndef BEMAN_BIG_INT_NAMESPACE
-#define BEMAN_BIG_INT_NAMESPACE beman::big_int
+    #define BEMAN_BIG_INT_NAMESPACE beman::big_int
 #endif // BEMAN_BIG_INT_NAMESPACE
 
 #define BEMAN_BIG_INT_BEGIN_NAMESPACE namespace BEMAN_BIG_INT_NAMESPACE {
@@ -218,7 +218,8 @@ using bit_uint = unsigned _BitInt(N);
     #endif
 #endif // BEMAN_BIG_INT_MSVC
 
-namespace beman::big_int::detail {
+BEMAN_BIG_INT_BEGIN_NAMESPACE
+namespace detail {
 
 #if BEMAN_BIG_INT_BITINT_MAXWIDTH >= 128
     #define BEMAN_BIG_INT_HAS_INT128 1
@@ -245,11 +246,12 @@ inline constexpr bool has_int128_v = true;
 inline constexpr bool has_int128_v = false;
 #endif
 
-} // namespace beman::big_int::detail
+} // namespace detail
+BEMAN_BIG_INT_END_NAMESPACE
 
 // Limb type selection =========================================================
 
-namespace beman::big_int {
+BEMAN_BIG_INT_BEGIN_NAMESPACE
 
 #ifdef BEMAN_BIG_INT_FORCED_LIMB_WIDTH
     #if BEMAN_BIG_INT_FORCED_LIMB_WIDTH != 32 && BEMAN_BIG_INT_FORCED_LIMB_WIDTH != 64
@@ -298,7 +300,7 @@ using int_wide_t = long long;
 
 #define BEMAN_BIG_INT_DOUBLE_LIMB_WIDTH (BEMAN_BIG_INT_LIMB_WIDTH * 2)
 
-} // namespace beman::big_int
+BEMAN_BIG_INT_END_NAMESPACE
 
 // Special architecture assembly long-multiplication optimization ==============
 // It is available for generic x86_64 and AArch64 on GCC/clang/MSVC ============
@@ -363,7 +365,8 @@ using int_wide_t = long long;
     #include <limits>
 #endif
 
-namespace beman::big_int::detail {
+BEMAN_BIG_INT_BEGIN_NAMESPACE
+namespace detail {
 
 template <class T>
 concept cv_unqualified = !std::is_const_v<T> && !std::is_volatile_v<T>;
@@ -565,7 +568,8 @@ struct width<bit_uint<N>> : std::integral_constant<std::size_t, N> {};
 template <class T>
 inline constexpr std::size_t width_v = width<T>::value;
 
-} // namespace beman::big_int::detail
+} // namespace detail
+BEMAN_BIG_INT_END_NAMESPACE
 
 // Allocator trait detection ===================================================
 
@@ -576,7 +580,8 @@ inline constexpr std::size_t width_v = width<T>::value;
 
 #if defined(__cpp_lib_allocate_at_least) && __cpp_lib_allocate_at_least >= 202302L
 
-namespace beman::big_int::detail {
+BEMAN_BIG_INT_BEGIN_NAMESPACE
+namespace detail {
 
 // The C++23 feature-test macro can be set even when a particular allocator's
 // `std::allocator_traits` doesn't actually expose `allocate_at_least`
@@ -586,7 +591,8 @@ concept traits_has_allocate_at_least = requires(Alloc& a, typename Traits::size_
     { Traits::allocate_at_least(a, n) };
 };
 
-} // namespace beman::big_int::detail
+} // namespace detail
+BEMAN_BIG_INT_END_NAMESPACE
 
 #endif // __cpp_lib_allocate_at_least
 
@@ -626,7 +632,8 @@ concept traits_has_allocate_at_least = requires(Alloc& a, typename Traits::size_
 
 // LCOV_EXCL_START
 // GCOVR_EXCL_START
-namespace beman::big_int::detail {
+BEMAN_BIG_INT_BEGIN_NAMESPACE
+namespace detail {
 
 // Deliberately NOT std::source_location::current(): as a defaulted argument
 // it is a consteval call, and MSVC rejects that with C7595 ("call to
@@ -646,17 +653,18 @@ namespace beman::big_int::detail {
 #endif
 }
 
-} // namespace beman::big_int::detail
+} // namespace detail
+BEMAN_BIG_INT_END_NAMESPACE
 
-#define BEMAN_BIG_INT_ASSERT(...) (__VA_ARGS__ ? void() : ::beman::big_int::detail::assert_fail(#__VA_ARGS__))
+#define BEMAN_BIG_INT_ASSERT(...) (__VA_ARGS__ ? void() : ::BEMAN_BIG_INT_NAMESPACE::detail::assert_fail(#__VA_ARGS__))
 // GCOVR_EXCL_STOP
 // LCOV_EXCL_STOP
 
 #ifndef NDEBUG
     #define BEMAN_BIG_INT_DEBUG_ASSERT(...) BEMAN_BIG_INT_ASSERT(__VA_ARGS__)
 #else
-  // The requires expression makes sure that we still check for expression validity,
-  // even if the expression is not evaluated.
+    // The requires expression makes sure that we still check for expression validity,
+    // even if the expression is not evaluated.
     #define BEMAN_BIG_INT_DEBUG_ASSERT(...) void(requires { __VA_ARGS__; })
 #endif
 
@@ -665,9 +673,9 @@ namespace beman::big_int::detail {
 #if defined(__cpp_if_consteval) && __cpp_if_consteval >= 202106L
     #define BEMAN_BIG_INT_IS_CONSTEVAL consteval
     #ifdef BEMAN_BIG_INT_MSVC
-  // In MSVC, all code following `if !consteval` is considered unreachable.
-  // The warning is also impossible to suppress, so NEVER use `if !consteval` on MSVC.
-  // https://developercommunity.microsoft.com/t/Code-following-if-consteval-is-unreac/11073119
+        // In MSVC, all code following `if !consteval` is considered unreachable.
+        // The warning is also impossible to suppress, so NEVER use `if !consteval` on MSVC.
+        // https://developercommunity.microsoft.com/t/Code-following-if-consteval-is-unreac/11073119
         #define BEMAN_BIG_INT_IS_NOT_CONSTEVAL (!__builtin_is_constant_evaluated())
     #else
         #define BEMAN_BIG_INT_IS_NOT_CONSTEVAL !consteval
@@ -707,7 +715,7 @@ namespace beman::big_int::detail {
 
 // Division result =============================================================
 
-namespace beman::big_int {
+BEMAN_BIG_INT_BEGIN_NAMESPACE
 
 BEMAN_BIG_INT_EXPORT template <class T>
 struct div_result {
@@ -717,11 +725,12 @@ struct div_result {
     friend auto operator<=>(const div_result&, const div_result&) = default;
 };
 
-} // namespace beman::big_int
+BEMAN_BIG_INT_END_NAMESPACE
 
 // Division with rounding toward positive infinity =============================
 
-namespace beman::big_int::detail {
+BEMAN_BIG_INT_BEGIN_NAMESPACE
+namespace detail {
 
 // Returns the quotient of the division `x / y`,
 // rounded towards positive infinity.
@@ -731,7 +740,8 @@ template <unsigned_integer T>
     return (x / y) + T(x % y != 0);
 }
 
-} // namespace beman::big_int::detail
+} // namespace detail
+BEMAN_BIG_INT_END_NAMESPACE
 
 // Exceptions ==================================================================
 

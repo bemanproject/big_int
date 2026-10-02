@@ -30,7 +30,8 @@
 
     #include <beman/big_int/string.hpp> // for beman::big_int::to_string
 
-namespace beman::big_int::detail {
+BEMAN_BIG_INT_BEGIN_NAMESPACE
+namespace detail {
 
 // How the field is aligned. `defaulted` records that the user wrote no alignment, so the
 // presentation type can pick its own default (right for numbers, left for the `c` type).
@@ -355,7 +356,8 @@ template <class FormatContext>
     }
 }
 
-} // namespace beman::big_int::detail
+} // namespace detail
+BEMAN_BIG_INT_END_NAMESPACE
 
 namespace std {
 
@@ -363,12 +365,12 @@ namespace std {
 // formatters: fill/align, sign, '#', sign-aware '0', static and dynamic width, the
 // 'b'/'B'/'o'/'d'/'x'/'X'/'c' types, and the 'L' locale option, for both char and wchar_t.
 template <std::size_t B, class L, class A, class charT>
-struct formatter<beman::big_int::basic_big_int<B, L, A>, charT> {
-    beman::big_int::detail::format_spec<charT> spec_;
+struct formatter<BEMAN_BIG_INT_NAMESPACE::basic_big_int<B, L, A>, charT> {
+    BEMAN_BIG_INT_NAMESPACE::detail::format_spec<charT> spec_;
 
     template <class ParseContext>
     constexpr typename ParseContext::iterator parse(ParseContext& ctx) {
-        namespace d    = beman::big_int::detail;
+        namespace d    = BEMAN_BIG_INT_NAMESPACE::detail;
         auto       it  = ctx.begin();
         const auto end = ctx.end();
         spec_          = d::format_spec<charT>{};
@@ -502,10 +504,10 @@ struct formatter<beman::big_int::basic_big_int<B, L, A>, charT> {
     }
 
     template <class FormatContext>
-    typename FormatContext::iterator format(const beman::big_int::basic_big_int<B, L, A>& value,
-                                            FormatContext&                                fc) const {
-        namespace d    = beman::big_int::detail;
-        using big_type = beman::big_int::basic_big_int<B, L, A>;
+    typename FormatContext::iterator format(const BEMAN_BIG_INT_NAMESPACE::basic_big_int<B, L, A>& value,
+                                            FormatContext&                                         fc) const {
+        namespace d    = BEMAN_BIG_INT_NAMESPACE::detail;
+        using big_type = BEMAN_BIG_INT_NAMESPACE::basic_big_int<B, L, A>;
 
         std::size_t width = spec_.has_width ? spec_.width : std::size_t{0};
         if (spec_.width_is_arg) {
@@ -524,7 +526,7 @@ struct formatter<beman::big_int::basic_big_int<B, L, A>, charT> {
 
         // Reuse the sub-quadratic to_chars/to_string: it returns the lowercase magnitude
         // with a leading '-' for negatives, from which we derive the sign.
-        std::string       ascii    = beman::big_int::to_string(value, spec_.base);
+        std::string       ascii    = BEMAN_BIG_INT_NAMESPACE::to_string(value, spec_.base);
         const bool        negative = !ascii.empty() && ascii.front() == '-';
         const std::size_t mag_off  = negative ? 1u : 0u;
         if (spec_.uppercase) {

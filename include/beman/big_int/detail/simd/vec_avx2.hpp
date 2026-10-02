@@ -8,6 +8,8 @@
 
 #include <immintrin.h>
 
+#include <beman/big_int/detail/config.hpp>
+
 // The x86-64 AVX2 + FMA (width-4) vector type. __m256d + _mm256_fmsub_pd /
 // _mm256_fnmadd_pd (single-rounded FMA) and _mm256_round_pd (round to nearest,
 // ties to even) produce results bit-identical to vec1d. This header is compiled
@@ -15,7 +17,8 @@
 // it at runtime only after confirming AVX2+FMA support, so its instructions never
 // execute on a CPU that lacks them.
 
-namespace beman::big_int::detail {
+BEMAN_BIG_INT_BEGIN_NAMESPACE
+namespace detail {
 
 struct vec4d {
     inline static constexpr std::size_t width = 4;
@@ -41,6 +44,7 @@ struct vec4d {
     return vec4d{_mm256_round_pd(a.v, _MM_FROUND_TO_NEAREST_INT | _MM_FROUND_NO_EXC)};
 }
 
-} // namespace beman::big_int::detail
+} // namespace detail
+BEMAN_BIG_INT_END_NAMESPACE
 
 #endif // BEMAN_BIG_INT_SIMD_VEC_AVX2_HPP

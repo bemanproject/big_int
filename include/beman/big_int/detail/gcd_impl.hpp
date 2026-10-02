@@ -17,7 +17,8 @@
     #include <utility>
 #endif
 
-namespace beman::big_int::detail {
+BEMAN_BIG_INT_BEGIN_NAMESPACE
+namespace detail {
 
 // Greatest common divisor of two single limbs, by the binary (Stein) algorithm:
 // pull out the common power of two, then keep both operands odd and replace the
@@ -333,6 +334,7 @@ struct lehmer_cofactors {
     return u.size;
 }
 
-} // namespace beman::big_int::detail
+} // namespace detail
+BEMAN_BIG_INT_END_NAMESPACE
 
 #endif // BEMAN_BIG_INT_GCD_IMPL_HPP

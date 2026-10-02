@@ -14,7 +14,8 @@
 #include <beman/big_int/detail/config.hpp>
 #include <beman/big_int/detail/wide_ops.hpp>
 
-namespace beman::big_int::detail {
+BEMAN_BIG_INT_BEGIN_NAMESPACE
+namespace detail {
 
 // Modular arithmetic over a single word-size prime, the foundation for the NTT
 // that backs FFT multiplication. Values are 64-bit regardless of the library
@@ -124,6 +125,7 @@ struct ntt_modulus {
     [[nodiscard]] constexpr std::uint64_t root(const std::uint64_t j) const noexcept { return pow(g, (p - 1) >> j); }
 };
 
-} // namespace beman::big_int::detail
+} // namespace detail
+BEMAN_BIG_INT_END_NAMESPACE
 
 #endif // BEMAN_BIG_INT_MOD_ARITH_HPP

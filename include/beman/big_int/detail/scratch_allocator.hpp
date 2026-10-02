@@ -13,7 +13,8 @@
     #include <type_traits>
 #endif
 
-namespace beman::big_int::detail {
+BEMAN_BIG_INT_BEGIN_NAMESPACE
+namespace detail {
 
 // Scratchpad bump allocator used by the multiplication and division
 // algorithms. Allocates LIFO from a pre-sized buffer; "deallocation" simply
@@ -236,6 +237,7 @@ struct scratch_allocator : scratch_allocator_base {
 
 BEMAN_BIG_INT_DIAGNOSTIC_POP()
 
-} // namespace beman::big_int::detail
+} // namespace detail
+BEMAN_BIG_INT_END_NAMESPACE
 
 #endif // BEMAN_BIG_INT_SCRATCH_ALLOCATOR_HPP
