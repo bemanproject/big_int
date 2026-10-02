@@ -176,6 +176,46 @@
       }
     },
     {
+      "name": "gcc-release-namespace",
+      "displayName": "GCC Release Build (custom namespace)",
+      "inherits": [
+        "gcc-release"
+      ],
+      "cacheVariables": {
+        "BEMAN_BIG_INT_NAMESPACE": "wrapper::nested::big_int"
+      }
+    },
+    {
+      "name": "llvm-release-namespace",
+      "displayName": "Clang Release Build (custom namespace)",
+      "inherits": [
+        "llvm-release"
+      ],
+      "cacheVariables": {
+        "BEMAN_BIG_INT_NAMESPACE": "wrapper::nested::big_int"
+      }
+    },
+    {
+      "name": "appleclang-release-namespace",
+      "displayName": "Appleclang Release Build (custom namespace)",
+      "inherits": [
+        "appleclang-release"
+      ],
+      "cacheVariables": {
+        "BEMAN_BIG_INT_NAMESPACE": "wrapper::nested::big_int"
+      }
+    },
+    {
+      "name": "msvc-release-namespace",
+      "displayName": "MSVC Release Build (custom namespace)",
+      "inherits": [
+        "msvc-release"
+      ],
+      "cacheVariables": {
+        "BEMAN_BIG_INT_NAMESPACE": "wrapper::nested::big_int"
+      }
+    },
+    {
       "name": "gcc-release-benchmarks",
       "displayName": "GCC Release Build (benchmarks)",
       "inherits": [
@@ -374,6 +414,34 @@
       ]
     },
     {
+      "name": "gcc-release-namespace",
+      "configurePreset": "gcc-release-namespace",
+      "inherits": [
+        "_root-build"
+      ]
+    },
+    {
+      "name": "llvm-release-namespace",
+      "configurePreset": "llvm-release-namespace",
+      "inherits": [
+        "_root-build"
+      ]
+    },
+    {
+      "name": "appleclang-release-namespace",
+      "configurePreset": "appleclang-release-namespace",
+      "inherits": [
+        "_root-build"
+      ]
+    },
+    {
+      "name": "msvc-release-namespace",
+      "configurePreset": "msvc-release-namespace",
+      "inherits": [
+        "_root-build"
+      ]
+    },
+    {
       "name": "gcc-release-benchmarks",
       "configurePreset": "gcc-release-benchmarks",
       "inherits": [
@@ -529,6 +597,26 @@
       "name": "msvc-release-simd",
       "inherits": "_test_base",
       "configurePreset": "msvc-release-simd"
+    },
+    {
+      "name": "gcc-release-namespace",
+      "inherits": "_test_base",
+      "configurePreset": "gcc-release-namespace"
+    },
+    {
+      "name": "llvm-release-namespace",
+      "inherits": "_test_base",
+      "configurePreset": "llvm-release-namespace"
+    },
+    {
+      "name": "appleclang-release-namespace",
+      "inherits": "_test_base",
+      "configurePreset": "appleclang-release-namespace"
+    },
+    {
+      "name": "msvc-release-namespace",
+      "inherits": "_test_base",
+      "configurePreset": "msvc-release-namespace"
     },
     {
       "name": "gcc-debug-module",
@@ -773,6 +861,74 @@
         {
           "type": "test",
           "name": "msvc-release-simd"
+        }
+      ]
+    },
+    {
+      "name": "gcc-release-namespace",
+      "steps": [
+        {
+          "type": "configure",
+          "name": "gcc-release-namespace"
+        },
+        {
+          "type": "build",
+          "name": "gcc-release-namespace"
+        },
+        {
+          "type": "test",
+          "name": "gcc-release-namespace"
+        }
+      ]
+    },
+    {
+      "name": "llvm-release-namespace",
+      "steps": [
+        {
+          "type": "configure",
+          "name": "llvm-release-namespace"
+        },
+        {
+          "type": "build",
+          "name": "llvm-release-namespace"
+        },
+        {
+          "type": "test",
+          "name": "llvm-release-namespace"
+        }
+      ]
+    },
+    {
+      "name": "appleclang-release-namespace",
+      "steps": [
+        {
+          "type": "configure",
+          "name": "appleclang-release-namespace"
+        },
+        {
+          "type": "build",
+          "name": "appleclang-release-namespace"
+        },
+        {
+          "type": "test",
+          "name": "appleclang-release-namespace"
+        }
+      ]
+    },
+    {
+      "name": "msvc-release-namespace",
+      "steps": [
+        {
+          "type": "configure",
+          "name": "msvc-release-namespace"
+        },
+        {
+          "type": "build",
+          "name": "msvc-release-namespace"
+        },
+        {
+          "type": "test",
+          "name": "msvc-release-namespace"
         }
       ]
     },
