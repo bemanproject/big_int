@@ -3,7 +3,8 @@
 
 #include <beman/big_int/detail/mul_impl.hpp>
 
-namespace beman::big_int::detail {
+BEMAN_BIG_INT_BEGIN_NAMESPACE
+namespace detail {
 
 // Sign flags for the three palindromic differences recovered by a 7x7 subsystem.
 struct subsystem_signs_85 {
@@ -766,4 +767,5 @@ void square_toom_cook_8_5(const std::span<uint_multiprecision_t>       result,
     scratch.deallocate(total_scratch);
 }
 
-} // namespace beman::big_int::detail
+} // namespace detail
+BEMAN_BIG_INT_END_NAMESPACE

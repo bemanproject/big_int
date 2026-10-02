@@ -15,7 +15,8 @@
 // The scalar (portable) FP NTT kernels, plus the shared twiddle build. Always
 // compiled; the universal fallback when no SIMD kernel applies.
 
-namespace beman::big_int::detail {
+BEMAN_BIG_INT_BEGIN_NAMESPACE
+namespace detail {
 
 void ntt_fp_forward_scalar(double* const         data,
                            const std::size_t     n,
@@ -78,4 +79,5 @@ void ntt_fp_build_twiddles(const std::span<double> twiddles,
     }
 }
 
-} // namespace beman::big_int::detail
+} // namespace detail
+BEMAN_BIG_INT_END_NAMESPACE

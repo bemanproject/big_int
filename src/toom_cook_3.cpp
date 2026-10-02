@@ -3,7 +3,8 @@
 
 #include <beman/big_int/detail/mul_impl.hpp>
 
-namespace beman::big_int::detail {
+BEMAN_BIG_INT_BEGIN_NAMESPACE
+namespace detail {
 
 void multiply_toom_cook_3(const std::span<uint_multiprecision_t>       result,
                           const std::span<const uint_multiprecision_t> a_untrimmed,
@@ -301,4 +302,5 @@ void square_toom_cook_3(const std::span<uint_multiprecision_t>       result,
     scratch.deallocate(total_scratch);
 }
 
-} // namespace beman::big_int::detail
+} // namespace detail
+BEMAN_BIG_INT_END_NAMESPACE

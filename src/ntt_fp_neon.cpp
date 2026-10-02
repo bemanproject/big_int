@@ -12,7 +12,8 @@
 
     #include <cstddef>
 
-namespace beman::big_int::detail {
+BEMAN_BIG_INT_BEGIN_NAMESPACE
+namespace detail {
 
 void ntt_fp_forward_neon(double* const         data,
                          const std::size_t     n,
@@ -35,6 +36,7 @@ void ntt_fp_pointwise_neon(double* const         a,
     ntt_fp_pointwise_impl<vec2d>(a, b, n, m);
 }
 
-} // namespace beman::big_int::detail
+} // namespace detail
+BEMAN_BIG_INT_END_NAMESPACE
 
 #endif // BEMAN_BIG_INT_NTT_FP_ARM64

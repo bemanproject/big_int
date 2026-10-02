@@ -14,7 +14,8 @@
 
     #include <cstddef>
 
-namespace beman::big_int::detail {
+BEMAN_BIG_INT_BEGIN_NAMESPACE
+namespace detail {
 
 void ntt_fp_forward_avx2(double* const         data,
                          const std::size_t     n,
@@ -37,6 +38,7 @@ void ntt_fp_pointwise_avx2(double* const         a,
     ntt_fp_pointwise_impl<vec4d>(a, b, n, m);
 }
 
-} // namespace beman::big_int::detail
+} // namespace detail
+BEMAN_BIG_INT_END_NAMESPACE
 
 #endif // BEMAN_BIG_INT_NTT_FP_X86

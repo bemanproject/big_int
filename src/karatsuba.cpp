@@ -5,7 +5,8 @@
 #include <beman/big_int/detail/multiply_long_runtime.hpp>
 #include <beman/big_int/detail/square_long_runtime.hpp>
 
-namespace beman::big_int::detail {
+BEMAN_BIG_INT_BEGIN_NAMESPACE
+namespace detail {
 
 // Squares below square_karatsuba_cutoff (and the squaring leaves below) stay
 // inside the IFMA square kernel's native range.
@@ -219,4 +220,5 @@ void square_karatsuba(const std::span<uint_multiprecision_t>       result,
     scratch.deallocate(total_scratch);
 }
 
-} // namespace beman::big_int::detail
+} // namespace detail
+BEMAN_BIG_INT_END_NAMESPACE

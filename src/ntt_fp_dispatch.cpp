@@ -18,7 +18,8 @@
     #include <intrin.h>
 #endif
 
-namespace beman::big_int::detail {
+BEMAN_BIG_INT_BEGIN_NAMESPACE
+namespace detail {
 
 namespace {
 
@@ -78,4 +79,5 @@ const ntt_fp_kernels& ntt_fp_dispatch() noexcept {
     return kernels;
 }
 
-} // namespace beman::big_int::detail
+} // namespace detail
+BEMAN_BIG_INT_END_NAMESPACE

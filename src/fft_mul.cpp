@@ -23,7 +23,8 @@
 // width. b need not divide the limb width, so packing and recomposition use
 // sliding bit buffers.
 
-namespace beman::big_int::detail {
+BEMAN_BIG_INT_BEGIN_NAMESPACE
+namespace detail {
 
 namespace {
 
@@ -344,4 +345,5 @@ void square_fft(const std::span<uint_multiprecision_t>       result,
     fft_recompose(result.first(2 * na), save, ca.first(result_coeff), crt_inverse(), coeff_bits);
 }
 
-} // namespace beman::big_int::detail
+} // namespace detail
+BEMAN_BIG_INT_END_NAMESPACE
