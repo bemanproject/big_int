@@ -15,16 +15,16 @@
 #include <string>
 #include <vector>
 
-namespace bmp = ::beman::big_int::boost_mp_testing;
+namespace bmp = ::BEMAN_BIG_INT_NAMESPACE::boost_mp_testing;
 
 namespace {
 
-using uint_t        = ::beman::big_int::uint_multiprecision_t;
+using uint_t        = ::BEMAN_BIG_INT_NAMESPACE::uint_multiprecision_t;
 using std_allocator = std::allocator<uint_t>;
-using scratch_t     = ::beman::big_int::detail::scratch_allocator<std_allocator>;
+using scratch_t     = ::BEMAN_BIG_INT_NAMESPACE::detail::scratch_allocator<std_allocator>;
 
 constexpr std::size_t limb_bits =
-    static_cast<std::size_t>(std::numeric_limits<::beman::big_int::uint_multiprecision_t>::digits);
+    static_cast<std::size_t>(std::numeric_limits<::BEMAN_BIG_INT_NAMESPACE::uint_multiprecision_t>::digits);
 
 std::vector<uint_t> make_random(const std::size_t limbs, const std::uint64_t seed) {
     std::mt19937_64                       rng{seed};
@@ -54,14 +54,15 @@ void expect_mul_matches(const std::size_t na, const std::size_t nb, const bool b
 
     std_allocator alloc;
     scratch_t     scratch(16 * std::max(na, nb) + 4096, alloc);
-    ::beman::big_int::detail::multiply_toom_cook_8_5(std::span<uint_t>{got}, a_view, b_view, scratch, std::size_t{1});
+    ::BEMAN_BIG_INT_NAMESPACE::detail::multiply_toom_cook_8_5(
+        std::span<uint_t>{got}, a_view, b_view, scratch, std::size_t{1});
 
     if (big_ref) {
         scratch_t ref_scratch(16 * std::max(na, nb) + 4096, alloc);
-        ::beman::big_int::detail::multiply_toom_cook_6_5(
+        ::BEMAN_BIG_INT_NAMESPACE::detail::multiply_toom_cook_6_5(
             std::span<uint_t>{ref}, a_view, b_view, ref_scratch, std::size_t{1});
     } else {
-        ::beman::big_int::detail::multiply_long(std::span<uint_t>{ref}, a_view, b_view);
+        ::BEMAN_BIG_INT_NAMESPACE::detail::multiply_long(std::span<uint_t>{ref}, a_view, b_view);
     }
 
     EXPECT_EQ(got, ref);
@@ -77,13 +78,14 @@ void expect_sqr_matches(const std::size_t n, const bool big_ref = false) {
 
     std_allocator alloc;
     scratch_t     scratch(16 * n + 4096, alloc);
-    ::beman::big_int::detail::square_toom_cook_8_5(std::span<uint_t>{got}, a_view, scratch, std::size_t{1});
+    ::BEMAN_BIG_INT_NAMESPACE::detail::square_toom_cook_8_5(std::span<uint_t>{got}, a_view, scratch, std::size_t{1});
 
     if (big_ref) {
         scratch_t ref_scratch(16 * n + 4096, alloc);
-        ::beman::big_int::detail::square_toom_cook_6_5(std::span<uint_t>{ref}, a_view, ref_scratch, std::size_t{1});
+        ::BEMAN_BIG_INT_NAMESPACE::detail::square_toom_cook_6_5(
+            std::span<uint_t>{ref}, a_view, ref_scratch, std::size_t{1});
     } else {
-        ::beman::big_int::detail::multiply_long(std::span<uint_t>{ref}, a_view, a_view);
+        ::BEMAN_BIG_INT_NAMESPACE::detail::multiply_long(std::span<uint_t>{ref}, a_view, a_view);
     }
 
     EXPECT_EQ(got, ref);
@@ -139,33 +141,34 @@ TEST(ToomCook8_5, Squaring) {
 // Toom-8.5 again. Reference is the independent Toom-6.5 kernel.
 // (One case only; 2-level Toom needs many limbs and is slow under MaxSan.) ----
 TEST(ToomCook8_5, DeepRecursionVsToom65) {
-    const std::size_t n = 8 * ::beman::big_int::detail::toom_cook_8_5_cutoff + 1000;
+    const std::size_t n = 8 * ::BEMAN_BIG_INT_NAMESPACE::detail::toom_cook_8_5_cutoff + 1000;
     expect_mul_matches(n, n, /*big_ref=*/true);
 }
 
 // ---- Public-API integration: operator* must agree with Boost.Multiprecision at and above the Toom-8.5 cutoff
 // (the FFT gate may take the product first, depending on the configuration). ----
 TEST(ToomCook8_5, DispatchAtCutoff) {
-    const std::size_t cutoff = ::beman::big_int::detail::toom_cook_8_5_cutoff;
+    const std::size_t cutoff = ::BEMAN_BIG_INT_NAMESPACE::detail::toom_cook_8_5_cutoff;
     const std::string a      = bmp::random_big_int(cutoff * limb_bits);
     const std::string b      = bmp::random_big_int(cutoff * limb_bits);
     EXPECT_TRUE(bmp::check_cpp_int_equal(std::multiplies<>{}, a, b));
 }
 
 TEST(ToomCook8_5, DispatchAboveCutoffAndSquare) {
-    const std::size_t cutoff = ::beman::big_int::detail::toom_cook_8_5_cutoff;
+    const std::size_t cutoff = ::BEMAN_BIG_INT_NAMESPACE::detail::toom_cook_8_5_cutoff;
     const std::string a      = bmp::random_big_int((cutoff + 1000) * limb_bits);
     const std::string b      = bmp::random_big_int((cutoff + 2000) * limb_bits);
     EXPECT_TRUE(bmp::check_cpp_int_equal(std::multiplies<>{}, a, b));
 
     // x * x at >= square_toom_cook_8_5_cutoff routes through square_dispatch ->
     // square_toom_cook_8_5 (or the square FFT).
-    const std::string c = bmp::random_big_int(::beman::big_int::detail::square_toom_cook_8_5_cutoff * limb_bits);
+    const std::string c =
+        bmp::random_big_int(::BEMAN_BIG_INT_NAMESPACE::detail::square_toom_cook_8_5_cutoff * limb_bits);
     EXPECT_TRUE(bmp::check_cpp_int_equal(std::multiplies<>{}, c, c));
 }
 
 TEST(ToomCook8_5, DispatchSignedOperands) {
-    const std::size_t n = ::beman::big_int::detail::toom_cook_8_5_cutoff + 1000;
+    const std::size_t n = ::BEMAN_BIG_INT_NAMESPACE::detail::toom_cook_8_5_cutoff + 1000;
     const std::string a = bmp::random_big_int(n * limb_bits, /*negative=*/true);
     const std::string b = bmp::random_big_int(n * limb_bits, /*negative=*/false);
     EXPECT_TRUE(bmp::check_cpp_int_equal(std::multiplies<>{}, a, b));

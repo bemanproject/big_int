@@ -19,8 +19,8 @@
 
 namespace {
 
-namespace detail = beman::big_int::detail;
-using uint_t     = beman::big_int::uint_multiprecision_t;
+namespace detail = BEMAN_BIG_INT_NAMESPACE::detail;
+using uint_t     = BEMAN_BIG_INT_NAMESPACE::uint_multiprecision_t;
 
 struct counting_state {
     std::map<std::type_index, std::size_t> allocations;

@@ -15,6 +15,13 @@
 
 include(GoogleTest)
 
+# The sources here name the library's namespace through BEMAN_BIG_INT_NAMESPACE, which
+# cannot cross the module boundary from detail/config.hpp, so it is passed on the
+# command line. A non-default namespace already arrives PUBLIC from beman.big_int.
+if(BEMAN_BIG_INT_NAMESPACE STREQUAL "beman::big_int")
+    add_compile_definitions(BEMAN_BIG_INT_NAMESPACE=beman::big_int)
+endif()
+
 # The project's test warning set, so a diagnostic only the module path produces is
 # still an error.
 function(beman_big_int_module_test_warnings target)

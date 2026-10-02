@@ -22,10 +22,10 @@
 
 namespace {
 
-using beman::big_int::big_int;
-using beman::big_int::from_chars;
-using beman::big_int::to_string;
-using namespace beman::big_int::big_int_literals;
+using BEMAN_BIG_INT_NAMESPACE::big_int;
+using BEMAN_BIG_INT_NAMESPACE::from_chars;
+using BEMAN_BIG_INT_NAMESPACE::to_string;
+using namespace BEMAN_BIG_INT_NAMESPACE::big_int_literals;
 
 // std::vformat is [[nodiscard]]; this non-nodiscard wrapper lets EXPECT_THROW / EXPECT_NO_THROW
 // invoke it without tripping -Werror=unused-result.

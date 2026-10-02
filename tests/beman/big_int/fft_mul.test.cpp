@@ -17,18 +17,18 @@
 
 namespace {
 
-using ::beman::big_int::uint_multiprecision_t;
-using ::beman::big_int::detail::fft_choose_coeff_bits;
-using ::beman::big_int::detail::multiply_fft;
-using ::beman::big_int::detail::square_fft;
+using ::BEMAN_BIG_INT_NAMESPACE::uint_multiprecision_t;
+using ::BEMAN_BIG_INT_NAMESPACE::detail::fft_choose_coeff_bits;
+using ::BEMAN_BIG_INT_NAMESPACE::detail::multiply_fft;
+using ::BEMAN_BIG_INT_NAMESPACE::detail::square_fft;
 #if defined(BEMAN_BIG_INT_SIMD_MUL)
-using ::beman::big_int::detail::fft_mul_fp_storage_size;
-using ::beman::big_int::detail::fft_mul_int_storage_size;
-using ::beman::big_int::detail::square_fft_fp_storage_size;
-using ::beman::big_int::detail::square_fft_int_storage_size;
+using ::BEMAN_BIG_INT_NAMESPACE::detail::fft_mul_fp_storage_size;
+using ::BEMAN_BIG_INT_NAMESPACE::detail::fft_mul_int_storage_size;
+using ::BEMAN_BIG_INT_NAMESPACE::detail::square_fft_fp_storage_size;
+using ::BEMAN_BIG_INT_NAMESPACE::detail::square_fft_int_storage_size;
 #else
-using ::beman::big_int::detail::fft_mul_storage_size;
-using ::beman::big_int::detail::square_fft_storage_size;
+using ::BEMAN_BIG_INT_NAMESPACE::detail::fft_mul_storage_size;
+using ::BEMAN_BIG_INT_NAMESPACE::detail::square_fft_storage_size;
 #endif
 using ::boost::multiprecision::cpp_int;
 
@@ -148,7 +148,7 @@ TEST(FftMul, SquareDifferential) {
 // (and, when the cost model is on, at the first size where the model picks the
 // FFT) route through the FFT branch of multiply_dispatch / square_dispatch.
 // Tied to the gate helpers so they keep exercising FFT after the gates are tuned.
-namespace bmp = ::beman::big_int::boost_mp_testing;
+namespace bmp = ::BEMAN_BIG_INT_NAMESPACE::boost_mp_testing;
 
 namespace {
 
@@ -173,9 +173,10 @@ std::size_t first_size_taking_fft(const std::size_t floor, Gate&& gate) {
 } // namespace
 
 TEST(FftMul, DispatchIntegrationMultiply) {
-    const std::size_t n = first_size_taking_fft(::beman::big_int::detail::fft_mul_min_limbs, [](const std::size_t m) {
-        return ::beman::big_int::detail::fft_mul_worthwhile(m, m);
-    });
+    const std::size_t n =
+        first_size_taking_fft(::BEMAN_BIG_INT_NAMESPACE::detail::fft_mul_min_limbs, [](const std::size_t m) {
+            return ::BEMAN_BIG_INT_NAMESPACE::detail::fft_mul_worthwhile(m, m);
+        });
     if (n > max_reference_limbs) {
         GTEST_SKIP() << "the gate takes the FFT only from " << n << " limbs here: too large for the Boost reference";
     }
@@ -185,8 +186,9 @@ TEST(FftMul, DispatchIntegrationMultiply) {
 
 TEST(FftMul, DispatchIntegrationSquare) {
     const std::size_t n =
-        first_size_taking_fft(::beman::big_int::detail::square_fft_min_limbs,
-                              [](const std::size_t m) { return ::beman::big_int::detail::square_fft_worthwhile(m); });
+        first_size_taking_fft(::BEMAN_BIG_INT_NAMESPACE::detail::square_fft_min_limbs, [](const std::size_t m) {
+            return ::BEMAN_BIG_INT_NAMESPACE::detail::square_fft_worthwhile(m);
+        });
     if (n > max_reference_limbs) {
         GTEST_SKIP() << "the gate takes the FFT only from " << n << " limbs here: too large for the Boost reference";
     }

@@ -11,8 +11,8 @@
 
 namespace {
 
-using beman::big_int::big_int;
-using beman::big_int::detail::int_multiprecision_t;
+using BEMAN_BIG_INT_NAMESPACE::big_int;
+using BEMAN_BIG_INT_NAMESPACE::detail::int_multiprecision_t;
 
 TEST(Comparison, EqualitySmallIntegers) {
     const big_int zero{0};

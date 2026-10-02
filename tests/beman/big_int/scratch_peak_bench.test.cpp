@@ -36,9 +36,9 @@
 
 namespace local {
 
-using uint_t           = ::beman::big_int::uint_multiprecision_t;
+using uint_t           = ::BEMAN_BIG_INT_NAMESPACE::uint_multiprecision_t;
 using std_allocator    = std::allocator<uint_t>;
-using scratch_for_test = ::beman::big_int::detail::scratch_allocator<std_allocator>;
+using scratch_for_test = ::BEMAN_BIG_INT_NAMESPACE::detail::scratch_allocator<std_allocator>;
 
 // Over-provision factor for the probe buffer. Comfortably above any current
 // or plausible future _storage_size multiplier.
@@ -106,7 +106,8 @@ std::size_t peak_karatsuba_at(const std::size_t limbs) {
                            const std::span<const uint_t> a,
                            const std::span<const uint_t> b,
                            scratch_for_test&             s) {
-                            ::beman::big_int::detail::multiply_karatsuba(r.first(a.size() + b.size()), a, b, s);
+                            ::BEMAN_BIG_INT_NAMESPACE::detail::multiply_karatsuba(
+                                r.first(a.size() + b.size()), a, b, s);
                         });
 }
 
@@ -116,7 +117,8 @@ std::size_t peak_toom_cook_3_at(const std::size_t limbs) {
                            const std::span<const uint_t> a,
                            const std::span<const uint_t> b,
                            scratch_for_test&             s) {
-                            ::beman::big_int::detail::multiply_toom_cook_3(r.first(a.size() + b.size()), a, b, s);
+                            ::BEMAN_BIG_INT_NAMESPACE::detail::multiply_toom_cook_3(
+                                r.first(a.size() + b.size()), a, b, s);
                         });
 }
 
@@ -126,7 +128,7 @@ std::size_t peak_toom_cook_4_at(const std::size_t limbs) {
                            const std::span<const uint_t> a,
                            const std::span<const uint_t> b,
                            scratch_for_test&             s) {
-                            ::beman::big_int::detail::multiply_toom_cook_4(
+                            ::BEMAN_BIG_INT_NAMESPACE::detail::multiply_toom_cook_4(
                                 r.first(a.size() + b.size()), a, b, s, std::size_t{1});
                         });
 }
@@ -137,7 +139,7 @@ std::size_t peak_toom_cook_6_5_at(const std::size_t limbs) {
                            const std::span<const uint_t> a,
                            const std::span<const uint_t> b,
                            scratch_for_test&             s) {
-                            ::beman::big_int::detail::multiply_toom_cook_6_5(
+                            ::BEMAN_BIG_INT_NAMESPACE::detail::multiply_toom_cook_6_5(
                                 r.first(a.size() + b.size()), a, b, s, std::size_t{1});
                         });
 }
@@ -148,7 +150,7 @@ std::size_t peak_toom_cook_8_5_at(const std::size_t limbs) {
                            const std::span<const uint_t> a,
                            const std::span<const uint_t> b,
                            scratch_for_test&             s) {
-                            ::beman::big_int::detail::multiply_toom_cook_8_5(
+                            ::BEMAN_BIG_INT_NAMESPACE::detail::multiply_toom_cook_8_5(
                                 r.first(a.size() + b.size()), a, b, s, std::size_t{1});
                         });
 }

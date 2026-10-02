@@ -35,7 +35,7 @@
 
 namespace {
 
-using limb = ::beman::big_int::uint_multiprecision_t;
+using limb = ::BEMAN_BIG_INT_NAMESPACE::uint_multiprecision_t;
 
 constexpr limb        limb_max    = std::numeric_limits<limb>::max();
 constexpr limb        poison      = limb_max / 0xFF * 0xA5; // 0xA5 in every byte
@@ -119,7 +119,7 @@ void expect_multiply_matches(multiply_fn              fn,
     const std::size_t len_b = b.size();
 
     std::vector<limb> expected(len_a + len_b);
-    ::beman::big_int::detail::multiply_long(expected, a, b);
+    ::BEMAN_BIG_INT_NAMESPACE::detail::multiply_long(expected, a, b);
 
     std::vector<limb> buf(len_a + len_b + 2 * guard_limbs, poison);
     fn(buf.data() + guard_limbs, a.data(), len_a, b.data(), len_b);
@@ -143,14 +143,14 @@ class MultiplyLongRuntime : public ::testing::TestWithParam<kernel> {
     void SetUp() override {
         const std::string_view name = GetParam().name;
         if (name == "Bmi2Adx") {
-            if (!::beman::big_int::tests::cpu_has_bmi2_and_adx()) {
+            if (!::BEMAN_BIG_INT_NAMESPACE::tests::cpu_has_bmi2_and_adx()) {
                 GTEST_SKIP() << "CPU lacks BMI2 and/or ADX";
             }
-            if (!::beman::big_int::tests::bmi2_adx_kernels_are_usable()) {
+            if (!::BEMAN_BIG_INT_NAMESPACE::tests::bmi2_adx_kernels_are_usable()) {
                 GTEST_SKIP() << "CPUID claims BMI2/ADX but the instructions fault (emulator)";
             }
         } else if (name == "Avx512Ifma") {
-            if (!::beman::big_int::tests::avx512_ifma_kernels_are_usable()) {
+            if (!::BEMAN_BIG_INT_NAMESPACE::tests::avx512_ifma_kernels_are_usable()) {
                 GTEST_SKIP() << "CPU lacks AVX-512 IFMA (or a required companion feature), or the "
                              << "instructions fault (emulator)";
             }
@@ -381,7 +381,7 @@ TEST_P(MultiplyLongRuntime, Avx512IfmaBoundaryShapes) {
 #if defined(BEMAN_BIG_INT_ARCH_X86_64)
     // Both sides of the IFMA dispatch gate: for each short length around its tiers, the last la the gate refuses
     // and the first it accepts (found through the gate itself), in both operand orders.
-    namespace d = ::beman::big_int::detail;
+    namespace d = ::BEMAN_BIG_INT_NAMESPACE::detail;
     for (std::size_t lo = d::ifma_multiply_min_limbs - 1; lo <= d::ifma_multiply_always_limbs + 1; ++lo) {
         if (lo == 0) {
             continue;
@@ -475,7 +475,7 @@ void expect_multiply_matches_aliased(multiply_fn              fn,
                                      const std::size_t        len_b,
                                      const char*              pattern) {
     std::vector<limb> expected(len_a + len_b);
-    ::beman::big_int::detail::multiply_long(
+    ::BEMAN_BIG_INT_NAMESPACE::detail::multiply_long(
         expected, std::span<const limb>(v).first(len_a), std::span<const limb>(v).first(len_b));
 
     std::vector<limb> buf(len_a + len_b + 2 * guard_limbs, poison);
@@ -556,7 +556,7 @@ TEST_P(MultiplyLongRuntime, OperandAlignmentOffsets) {
     }
 
     std::vector<limb> expected(len_a + len_b);
-    ::beman::big_int::detail::multiply_long(expected, a_src, b_src);
+    ::BEMAN_BIG_INT_NAMESPACE::detail::multiply_long(expected, a_src, b_src);
 
     for (std::size_t off = 0; off < 8; ++off) {
         for (int which = 0; which < 3; ++which) {
@@ -700,7 +700,7 @@ void expect_multiply_matches_guarded(multiply_fn             fn,
     }
 
     std::vector<limb> expected(len_a + len_b);
-    ::beman::big_int::detail::multiply_long(expected, a_src, b_src);
+    ::BEMAN_BIG_INT_NAMESPACE::detail::multiply_long(expected, a_src, b_src);
 
     guard_page_buffer a_buf(len_a * sizeof(limb), side);
     guard_page_buffer b_buf(len_b * sizeof(limb), side);

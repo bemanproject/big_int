@@ -13,9 +13,9 @@
 #include "testing.hpp"
 
 TEST(Multiplication, KaratsubaEdge01) {
-    using beman::big_int::big_int;
+    using BEMAN_BIG_INT_NAMESPACE::big_int;
 #if !defined(BEMAN_BIG_INT_MSVC)
-    using namespace beman::big_int::literals;
+    using namespace BEMAN_BIG_INT_NAMESPACE::literals;
 #endif
 
 #if defined(BEMAN_BIG_INT_MSVC)

@@ -34,7 +34,7 @@
 
 namespace {
 
-using limb = ::beman::big_int::uint_multiprecision_t;
+using limb = ::BEMAN_BIG_INT_NAMESPACE::uint_multiprecision_t;
 
 constexpr limb        limb_max    = std::numeric_limits<limb>::max();
 constexpr limb        poison      = limb_max / 0xFF * 0xA5; // 0xA5 in every byte
@@ -106,7 +106,7 @@ void expect_square_matches(square_fn fn, const std::vector<limb>& a, const char*
     const std::size_t n = a.size();
 
     std::vector<limb> expected(2 * n);
-    ::beman::big_int::detail::multiply_long(expected, a, a);
+    ::BEMAN_BIG_INT_NAMESPACE::detail::multiply_long(expected, a, a);
 
     std::vector<limb> buf(2 * n + 2 * guard_limbs, poison);
     fn(buf.data() + guard_limbs, a.data(), n);
@@ -128,14 +128,14 @@ class SquareLongRuntime : public ::testing::TestWithParam<kernel> {
     void SetUp() override {
         const std::string_view name = GetParam().name;
         if (name == "Bmi2Adx") {
-            if (!::beman::big_int::tests::cpu_has_bmi2_and_adx()) {
+            if (!::BEMAN_BIG_INT_NAMESPACE::tests::cpu_has_bmi2_and_adx()) {
                 GTEST_SKIP() << "CPU lacks BMI2 and/or ADX";
             }
-            if (!::beman::big_int::tests::bmi2_adx_kernels_are_usable()) {
+            if (!::BEMAN_BIG_INT_NAMESPACE::tests::bmi2_adx_kernels_are_usable()) {
                 GTEST_SKIP() << "CPUID claims BMI2/ADX but the instructions fault (emulator)";
             }
         } else if (name == "Avx512Ifma") {
-            if (!::beman::big_int::tests::avx512_ifma_kernels_are_usable()) {
+            if (!::BEMAN_BIG_INT_NAMESPACE::tests::avx512_ifma_kernels_are_usable()) {
                 GTEST_SKIP() << "CPU lacks AVX-512 IFMA (or a required companion feature), or the "
                              << "instructions fault (emulator)";
             }
@@ -296,7 +296,7 @@ void expect_square_matches_guarded(square_fn fn, const std::size_t n, guard_page
     }
 
     std::vector<limb> expected(2 * n);
-    ::beman::big_int::detail::multiply_long(expected, a_src, a_src);
+    ::BEMAN_BIG_INT_NAMESPACE::detail::multiply_long(expected, a_src, a_src);
 
     guard_page_buffer a_buf(n * sizeof(limb), side);
     guard_page_buffer r_buf(2 * n * sizeof(limb), side);

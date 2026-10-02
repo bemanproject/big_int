@@ -12,9 +12,9 @@
 
 namespace {
 
-using beman::big_int::basic_big_int;
-using beman::big_int::big_int;
-using beman::big_int::uint_multiprecision_t;
+using BEMAN_BIG_INT_NAMESPACE::basic_big_int;
+using BEMAN_BIG_INT_NAMESPACE::big_int;
+using BEMAN_BIG_INT_NAMESPACE::uint_multiprecision_t;
 
 // ----- compile-time sanity -----
 
@@ -230,7 +230,7 @@ TEST(Modulus, CompoundAssignmentMultiLimbDivisorPrimitive) {
 #else
     // uint128_t spans multiple limbs: exercises the integer-rhs slow path in
     // operator%= where to_limbs(...) yields a multi-limb span.
-    using beman::big_int::detail::uint128_t;
+    using BEMAN_BIG_INT_NAMESPACE::detail::uint128_t;
 
     const uint128_t divisor  = (static_cast<uint128_t>(1) << 100) + uint128_t{12345};
     const big_int   big_div  = big_int{divisor};

@@ -36,13 +36,14 @@ static auto do_one_test() -> bool;
 
 static auto do_one_test() -> bool {
 
-    using ring_allocator_type = util::ring_allocator<beman::big_int::uint_multiprecision_t, std::size_t{0x2000U}>;
+    using ring_allocator_type =
+        util::ring_allocator<BEMAN_BIG_INT_NAMESPACE::uint_multiprecision_t, std::size_t{0x2000U}>;
 
-    using ring_big_int_type = beman::big_int::basic_big_int<beman::big_int::big_int::inplace_bits,
-                                                            beman::big_int::uint_multiprecision_t,
-                                                            ring_allocator_type>;
+    using ring_big_int_type = BEMAN_BIG_INT_NAMESPACE::basic_big_int<BEMAN_BIG_INT_NAMESPACE::big_int::inplace_bits,
+                                                                     BEMAN_BIG_INT_NAMESPACE::uint_multiprecision_t,
+                                                                     ring_allocator_type>;
 
-    using namespace beman::big_int::literals;
+    using namespace BEMAN_BIG_INT_NAMESPACE::literals;
 
     ring_big_int_type val_a{};
     ring_big_int_type val_b{};

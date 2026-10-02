@@ -23,8 +23,8 @@
 
 namespace {
 
-namespace detail = beman::big_int::detail;
-using uint_t     = beman::big_int::uint_multiprecision_t;
+namespace detail = BEMAN_BIG_INT_NAMESPACE::detail;
+using uint_t     = BEMAN_BIG_INT_NAMESPACE::uint_multiprecision_t;
 
 constexpr uint_t limb_max = std::numeric_limits<uint_t>::max();
 
@@ -153,7 +153,7 @@ TEST(DivisionDivappr, AdversarialPatterns) {
             // runs of (d1, d0) pairs in the windows.
             {
                 std::vector<uint_t> d(s, 0);
-                d.back() = uint_t{1} << (beman::big_int::detail::width_v<uint_t> - 1);
+                d.back() = uint_t{1} << (BEMAN_BIG_INT_NAMESPACE::detail::width_v<uint_t> - 1);
                 d[0]     = 1;
                 check_divappr(std::vector<uint_t>(m, limb_max), d);
             }
@@ -497,7 +497,7 @@ TEST(DivisionDivQ, MaximalQuotientCorners) {
 TEST(DivisionDivQ, OperatorSlashAgreesWithDivRem) {
     // Public-path check at sizes inside the divide-and-conquer band on
     // every architecture (s past the x86-64 gates), all sign combinations.
-    using big_int = beman::big_int::big_int;
+    using big_int = BEMAN_BIG_INT_NAMESPACE::big_int;
     std::mt19937_64 rng{0x5c4u};
 
     const auto make = [&](const std::size_t limbs, const bool negative) {

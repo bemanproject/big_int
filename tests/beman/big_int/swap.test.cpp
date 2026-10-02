@@ -20,10 +20,10 @@
 
 namespace {
 
-using beman::big_int::basic_big_int;
-using beman::big_int::big_int;
-using beman::big_int::to_string;
-using beman::big_int::uint_multiprecision_t;
+using BEMAN_BIG_INT_NAMESPACE::basic_big_int;
+using BEMAN_BIG_INT_NAMESPACE::big_int;
+using BEMAN_BIG_INT_NAMESPACE::to_string;
+using BEMAN_BIG_INT_NAMESPACE::uint_multiprecision_t;
 
 // A wide instantiation: inplace_capacity == 256 / 64 == 4, so values up to four
 // limbs live inline and the element-wise inline-swap loop runs over four limbs.
@@ -52,7 +52,7 @@ static_assert(noexcept(std::declval<big_int&>().swap(std::declval<big_int&>())))
 
 // std::pmr::polymorphic_allocator neither propagates on swap nor is always-equal,
 // so its member swap carries a narrow (potentially-throwing) contract.
-using pmr_big_int = beman::big_int::pmr::big_int;
+using pmr_big_int = BEMAN_BIG_INT_NAMESPACE::pmr::big_int;
 static_assert(!noexcept(std::declval<pmr_big_int&>().swap(std::declval<pmr_big_int&>())));
 
 // The non-member overload returns void and is found by argument-dependent lookup,

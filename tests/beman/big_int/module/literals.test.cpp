@@ -6,7 +6,8 @@
 // everything that needs a library macro (BEMAN_BIG_INT_*) or a header
 // (testing.hpp, beman/big_int.hpp) stripped: macros do not cross a module
 // boundary, and including a public header under BEMAN_BIG_INT_BUILD_MODULE is
-// ill-formed.
+// ill-formed. BEMAN_BIG_INT_NAMESPACE is the exception: CMake passes it on the
+// command line.
 //
 // Diagnostic suppression below uses raw compiler pragmas rather than the
 // library's BEMAN_BIG_INT_DIAGNOSTIC_* macros, for the same reason.
@@ -22,9 +23,9 @@
 import beman.big_int;
 namespace {
 
-using namespace beman::big_int::literals;
+using namespace BEMAN_BIG_INT_NAMESPACE::literals;
 
-using beman::big_int::big_int;
+using BEMAN_BIG_INT_NAMESPACE::big_int;
 
 // [big.int.literal]
 // `operator""N`, `operator""_n` and `operator""_N` delegate to `operator""n`, so

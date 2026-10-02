@@ -15,9 +15,9 @@
 
 namespace {
 
-using beman::big_int::big_int;
-using beman::big_int::uint_multiprecision_t;
-using beman::big_int::detail::int_multiprecision_t;
+using BEMAN_BIG_INT_NAMESPACE::big_int;
+using BEMAN_BIG_INT_NAMESPACE::uint_multiprecision_t;
+using BEMAN_BIG_INT_NAMESPACE::detail::int_multiprecision_t;
 
 TEST(IncrementDecrement, PrefixIncrement) {
     big_int x{41};
@@ -197,7 +197,7 @@ TEST(IncrementDecrement, BitwiseNotCanAllocate) {
 
 constexpr std::size_t limb_bits = std::size_t{std::numeric_limits<uint_multiprecision_t>::digits};
 
-using big_int_256 = beman::big_int::basic_big_int<256>;
+using big_int_256 = BEMAN_BIG_INT_NAMESPACE::basic_big_int<256>;
 
 // `--` and `++` are the only operations that can shrink a magnitude across a
 // limb boundary. is_normalized() lives in testing.hpp.

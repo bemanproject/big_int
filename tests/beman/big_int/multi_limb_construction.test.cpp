@@ -26,12 +26,12 @@ TEST(MultiLimbConstruction, SkippedUnderClang19) {
 
 namespace {
 
-constexpr std::size_t test_limb_bits = sizeof(beman::big_int::uint_multiprecision_t) * CHAR_BIT;
+constexpr std::size_t test_limb_bits = sizeof(BEMAN_BIG_INT_NAMESPACE::uint_multiprecision_t) * CHAR_BIT;
 
     #ifdef BEMAN_BIG_INT_HAS_INT128_FUNDAMENTAL
 
-using i128 = beman::big_int::detail::int128_t;
-using u128 = beman::big_int::detail::uint128_t;
+using i128 = BEMAN_BIG_INT_NAMESPACE::detail::int128_t;
+using u128 = BEMAN_BIG_INT_NAMESPACE::detail::uint128_t;
 
 constexpr u128 make_u128(std::uint64_t high, std::uint64_t low) noexcept {
     return (static_cast<u128>(high) << 64) | static_cast<u128>(low);
@@ -40,15 +40,15 @@ constexpr u128 make_u128(std::uint64_t high, std::uint64_t low) noexcept {
 // ----- compile-time tests -----
 
 consteval bool test_int128_construction_unsigned_large() {
-    const u128              value = make_u128(0xABCDEF0123456789ULL, 0xFEDCBA9876543210ULL);
-    beman::big_int::big_int x(value);
+    const u128                       value = make_u128(0xABCDEF0123456789ULL, 0xFEDCBA9876543210ULL);
+    BEMAN_BIG_INT_NAMESPACE::big_int x(value);
     return static_cast<u128>(x) == value;
 }
 static_assert(test_int128_construction_unsigned_large());
 
 consteval bool test_int128_construction_signed_negative() {
-    const i128              value = -static_cast<i128>(make_u128(0x1234567890ABCDEFULL, 0x0123456789ABCDEFULL));
-    beman::big_int::big_int x(value);
+    const i128 value = -static_cast<i128>(make_u128(0x1234567890ABCDEFULL, 0x0123456789ABCDEFULL));
+    BEMAN_BIG_INT_NAMESPACE::big_int x(value);
     return static_cast<i128>(x) == value;
 }
 static_assert(test_int128_construction_signed_negative());
@@ -59,8 +59,8 @@ TEST(MultiLimbConstruction, FromUnsignedInt128SmallValueFitsInplace) {
     // Value statically requires multiple limbs, but compresses to a single limb at runtime.
     // Exercises the inplace-fit shortcut inside `assign_magnitude` when
     // `value_limbs > inplace_capacity`.
-    const u128              value = 42U;
-    beman::big_int::big_int x(value);
+    const u128                       value = 42U;
+    BEMAN_BIG_INT_NAMESPACE::big_int x(value);
     EXPECT_EQ(x, 42U);
     EXPECT_EQ(x.representation().size(), 1U);
 }
@@ -68,8 +68,8 @@ TEST(MultiLimbConstruction, FromUnsignedInt128SmallValueFitsInplace) {
 TEST(MultiLimbConstruction, FromUnsignedInt128LargeValueGrows) {
     // High limb is nonzero so the inplace shortcut cannot trigger on `big_int<64>`;
     // the constructor must `grow()` to hold both limbs.
-    const u128              value = make_u128(0xABCDEF0123456789ULL, 0xFEDCBA9876543210ULL);
-    beman::big_int::big_int x(value);
+    const u128                       value = make_u128(0xABCDEF0123456789ULL, 0xFEDCBA9876543210ULL);
+    BEMAN_BIG_INT_NAMESPACE::big_int x(value);
     EXPECT_TRUE(x == value);
     EXPECT_EQ(static_cast<u128>(x), value);
     if constexpr (test_limb_bits == 64) {
@@ -80,27 +80,27 @@ TEST(MultiLimbConstruction, FromUnsignedInt128LargeValueGrows) {
 }
 
 TEST(MultiLimbConstruction, FromUnsignedInt128MaxValue) {
-    const u128              value = static_cast<u128>(-1);
-    beman::big_int::big_int x(value);
+    const u128                       value = static_cast<u128>(-1);
+    BEMAN_BIG_INT_NAMESPACE::big_int x(value);
     EXPECT_EQ(static_cast<u128>(x), value);
 }
 
 TEST(MultiLimbConstruction, FromSignedInt128Negative) {
-    const i128              value = -static_cast<i128>(make_u128(0x1234567890ABCDEFULL, 0x0123456789ABCDEFULL));
-    beman::big_int::big_int x(value);
+    const i128 value = -static_cast<i128>(make_u128(0x1234567890ABCDEFULL, 0x0123456789ABCDEFULL));
+    BEMAN_BIG_INT_NAMESPACE::big_int x(value);
     EXPECT_EQ(static_cast<i128>(x), value);
 }
 
 TEST(MultiLimbConstruction, FromSignedInt128MinValue) {
     // i128 minimum: high limb is 0x8000...000, low limb zero.
-    const i128              value = static_cast<i128>(make_u128(0x8000000000000000ULL, 0));
-    beman::big_int::big_int x(value);
+    const i128                       value = static_cast<i128>(make_u128(0x8000000000000000ULL, 0));
+    BEMAN_BIG_INT_NAMESPACE::big_int x(value);
     EXPECT_EQ(static_cast<i128>(x), value);
 }
 
 TEST(MultiLimbConstruction, FromSignedInt128Positive) {
-    const i128              value = static_cast<i128>(make_u128(0x1234567890ABCDEFULL, 0x0123456789ABCDEFULL));
-    beman::big_int::big_int x(value);
+    const i128 value = static_cast<i128>(make_u128(0x1234567890ABCDEFULL, 0x0123456789ABCDEFULL));
+    BEMAN_BIG_INT_NAMESPACE::big_int x(value);
     EXPECT_EQ(static_cast<i128>(x), value);
 }
 
@@ -108,38 +108,38 @@ TEST(MultiLimbConstruction, FromInt128InplacePathLargeBigInt) {
     // basic_big_int<256> has enough inplace capacity to hold a 128-bit value
     // (4 limbs on 64-bit limbs, 8 on 32-bit limbs), so `value_limbs <= inplace_capacity`
     // and `assign_magnitude` skips the grow check entirely.
-    const u128                         value = make_u128(0xABCDEF0123456789ULL, 0xFEDCBA9876543210ULL);
-    beman::big_int::basic_big_int<256> x(value);
+    const u128                                  value = make_u128(0xABCDEF0123456789ULL, 0xFEDCBA9876543210ULL);
+    BEMAN_BIG_INT_NAMESPACE::basic_big_int<256> x(value);
     EXPECT_EQ(static_cast<u128>(x), value);
     EXPECT_TRUE(is_inplace(x));
 }
 
 TEST(MultiLimbConstruction, AssignFromUnsignedInt128) {
-    const u128              value = make_u128(0xABCDEF0123456789ULL, 0xFEDCBA9876543210ULL);
-    beman::big_int::big_int x;
+    const u128                       value = make_u128(0xABCDEF0123456789ULL, 0xFEDCBA9876543210ULL);
+    BEMAN_BIG_INT_NAMESPACE::big_int x;
     x = value;
     EXPECT_EQ(static_cast<u128>(x), value);
 }
 
 TEST(MultiLimbConstruction, AssignFromSignedInt128Negative) {
-    const i128              value = -static_cast<i128>(make_u128(0xABCDEF0123456789ULL, 0xFEDCBA9876543210ULL));
-    beman::big_int::big_int x;
+    const i128 value = -static_cast<i128>(make_u128(0xABCDEF0123456789ULL, 0xFEDCBA9876543210ULL));
+    BEMAN_BIG_INT_NAMESPACE::big_int x;
     x = value;
     EXPECT_EQ(static_cast<i128>(x), value);
 }
 
 TEST(MultiLimbConstruction, AssignOverwritesWithLargerInt128) {
     // Start with a small one-limb value, then assign a multi-limb value.
-    beman::big_int::big_int x(1);
-    const u128              value = make_u128(0xABCDEF0123456789ULL, 0xFEDCBA9876543210ULL);
-    x                             = value;
+    BEMAN_BIG_INT_NAMESPACE::big_int x(1);
+    const u128                       value = make_u128(0xABCDEF0123456789ULL, 0xFEDCBA9876543210ULL);
+    x                                      = value;
     EXPECT_EQ(static_cast<u128>(x), value);
 }
 
 TEST(MultiLimbConstruction, ConstructFromInt128WithAllocator) {
-    std::allocator<beman::big_int::uint_multiprecision_t> a;
-    const u128              value = make_u128(0xABCDEF0123456789ULL, 0xFEDCBA9876543210ULL);
-    beman::big_int::big_int x(value, a);
+    std::allocator<BEMAN_BIG_INT_NAMESPACE::uint_multiprecision_t> a;
+    const u128                       value = make_u128(0xABCDEF0123456789ULL, 0xFEDCBA9876543210ULL);
+    BEMAN_BIG_INT_NAMESPACE::big_int x(value, a);
     EXPECT_EQ(static_cast<u128>(x), value);
 }
 
@@ -160,7 +160,7 @@ using bi96  = bit_int<96>;
 
 consteval bool test_bitint96_construction() {
     const bui96 value = (static_cast<bui96>(0xCAFEBABEU) << 64) | static_cast<bui96>(0xDEADBEEF12345678ULL);
-    beman::big_int::big_int x(value);
+    BEMAN_BIG_INT_NAMESPACE::big_int x(value);
     return static_cast<bui96>(x) == value;
 }
 static_assert(test_bitint96_construction());
@@ -170,8 +170,8 @@ static_assert(test_bitint96_construction());
 TEST(MultiLimbConstruction, FromUnsignedBitInt96Small) {
     // 96-bit static width forces the multi-limb path on 32- and 64-bit limbs;
     // small magnitude exercises the trim/inplace-shortcut.
-    const bui96             value = 42U;
-    beman::big_int::big_int x(value);
+    const bui96                      value = 42U;
+    BEMAN_BIG_INT_NAMESPACE::big_int x(value);
     EXPECT_EQ(x, 42U);
     EXPECT_EQ(x.representation().size(), 1U);
 }
@@ -179,27 +179,27 @@ TEST(MultiLimbConstruction, FromUnsignedBitInt96Small) {
 TEST(MultiLimbConstruction, FromUnsignedBitInt96Large) {
     // Set bits in the upper portion to force multi-limb storage on 64-bit limbs.
     const bui96 value = (static_cast<bui96>(0xCAFEBABEU) << 64) | static_cast<bui96>(0xDEADBEEF12345678ULL);
-    beman::big_int::big_int x(value);
+    BEMAN_BIG_INT_NAMESPACE::big_int x(value);
     EXPECT_TRUE(x == value);
     EXPECT_EQ(static_cast<bui96>(x), value);
 }
 
 TEST(MultiLimbConstruction, FromUnsignedBitInt96Max) {
-    const bui96             value = static_cast<bui96>(-1);
-    beman::big_int::big_int x(value);
+    const bui96                      value = static_cast<bui96>(-1);
+    BEMAN_BIG_INT_NAMESPACE::big_int x(value);
     EXPECT_EQ(static_cast<bui96>(x), value);
 }
 
 TEST(MultiLimbConstruction, FromSignedBitInt96Negative) {
-    const bi96              value = -static_cast<bi96>(0x123456789ABCDEFULL);
-    beman::big_int::big_int x(value);
+    const bi96                       value = -static_cast<bi96>(0x123456789ABCDEFULL);
+    BEMAN_BIG_INT_NAMESPACE::big_int x(value);
     EXPECT_EQ(static_cast<bi96>(x), value);
 }
 
 TEST(MultiLimbConstruction, FromSignedBitInt96LargeNegative) {
     // Lower 64 bits set; magnitude is wider than one 64-bit limb.
-    const bi96              value = -static_cast<bi96>(static_cast<bui96>(0xFFFFFFFFFFFFFFFFULL) << 16);
-    beman::big_int::big_int x(value);
+    const bi96                       value = -static_cast<bi96>(static_cast<bui96>(0xFFFFFFFFFFFFFFFFULL) << 16);
+    BEMAN_BIG_INT_NAMESPACE::big_int x(value);
     EXPECT_EQ(static_cast<bi96>(x), value);
 }
 
@@ -209,16 +209,16 @@ TEST(MultiLimbConstruction, ConstructFromSignedBitInt96WithAllocator) {
     // signed the same way. `std::is_signed_v` is not specified for `_BitInt`, so
     // a standard library that answers false for it would send a signed operand
     // down the unsigned path.
-    std::allocator<beman::big_int::uint_multiprecision_t> a;
-    const bi96              value = -static_cast<bi96>(static_cast<bui96>(0xFFFFFFFFFFFFFFFFULL) << 16);
-    beman::big_int::big_int x(value, a);
+    std::allocator<BEMAN_BIG_INT_NAMESPACE::uint_multiprecision_t> a;
+    const bi96                       value = -static_cast<bi96>(static_cast<bui96>(0xFFFFFFFFFFFFFFFFULL) << 16);
+    BEMAN_BIG_INT_NAMESPACE::big_int x(value, a);
     EXPECT_EQ(static_cast<bi96>(x), value);
     EXPECT_LT(x, 0);
 }
 
 TEST(MultiLimbConstruction, AssignFromUnsignedBitInt96) {
     const bui96 value = (static_cast<bui96>(0xCAFEBABEU) << 64) | static_cast<bui96>(0xDEADBEEF12345678ULL);
-    beman::big_int::big_int x;
+    BEMAN_BIG_INT_NAMESPACE::big_int x;
     x = value;
     EXPECT_EQ(static_cast<bui96>(x), value);
 }
@@ -233,8 +233,8 @@ using bi192  = bit_int<192>;
 // ----- compile-time tests -----
 
 consteval bool test_bitint192_construction() {
-    const bui192            value = (static_cast<bui192>(1) << 191) | static_cast<bui192>(0xDEADBEEFULL);
-    beman::big_int::big_int x(value);
+    const bui192                     value = (static_cast<bui192>(1) << 191) | static_cast<bui192>(0xDEADBEEFULL);
+    BEMAN_BIG_INT_NAMESPACE::big_int x(value);
     return static_cast<bui192>(x) == value;
 }
 static_assert(test_bitint192_construction());
@@ -242,15 +242,15 @@ static_assert(test_bitint192_construction());
 // ----- runtime tests -----
 
 TEST(MultiLimbConstruction, FromUnsignedBitInt192) {
-    const bui192            value = (static_cast<bui192>(1) << 191) | (static_cast<bui192>(0xCAFEBABEU) << 64) |
-                                    static_cast<bui192>(0xDEADBEEFULL);
-    beman::big_int::big_int x(value);
+    const bui192 value = (static_cast<bui192>(1) << 191) | (static_cast<bui192>(0xCAFEBABEU) << 64) |
+                         static_cast<bui192>(0xDEADBEEFULL);
+    BEMAN_BIG_INT_NAMESPACE::big_int x(value);
     EXPECT_EQ(static_cast<bui192>(x), value);
 }
 
 TEST(MultiLimbConstruction, FromUnsignedBitInt192Max) {
-    const bui192            value = static_cast<bui192>(-1);
-    beman::big_int::big_int x(value);
+    const bui192                     value = static_cast<bui192>(-1);
+    BEMAN_BIG_INT_NAMESPACE::big_int x(value);
     EXPECT_EQ(static_cast<bui192>(x), value);
 }
 
@@ -260,28 +260,28 @@ TEST(MultiLimbConstruction, FromUnsignedBitInt192InplacePath) {
     // and the constructor never grows.
     const bui192 value = (static_cast<bui192>(1) << 191) | (static_cast<bui192>(0xCAFEBABEU) << 64) |
                          static_cast<bui192>(0xDEADBEEFULL);
-    beman::big_int::basic_big_int<192> x(value);
+    BEMAN_BIG_INT_NAMESPACE::basic_big_int<192> x(value);
     EXPECT_EQ(static_cast<bui192>(x), value);
     EXPECT_TRUE(is_inplace(x));
 }
 
 TEST(MultiLimbConstruction, FromSignedBitInt192Negative) {
     const bi192 value = -static_cast<bi192>((static_cast<bui192>(1) << 130) | static_cast<bui192>(0xDEADBEEFULL));
-    beman::big_int::big_int x(value);
+    BEMAN_BIG_INT_NAMESPACE::big_int x(value);
     EXPECT_EQ(static_cast<bi192>(x), value);
 }
 
 TEST(MultiLimbConstruction, FromSignedBitInt192Min) {
     // i192 minimum: -2^191.
-    const bi192             value = -(static_cast<bi192>(1) << 190) - (static_cast<bi192>(1) << 190);
-    beman::big_int::big_int x(value);
+    const bi192                      value = -(static_cast<bi192>(1) << 190) - (static_cast<bi192>(1) << 190);
+    BEMAN_BIG_INT_NAMESPACE::big_int x(value);
     EXPECT_EQ(static_cast<bi192>(x), value);
 }
 
 TEST(MultiLimbConstruction, AssignFromUnsignedBitInt192) {
-    const bui192            value = (static_cast<bui192>(1) << 191) | (static_cast<bui192>(0xCAFEBABEU) << 64) |
-                                    static_cast<bui192>(0xDEADBEEFULL);
-    beman::big_int::big_int x;
+    const bui192 value = (static_cast<bui192>(1) << 191) | (static_cast<bui192>(0xCAFEBABEU) << 64) |
+                         static_cast<bui192>(0xDEADBEEFULL);
+    BEMAN_BIG_INT_NAMESPACE::big_int x;
     x = value;
     EXPECT_EQ(static_cast<bui192>(x), value);
 }

@@ -23,8 +23,8 @@
 
 namespace {
 
-namespace detail = beman::big_int::detail;
-using uint_t     = beman::big_int::uint_multiprecision_t;
+namespace detail = BEMAN_BIG_INT_NAMESPACE::detail;
+using uint_t     = BEMAN_BIG_INT_NAMESPACE::uint_multiprecision_t;
 
 constexpr uint_t      limb_max  = std::numeric_limits<uint_t>::max();
 constexpr std::size_t limb_bits = detail::width_v<uint_t>;

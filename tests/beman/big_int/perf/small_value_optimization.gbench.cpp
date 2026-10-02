@@ -31,8 +31,8 @@
 
 namespace {
 
-using big_int_64  = beman::big_int::big_int;            // basic_big_int<64>: 1 inplace limb
-using big_int_128 = beman::big_int::basic_big_int<128>; // 2 inplace limbs
+using big_int_64  = BEMAN_BIG_INT_NAMESPACE::big_int;            // basic_big_int<64>: 1 inplace limb
+using big_int_128 = BEMAN_BIG_INT_NAMESPACE::basic_big_int<128>; // 2 inplace limbs
 
 // Compose a `(hi << 64) | lo` value of the target type. Works uniformly for the
 // builtin 128-bit integer and for big_int, both of which support `<<` and `|`.

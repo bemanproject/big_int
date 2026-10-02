@@ -15,9 +15,9 @@
 
 namespace {
 
-using beman::big_int::basic_big_int;
-using beman::big_int::big_int;
-using beman::big_int::uint_multiprecision_t;
+using BEMAN_BIG_INT_NAMESPACE::basic_big_int;
+using BEMAN_BIG_INT_NAMESPACE::big_int;
+using BEMAN_BIG_INT_NAMESPACE::uint_multiprecision_t;
 
 // ----- compile-time sanity -----
 // See addition.test.cpp for why we compare big_int-to-big_int in consteval tests.
@@ -554,7 +554,7 @@ consteval bool ce_borrow_out_wraps() {
     uint_multiprecision_t       a[1] = {1};
     const uint_multiprecision_t b[1] = {2};
     const bool                  borrow =
-        beman::big_int::detail::subtract_unsigned_spans_borrow_out(std::span{a}, std::span{a}, std::span{b});
+        BEMAN_BIG_INT_NAMESPACE::detail::subtract_unsigned_spans_borrow_out(std::span{a}, std::span{a}, std::span{b});
     return borrow && a[0] == limb_max;
 }
 static_assert(ce_borrow_out_wraps());
@@ -565,9 +565,9 @@ TEST(SubtractBorrowOut, NoBorrowMatchesPlainSubtract) {
     uint_multiprecision_t       expected[3]{};
     uint_multiprecision_t       actual[3]{};
 
-    beman::big_int::detail::subtract_unsigned_spans(std::span{expected}, std::span{a}, std::span{b});
-    const bool borrow =
-        beman::big_int::detail::subtract_unsigned_spans_borrow_out(std::span{actual}, std::span{a}, std::span{b});
+    BEMAN_BIG_INT_NAMESPACE::detail::subtract_unsigned_spans(std::span{expected}, std::span{a}, std::span{b});
+    const bool borrow = BEMAN_BIG_INT_NAMESPACE::detail::subtract_unsigned_spans_borrow_out(
+        std::span{actual}, std::span{a}, std::span{b});
 
     EXPECT_FALSE(borrow);
     EXPECT_TRUE(std::ranges::equal(std::span{expected}, std::span{actual}));
@@ -577,7 +577,7 @@ TEST(SubtractBorrowOut, EqualValuesYieldZeroNoBorrow) {
     const uint_multiprecision_t a[2] = {limb_max, 42};
     uint_multiprecision_t       r[2]{};
     const bool                  borrow =
-        beman::big_int::detail::subtract_unsigned_spans_borrow_out(std::span{r}, std::span{a}, std::span{a});
+        BEMAN_BIG_INT_NAMESPACE::detail::subtract_unsigned_spans_borrow_out(std::span{r}, std::span{a}, std::span{a});
     EXPECT_FALSE(borrow);
     EXPECT_EQ(r[0], 0u);
     EXPECT_EQ(r[1], 0u);
@@ -589,7 +589,7 @@ TEST(SubtractBorrowOut, BorrowWrapsMultiLimb) {
     const uint_multiprecision_t b[2] = {1, 1};
     uint_multiprecision_t       r[2]{};
     const bool                  borrow =
-        beman::big_int::detail::subtract_unsigned_spans_borrow_out(std::span{r}, std::span{a}, std::span{b});
+        BEMAN_BIG_INT_NAMESPACE::detail::subtract_unsigned_spans_borrow_out(std::span{r}, std::span{a}, std::span{b});
     EXPECT_TRUE(borrow);
     EXPECT_EQ(r[0], limb_max);
     EXPECT_EQ(r[1], limb_max);
@@ -601,7 +601,7 @@ TEST(SubtractBorrowOut, RaggedSizesBorrowRipplesThroughTail) {
     const uint_multiprecision_t b[1] = {1};
     uint_multiprecision_t       r[3]{};
     const bool                  borrow =
-        beman::big_int::detail::subtract_unsigned_spans_borrow_out(std::span{r}, std::span{a}, std::span{b});
+        BEMAN_BIG_INT_NAMESPACE::detail::subtract_unsigned_spans_borrow_out(std::span{r}, std::span{a}, std::span{b});
     EXPECT_FALSE(borrow);
     EXPECT_EQ(r[0], limb_max);
     EXPECT_EQ(r[1], limb_max);
@@ -614,7 +614,7 @@ TEST(SubtractBorrowOut, RaggedSizesFullSpanBorrow) {
     const uint_multiprecision_t b[1] = {1};
     uint_multiprecision_t       r[3]{};
     const bool                  borrow =
-        beman::big_int::detail::subtract_unsigned_spans_borrow_out(std::span{r}, std::span{a}, std::span{b});
+        BEMAN_BIG_INT_NAMESPACE::detail::subtract_unsigned_spans_borrow_out(std::span{r}, std::span{a}, std::span{b});
     EXPECT_TRUE(borrow);
     EXPECT_EQ(r[0], limb_max);
     EXPECT_EQ(r[1], limb_max);
@@ -625,7 +625,7 @@ TEST(SubtractBorrowOut, ResultMayAliasA) {
     uint_multiprecision_t       a[2] = {3, 5};
     const uint_multiprecision_t b[2] = {4, 5};
     const bool                  borrow =
-        beman::big_int::detail::subtract_unsigned_spans_borrow_out(std::span{a}, std::span{a}, std::span{b});
+        BEMAN_BIG_INT_NAMESPACE::detail::subtract_unsigned_spans_borrow_out(std::span{a}, std::span{a}, std::span{b});
     EXPECT_TRUE(borrow);
     EXPECT_EQ(a[0], limb_max);
     EXPECT_EQ(a[1], limb_max);
@@ -637,8 +637,8 @@ TEST(SubtractBorrowOut, RoundTripWithAddRecoversOperand) {
     const uint_multiprecision_t b[3] = {limb_max, limb_max, 0x9abc};
     uint_multiprecision_t       r[3]{};
     const bool                  borrow =
-        beman::big_int::detail::subtract_unsigned_spans_borrow_out(std::span{r}, std::span{a}, std::span{b});
-    const bool carry = beman::big_int::detail::add_unsigned_spans(std::span{r}, std::span{r}, std::span{b});
+        BEMAN_BIG_INT_NAMESPACE::detail::subtract_unsigned_spans_borrow_out(std::span{r}, std::span{a}, std::span{b});
+    const bool carry = BEMAN_BIG_INT_NAMESPACE::detail::add_unsigned_spans(std::span{r}, std::span{r}, std::span{b});
     EXPECT_EQ(borrow, carry);
     EXPECT_TRUE(std::ranges::equal(std::span{r}, std::span{a}));
 }

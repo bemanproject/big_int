@@ -13,25 +13,25 @@ namespace local {
 auto run_one_mersenne(const unsigned p2) -> void {
     using cpp_int_type =
         boost::multiprecision::number<boost::multiprecision::cpp_int_backend<>, boost::multiprecision::et_off>;
-    using big_int_type = beman::big_int::big_int;
+    using big_int_type = BEMAN_BIG_INT_NAMESPACE::big_int;
 
     // Mersenne value (2^p2 - 1) computed via square-and-multiply pow().
     // The exponents below produce limb counts well above the Toom-Cook 3
     // cutoff (detail::toom_cook_3_cutoff) at multiple recursion depths.
 
     const cpp_int_type cpp_int_two{2};
-    const cpp_int_type cpp_int_mersenne{cpp_int_type{beman::big_int::pow(cpp_int_two, p2)} - 1};
+    const cpp_int_type cpp_int_mersenne{cpp_int_type{BEMAN_BIG_INT_NAMESPACE::pow(cpp_int_two, p2)} - 1};
 
     const big_int_type big_int_two{2};
-    const big_int_type big_int_mersenne{big_int_type{beman::big_int::pow(big_int_two, p2)} - 1};
+    const big_int_type big_int_mersenne{big_int_type{BEMAN_BIG_INT_NAMESPACE::pow(big_int_two, p2)} - 1};
 
     const std::span<const ::boost::multiprecision::limb_type> cpp_int_rep{cpp_int_mersenne.backend().limbs(),
                                                                           cpp_int_mersenne.backend().size()};
     const auto big_int_bytes = std::as_bytes(big_int_mersenne.representation());
     const auto cpp_int_bytes = std::as_bytes(cpp_int_rep);
 
-    const auto big_int_sig = beman::big_int::significant_byte_len(big_int_bytes);
-    const auto cpp_int_sig = beman::big_int::significant_byte_len(cpp_int_bytes);
+    const auto big_int_sig = BEMAN_BIG_INT_NAMESPACE::significant_byte_len(big_int_bytes);
+    const auto cpp_int_sig = BEMAN_BIG_INT_NAMESPACE::significant_byte_len(cpp_int_bytes);
 
     const bool result_length_is_ok{big_int_sig == cpp_int_sig};
 

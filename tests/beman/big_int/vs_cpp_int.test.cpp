@@ -10,7 +10,7 @@
 
 namespace {
 
-namespace bmp = ::beman::big_int::boost_mp_testing;
+namespace bmp = ::BEMAN_BIG_INT_NAMESPACE::boost_mp_testing;
 using bmp::check_cpp_int_equal;
 using bmp::random_big_int;
 

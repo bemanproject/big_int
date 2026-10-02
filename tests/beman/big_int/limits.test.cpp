@@ -25,11 +25,11 @@
 
 namespace {
 
-using beman::big_int::basic_big_int;
-using beman::big_int::big_int;
-using beman::big_int::uint_multiprecision_t;
+using BEMAN_BIG_INT_NAMESPACE::basic_big_int;
+using BEMAN_BIG_INT_NAMESPACE::big_int;
+using BEMAN_BIG_INT_NAMESPACE::uint_multiprecision_t;
 
-using pmr_big_int  = beman::big_int::pmr::big_int;
+using pmr_big_int  = BEMAN_BIG_INT_NAMESPACE::pmr::big_int;
 using wide_big_int = basic_big_int<512>;
 
 using lim       = std::numeric_limits<big_int>;

@@ -27,17 +27,20 @@
 
 namespace beman_big_int_abi {
 
-beman::big_int::big_int twice(const beman::big_int::big_int& x) { return x + x; }
+BEMAN_BIG_INT_NAMESPACE::big_int twice(const BEMAN_BIG_INT_NAMESPACE::big_int& x) { return x + x; }
 
-beman::big_int::pmr::big_int pmr_twice(const beman::big_int::pmr::big_int& x) { return x + x; }
+BEMAN_BIG_INT_NAMESPACE::pmr::big_int pmr_twice(const BEMAN_BIG_INT_NAMESPACE::pmr::big_int& x) { return x + x; }
 
-std::string decimal(const beman::big_int::big_int& x) { return beman::big_int::to_string(x); }
+std::string decimal(const BEMAN_BIG_INT_NAMESPACE::big_int& x) { return BEMAN_BIG_INT_NAMESPACE::to_string(x); }
 
-std::size_t hashed(const beman::big_int::big_int& x) { return std::hash<beman::big_int::big_int>{}(x); }
+std::size_t hashed(const BEMAN_BIG_INT_NAMESPACE::big_int& x) {
+    return std::hash<BEMAN_BIG_INT_NAMESPACE::big_int>{}(x);
+}
 
-beman::big_int::big_int parse(const std::string& text) {
-    beman::big_int::big_int     out;
-    [[maybe_unused]] const auto result = beman::big_int::from_chars(text.data(), text.data() + text.size(), out, 10);
+BEMAN_BIG_INT_NAMESPACE::big_int parse(const std::string& text) {
+    BEMAN_BIG_INT_NAMESPACE::big_int out;
+    [[maybe_unused]] const auto      result =
+        BEMAN_BIG_INT_NAMESPACE::from_chars(text.data(), text.data() + text.size(), out, 10);
     return out;
 }
 

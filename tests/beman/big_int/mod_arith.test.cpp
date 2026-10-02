@@ -13,8 +13,8 @@
 
 namespace {
 
-using ::beman::big_int::detail::ntt_modulus;
-using ::beman::big_int::detail::ntt_primes;
+using ::BEMAN_BIG_INT_NAMESPACE::detail::ntt_modulus;
+using ::BEMAN_BIG_INT_NAMESPACE::detail::ntt_primes;
 using ::boost::multiprecision::cpp_int;
 
 // --------------------------------------------------------------------------

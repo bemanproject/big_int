@@ -13,12 +13,12 @@
 
 namespace {
 
-using beman::big_int::uint_multiprecision_t;
-using beman::big_int::detail::int_multiprecision_t;
+using BEMAN_BIG_INT_NAMESPACE::uint_multiprecision_t;
+using BEMAN_BIG_INT_NAMESPACE::detail::int_multiprecision_t;
 
 TEST(WideOps, WideFromToIntUint) {
-    using beman::big_int::detail::wide;
-    using beman::big_int::detail::wider_t;
+    using BEMAN_BIG_INT_NAMESPACE::detail::wide;
+    using BEMAN_BIG_INT_NAMESPACE::detail::wider_t;
 
     constexpr wider_t<uint_multiprecision_t> x1 = (static_cast<wider_t<uint_multiprecision_t>>(1ull) << 64) | 9ull;
     constexpr wider_t<uint_multiprecision_t> x2 =
@@ -47,8 +47,8 @@ TEST(WideOps, WideFromToIntUint) {
 }
 
 TEST(WideOps, WideFromToIntInt) {
-    using beman::big_int::detail::wide;
-    using beman::big_int::detail::wider_t;
+    using BEMAN_BIG_INT_NAMESPACE::detail::wide;
+    using BEMAN_BIG_INT_NAMESPACE::detail::wider_t;
 
     constexpr wider_t<int_multiprecision_t> x1 = static_cast<wider_t<int_multiprecision_t>>(-1);
     constexpr wider_t<int_multiprecision_t> x2 = static_cast<wider_t<int_multiprecision_t>>(1);
@@ -75,7 +75,7 @@ TEST(WideOps, WideFromToIntInt) {
 }
 
 TEST(WideOps, WideEquality) {
-    using beman::big_int::detail::wide;
+    using BEMAN_BIG_INT_NAMESPACE::detail::wide;
 
     constexpr wide<uint_multiprecision_t> a{.low_bits = 1ull, .high_bits = 2ull};
     constexpr wide<uint_multiprecision_t> b{.low_bits = 1ull, .high_bits = 2ull};
@@ -97,7 +97,7 @@ TEST(WideOps, WideEquality) {
 }
 
 TEST(WideOps, WideningMulInt) {
-    using beman::big_int::detail::widening_mul;
+    using BEMAN_BIG_INT_NAMESPACE::detail::widening_mul;
 
     const auto r1 = widening_mul<int_multiprecision_t>(0, 0);
     const auto r2 = widening_mul<int_multiprecision_t>(1, 1);
@@ -121,7 +121,7 @@ TEST(WideOps, WideningMulInt) {
 }
 
 TEST(WideOps, WideningMulUint) {
-    using beman::big_int::detail::widening_mul;
+    using BEMAN_BIG_INT_NAMESPACE::detail::widening_mul;
 
     const auto r1 = widening_mul<uint_multiprecision_t>(0ull, 0ull);
     const auto r2 = widening_mul<uint_multiprecision_t>(1ull, 1ull);
@@ -146,8 +146,8 @@ TEST(WideOps, WideningMulUint) {
 }
 
 TEST(WideOps, FunnelShlInt) {
-    using beman::big_int::detail::funnel_shl;
-    using beman::big_int::detail::wide;
+    using BEMAN_BIG_INT_NAMESPACE::detail::funnel_shl;
+    using BEMAN_BIG_INT_NAMESPACE::detail::wide;
 
     constexpr wide<int_multiprecision_t> x{
         .low_bits  = static_cast<int_multiprecision_t>(0x0102'0304'0506'0708ull),
@@ -169,8 +169,8 @@ TEST(WideOps, FunnelShlInt) {
 }
 
 TEST(WideOps, FunnelShlUint) {
-    using beman::big_int::detail::funnel_shl;
-    using beman::big_int::detail::wide;
+    using BEMAN_BIG_INT_NAMESPACE::detail::funnel_shl;
+    using BEMAN_BIG_INT_NAMESPACE::detail::wide;
 
     constexpr wide<uint_multiprecision_t> x{
         .low_bits  = 0x0123'4567'89AB'CDEFull,
@@ -192,8 +192,8 @@ TEST(WideOps, FunnelShlUint) {
 }
 
 TEST(WideOps, FunnelShrInt) {
-    using beman::big_int::detail::funnel_shr;
-    using beman::big_int::detail::wide;
+    using BEMAN_BIG_INT_NAMESPACE::detail::funnel_shr;
+    using BEMAN_BIG_INT_NAMESPACE::detail::wide;
 
     constexpr wide<int_multiprecision_t> x{
         .low_bits  = static_cast<int_multiprecision_t>(0x0102'0304'0506'0708ull),
@@ -215,8 +215,8 @@ TEST(WideOps, FunnelShrInt) {
 }
 
 TEST(WideOps, FunnelShrUint) {
-    using beman::big_int::detail::funnel_shr;
-    using beman::big_int::detail::wide;
+    using BEMAN_BIG_INT_NAMESPACE::detail::funnel_shr;
+    using BEMAN_BIG_INT_NAMESPACE::detail::wide;
 
     constexpr wide<uint_multiprecision_t> x{
         .low_bits  = 0x0011'2233'4455'6677ull,
@@ -238,7 +238,7 @@ TEST(WideOps, FunnelShrUint) {
 }
 
 TEST(WideOps, OverflowingAddInt) {
-    using beman::big_int::detail::overflowing_add;
+    using BEMAN_BIG_INT_NAMESPACE::detail::overflowing_add;
 
     const auto r1 = overflowing_add<int_multiprecision_t>(0, 0);
     const auto r2 = overflowing_add<int_multiprecision_t>(7, 5);
@@ -262,7 +262,7 @@ TEST(WideOps, OverflowingAddInt) {
 }
 
 TEST(WideOps, OverflowingAddUint) {
-    using beman::big_int::detail::overflowing_add;
+    using BEMAN_BIG_INT_NAMESPACE::detail::overflowing_add;
 
     const auto r1 = overflowing_add<uint_multiprecision_t>(0ull, 0ull);
     const auto r2 = overflowing_add<uint_multiprecision_t>(1ull, 2ull);
@@ -289,8 +289,8 @@ TEST(WideOps, OverflowingAddUint) {
 // Types narrower than int promote in x + y; the overflow must still be seen
 // (the portable path, used by MSVC on ARM64 and in constant evaluation).
 TEST(WideOps, OverflowingAddNarrowUint) {
-    using beman::big_int::detail::carrying_add;
-    using beman::big_int::detail::overflowing_add;
+    using BEMAN_BIG_INT_NAMESPACE::detail::carrying_add;
+    using BEMAN_BIG_INT_NAMESPACE::detail::overflowing_add;
 
     static_assert(overflowing_add<std::uint16_t>(0xFFFFu, 1u).overflow);
     static_assert(overflowing_add<std::uint8_t>(0xFFu, 1u).overflow);
@@ -310,7 +310,7 @@ TEST(WideOps, OverflowingAddNarrowUint) {
 }
 
 TEST(WideOps, OverflowingSubInt) {
-    using beman::big_int::detail::overflowing_sub;
+    using BEMAN_BIG_INT_NAMESPACE::detail::overflowing_sub;
 
     const auto r1 = overflowing_sub<int_multiprecision_t>(0, 0);
     const auto r2 = overflowing_sub<int_multiprecision_t>(7, 5);
@@ -334,7 +334,7 @@ TEST(WideOps, OverflowingSubInt) {
 }
 
 TEST(WideOps, OverflowingSubUint) {
-    using beman::big_int::detail::overflowing_sub;
+    using BEMAN_BIG_INT_NAMESPACE::detail::overflowing_sub;
 
     const auto r1 = overflowing_sub<uint_multiprecision_t>(0ull, 0ull);
     const auto r2 = overflowing_sub<uint_multiprecision_t>(7ull, 5ull);
@@ -359,7 +359,7 @@ TEST(WideOps, OverflowingSubUint) {
 }
 
 TEST(WideOps, OverflowingMulUint) {
-    using beman::big_int::detail::overflowing_mul;
+    using BEMAN_BIG_INT_NAMESPACE::detail::overflowing_mul;
 
     const auto r1 = overflowing_mul<uint_multiprecision_t>(0ull, 7ull);
     const auto r2 = overflowing_mul<uint_multiprecision_t>(1ull, 1ull);
@@ -384,7 +384,7 @@ TEST(WideOps, OverflowingMulUint) {
 }
 
 TEST(WideOps, CarryingAddUint) {
-    using beman::big_int::detail::carrying_add;
+    using BEMAN_BIG_INT_NAMESPACE::detail::carrying_add;
 
     const auto r1 = carrying_add<uint_multiprecision_t>(0ull, 0ull, false);
     const auto r2 = carrying_add<uint_multiprecision_t>(1ull, 2ull, false);
@@ -410,7 +410,7 @@ TEST(WideOps, CarryingAddUint) {
 }
 
 TEST(WideOps, BorrowingSubUint) {
-    using beman::big_int::detail::borrowing_sub;
+    using BEMAN_BIG_INT_NAMESPACE::detail::borrowing_sub;
 
     const auto r1 = borrowing_sub<uint_multiprecision_t>(0ull, 0ull, false);
     const auto r2 = borrowing_sub<uint_multiprecision_t>(5ull, 3ull, false);
@@ -434,8 +434,8 @@ TEST(WideOps, BorrowingSubUint) {
 }
 
 TEST(WideOps, NarrowingDivUint) {
-    using beman::big_int::detail::narrowing_div;
-    using beman::big_int::detail::wide;
+    using BEMAN_BIG_INT_NAMESPACE::detail::narrowing_div;
+    using BEMAN_BIG_INT_NAMESPACE::detail::wide;
 
     const auto r1 = narrowing_div(wide<uint_multiprecision_t>{.low_bits = 5ull, .high_bits = 1ull}, 3ull);
     const auto r2 = narrowing_div(wide<uint_multiprecision_t>{.low_bits = 20ull, .high_bits = 0ull}, 6ull);
@@ -459,8 +459,8 @@ TEST(WideOps, NarrowingDivUint) {
 }
 
 TEST(WideOps, DivideWideByWideFast) {
-    using beman::big_int::detail::divide_wide_by_wide;
-    using beman::big_int::detail::wide;
+    using BEMAN_BIG_INT_NAMESPACE::detail::divide_wide_by_wide;
+    using BEMAN_BIG_INT_NAMESPACE::detail::wide;
 
     // Fast path: T == uint_multiprecision_t, wider_t<T> exists.
     const auto r1 = divide_wide_by_wide(wide<uint_multiprecision_t>{.low_bits = 1ull, .high_bits = 2ull},
@@ -493,8 +493,8 @@ TEST(WideOps, DivideWideByWideFast) {
 }
 
 TEST(WideOps, DivideWideByWidePortable) {
-    using beman::big_int::detail::divide_wide_by_wide_portable;
-    using beman::big_int::detail::wide;
+    using BEMAN_BIG_INT_NAMESPACE::detail::divide_wide_by_wide_portable;
+    using BEMAN_BIG_INT_NAMESPACE::detail::wide;
 
     // Call the portable long-division directly.
     using T = std::uint16_t;
@@ -537,18 +537,18 @@ TEST(WideOps, DivideWideByWidePortable) {
 
 // ----- Moller-Granlund preinv division primitives -----
 
-using beman::big_int::detail::div_2by1_preinv;
-using beman::big_int::detail::div_3by2_preinv;
-using beman::big_int::detail::narrowing_div;
-using beman::big_int::detail::reciprocal_word;
-using beman::big_int::detail::reciprocal_word_3by2;
-using beman::big_int::detail::wide;
-using beman::big_int::detail::widening_mul;
+using BEMAN_BIG_INT_NAMESPACE::detail::div_2by1_preinv;
+using BEMAN_BIG_INT_NAMESPACE::detail::div_3by2_preinv;
+using BEMAN_BIG_INT_NAMESPACE::detail::narrowing_div;
+using BEMAN_BIG_INT_NAMESPACE::detail::reciprocal_word;
+using BEMAN_BIG_INT_NAMESPACE::detail::reciprocal_word_3by2;
+using BEMAN_BIG_INT_NAMESPACE::detail::wide;
+using BEMAN_BIG_INT_NAMESPACE::detail::widening_mul;
 
 TEST(WideOps, WiderTraitMatchesPlatform) {
-    using beman::big_int::detail::has_int128_v;
-    using beman::big_int::detail::has_wider;
-    using beman::big_int::detail::wider_t;
+    using BEMAN_BIG_INT_NAMESPACE::detail::has_int128_v;
+    using BEMAN_BIG_INT_NAMESPACE::detail::has_wider;
+    using BEMAN_BIG_INT_NAMESPACE::detail::wider_t;
 
     static_assert(std::is_same_v<wider_t<std::uint8_t>, std::uint16_t>);
     static_assert(std::is_same_v<wider_t<std::uint16_t>, std::uint32_t>);
@@ -569,7 +569,7 @@ BEMAN_BIG_INT_DIAGNOSTIC_PUSH()
 BEMAN_BIG_INT_DIAGNOSTIC_IGNORED_GCC("-Wuseless-cast")
 
 TEST(WideOps, NarrowingDivPortable) {
-    using beman::big_int::detail::narrowing_div_portable;
+    using BEMAN_BIG_INT_NAMESPACE::detail::narrowing_div_portable;
 
     // Check the bit-by-bit loop with uint16 limbs against uint32 division.
     using T = std::uint16_t;
@@ -614,7 +614,7 @@ TEST(WideOps, NarrowingDivPortable) {
 
     // The portable path must also work during constant evaluation.
     static_assert(narrowing_div_portable(wide<std::uint64_t>{.low_bits = 5u, .high_bits = 1u}, std::uint64_t{3}) ==
-                  beman::big_int::div_result<std::uint64_t>{6'148'914'691'236'517'207ull, 0ull});
+                  BEMAN_BIG_INT_NAMESPACE::div_result<std::uint64_t>{6'148'914'691'236'517'207ull, 0ull});
 }
 
 BEMAN_BIG_INT_DIAGNOSTIC_POP()
@@ -622,8 +622,8 @@ BEMAN_BIG_INT_DIAGNOSTIC_POP()
 // v must equal floor((B^2 - 1) / d) - B, computed independently via wider_t.
 template <class T>
 void check_reciprocal_word(const T d) {
-    using W                        = beman::big_int::detail::wider_t<T>;
-    constexpr std::size_t w        = beman::big_int::detail::width_v<T>;
+    using W                        = BEMAN_BIG_INT_NAMESPACE::detail::wider_t<T>;
+    constexpr std::size_t w        = BEMAN_BIG_INT_NAMESPACE::detail::width_v<T>;
     const W               all_ones = static_cast<W>(static_cast<W>(0) - 1);
     const T               expected = static_cast<T>(all_ones / d - (static_cast<W>(1) << w));
     EXPECT_EQ(reciprocal_word(d), expected) << "d=" << d;
@@ -638,7 +638,7 @@ TEST(WideOps, ReciprocalWordExhaustive16) {
 
 TEST(WideOps, ReciprocalWordLimb) {
     using T                   = uint_multiprecision_t;
-    constexpr std::size_t w   = beman::big_int::detail::width_v<T>;
+    constexpr std::size_t w   = BEMAN_BIG_INT_NAMESPACE::detail::width_v<T>;
     constexpr T           top = T{1} << (w - 1);
     constexpr T           max = std::numeric_limits<T>::max();
 
@@ -657,7 +657,7 @@ TEST(WideOps, ReciprocalWordLimb) {
 // floor((B^2-1)/(B-1)) - B == 1.
 consteval bool ce_reciprocal_word() {
     using T                   = uint_multiprecision_t;
-    constexpr std::size_t w   = beman::big_int::detail::width_v<T>;
+    constexpr std::size_t w   = BEMAN_BIG_INT_NAMESPACE::detail::width_v<T>;
     constexpr T           max = std::numeric_limits<T>::max();
     return reciprocal_word(T{1} << (w - 1)) == max && reciprocal_word(max) == 1;
 }
@@ -667,7 +667,7 @@ static_assert(ce_reciprocal_word());
 // only: (B + v) * <d1,d0> <= B^3 - 1 < (B + v + 1) * <d1,d0>.
 template <class T>
 void check_reciprocal_word_3by2(const T d1, const T d0) {
-    using beman::big_int::detail::carrying_add;
+    using BEMAN_BIG_INT_NAMESPACE::detail::carrying_add;
     const T v = reciprocal_word_3by2(d1, d0);
 
     // 4-limb accumulation of (B + v) * (d1*B + d0) = v*d0 + (v*d1 + d0)*B + d1*B^2.
@@ -705,7 +705,7 @@ TEST(WideOps, ReciprocalWord3by2Exhaustive16) {
 
 TEST(WideOps, ReciprocalWord3by2Limb) {
     using T                   = uint_multiprecision_t;
-    constexpr std::size_t w   = beman::big_int::detail::width_v<T>;
+    constexpr std::size_t w   = BEMAN_BIG_INT_NAMESPACE::detail::width_v<T>;
     constexpr T           top = T{1} << (w - 1);
     constexpr T           max = std::numeric_limits<T>::max();
 
@@ -750,7 +750,7 @@ TEST(WideOps, Div2by1PreinvSweep16) {
 
 TEST(WideOps, Div2by1PreinvLimb) {
     using T                   = uint_multiprecision_t;
-    constexpr std::size_t w   = beman::big_int::detail::width_v<T>;
+    constexpr std::size_t w   = BEMAN_BIG_INT_NAMESPACE::detail::width_v<T>;
     constexpr T           top = T{1} << (w - 1);
     constexpr T           max = std::numeric_limits<T>::max();
 
@@ -769,7 +769,7 @@ TEST(WideOps, Div2by1PreinvLimb) {
 
 consteval bool ce_div_2by1_preinv() {
     using T                 = uint_multiprecision_t;
-    constexpr std::size_t w = beman::big_int::detail::width_v<T>;
+    constexpr std::size_t w = BEMAN_BIG_INT_NAMESPACE::detail::width_v<T>;
     constexpr T           d = T{1} << (w - 1);
     // <d-1, max> / d: quotient max, remainder d - 1.
     const auto r =
@@ -782,7 +782,7 @@ static_assert(ce_div_2by1_preinv());
 // with R < <d1,d0>, using limb arithmetic only.
 template <class T>
 void check_div_3by2(const T u2, const T u1, const T u0, const T d1, const T d0) {
-    using beman::big_int::detail::carrying_add;
+    using BEMAN_BIG_INT_NAMESPACE::detail::carrying_add;
 
     const T    v   = reciprocal_word_3by2(d1, d0);
     const auto got = div_3by2_preinv(u2, u1, u0, d1, d0, v);
@@ -834,7 +834,7 @@ TEST(WideOps, Div3by2PreinvSweep16) {
 
 TEST(WideOps, Div3by2PreinvLimb) {
     using T                   = uint_multiprecision_t;
-    constexpr std::size_t w   = beman::big_int::detail::width_v<T>;
+    constexpr std::size_t w   = BEMAN_BIG_INT_NAMESPACE::detail::width_v<T>;
     constexpr T           top = T{1} << (w - 1);
     constexpr T           max = std::numeric_limits<T>::max();
 
@@ -867,7 +867,7 @@ TEST(WideOps, Div3by2PreinvLimb) {
 
 consteval bool ce_div_3by2_preinv() {
     using T                   = uint_multiprecision_t;
-    constexpr std::size_t w   = beman::big_int::detail::width_v<T>;
+    constexpr std::size_t w   = BEMAN_BIG_INT_NAMESPACE::detail::width_v<T>;
     constexpr T           top = T{1} << (w - 1);
     // <top-1, max, max> / <top, 0>: quotient max, remainder <top-1, max>.
     const auto r = div_3by2_preinv(top - 1,

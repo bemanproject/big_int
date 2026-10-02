@@ -13,7 +13,8 @@
 #include <string>
 #include <string_view>
 
-namespace beman::big_int::fuzz {
+BEMAN_BIG_INT_BEGIN_NAMESPACE
+namespace fuzz {
 
 // Encode a byte buffer as a signed hex string accepted by both
 // beman::big_int::from_chars and boost::cpp_int's string ctor.
@@ -77,7 +78,7 @@ int run(BinOp&& op, const std::uint8_t* data, const std::size_t size, const bool
     const std::string lhs = bytes_to_signed_hex(lhs_data, lhs_size);
     const std::string rhs = bytes_to_signed_hex(rhs_data, rhs_size);
 
-    const auto result = ::beman::big_int::boost_mp_testing::check_cpp_int_equal(
+    const auto result = ::BEMAN_BIG_INT_NAMESPACE::boost_mp_testing::check_cpp_int_equal(
         std::forward<BinOp>(op), std::string_view{lhs}, std::string_view{rhs});
     if (!result) {
         std::fprintf(stderr,
@@ -101,8 +102,8 @@ int run_unary(UnaryOp&& op, const std::uint8_t* data, const std::size_t size, co
 
     const std::string arg = bytes_to_signed_hex(arg_data, arg_size, use_negative);
 
-    const auto result = ::beman::big_int::boost_mp_testing::check_cpp_int_equal_unary(std::forward<UnaryOp>(op),
-                                                                                      std::string_view{arg});
+    const auto result = ::BEMAN_BIG_INT_NAMESPACE::boost_mp_testing::check_cpp_int_equal_unary(
+        std::forward<UnaryOp>(op), std::string_view{arg});
     if (!result) {
         std::fprintf(stderr, "beman::big_int parity mismatch\n  arg = %s\n  %s\n", arg.c_str(), result.message());
         std::abort();
@@ -110,6 +111,7 @@ int run_unary(UnaryOp&& op, const std::uint8_t* data, const std::size_t size, co
     return 0;
 }
 
-} // namespace beman::big_int::fuzz
+} // namespace fuzz
+BEMAN_BIG_INT_END_NAMESPACE
 
 #endif // BEMAN_BIG_INT_TESTS_FUZZING_FUZZ_COMMON_HPP

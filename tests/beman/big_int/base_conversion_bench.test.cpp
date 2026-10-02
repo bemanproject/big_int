@@ -51,9 +51,9 @@
 
 namespace local {
 
-namespace detail = ::beman::big_int::detail;
-using uint_t     = ::beman::big_int::uint_multiprecision_t;
-using stopwatch  = ::beman::big_int::benchmark_testing::stopwatch;
+namespace detail = ::BEMAN_BIG_INT_NAMESPACE::detail;
+using uint_t     = ::BEMAN_BIG_INT_NAMESPACE::uint_multiprecision_t;
+using stopwatch  = ::BEMAN_BIG_INT_NAMESPACE::benchmark_testing::stopwatch;
 
 inline constexpr unsigned reps_per_point    = 5;
 inline constexpr unsigned samples_per_point = 3;
@@ -139,9 +139,9 @@ double run_from_chars_at(const std::size_t len, const int base) {
     return measure_ns(len, base, [&](const std::vector<unsigned char>& digits) {
         auto text = std::make_shared<std::string>(ascii_of(digits));
         return [text, &base]() {
-            ::beman::big_int::big_int                     value;
+            ::BEMAN_BIG_INT_NAMESPACE::big_int            value;
             [[maybe_unused]] const std::from_chars_result result =
-                ::beman::big_int::from_chars(text->data(), text->data() + text->size(), value, base);
+                ::BEMAN_BIG_INT_NAMESPACE::from_chars(text->data(), text->data() + text->size(), value, base);
         };
     });
 }
@@ -161,14 +161,14 @@ double run_fast_out_at(const std::size_t len, const int base, const std::size_t 
 
 double run_to_chars_at(const std::size_t len, const int base) {
     return measure_ns(len, base, [&](const std::vector<unsigned char>& digits) {
-        auto                                          value = std::make_shared<::beman::big_int::big_int>();
+        auto                                          value = std::make_shared<::BEMAN_BIG_INT_NAMESPACE::big_int>();
         const auto                                    text  = ascii_of(digits);
         [[maybe_unused]] const std::from_chars_result parsed =
-            ::beman::big_int::from_chars(text.data(), text.data() + text.size(), *value, base);
+            ::BEMAN_BIG_INT_NAMESPACE::from_chars(text.data(), text.data() + text.size(), *value, base);
         auto out = std::make_shared<std::vector<char>>(digits.size() + 8, '\0');
         return [value, out, &base]() {
             [[maybe_unused]] const std::to_chars_result result =
-                ::beman::big_int::to_chars(out->data(), out->data() + out->size(), *value, base);
+                ::BEMAN_BIG_INT_NAMESPACE::to_chars(out->data(), out->data() + out->size(), *value, base);
         };
     });
 }

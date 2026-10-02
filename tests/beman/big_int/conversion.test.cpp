@@ -10,28 +10,29 @@
 
 namespace {
 
-using namespace beman::big_int::big_int_literals;
+using namespace BEMAN_BIG_INT_NAMESPACE::big_int_literals;
 
 // [big.int.conv] compile-time tests
 
-static_assert(!static_cast<bool>(beman::big_int::big_int{}));
-static_assert(static_cast<bool>(beman::big_int::big_int{1}));
-static_assert(static_cast<bool>(beman::big_int::big_int{-1}));
-static_assert(static_cast<bool>(beman::big_int::big_int{42}));
+static_assert(!static_cast<bool>(BEMAN_BIG_INT_NAMESPACE::big_int{}));
+static_assert(static_cast<bool>(BEMAN_BIG_INT_NAMESPACE::big_int{1}));
+static_assert(static_cast<bool>(BEMAN_BIG_INT_NAMESPACE::big_int{-1}));
+static_assert(static_cast<bool>(BEMAN_BIG_INT_NAMESPACE::big_int{42}));
 
-static_assert(static_cast<int>(beman::big_int::big_int{42}) == 42);
-static_assert(static_cast<int>(beman::big_int::big_int{-42}) == -42);
-static_assert(static_cast<int>(beman::big_int::big_int{0}) == 0);
-static_assert(static_cast<long long>(beman::big_int::big_int{1000000000000LL}) == 1000000000000LL);
-static_assert(static_cast<long long>(beman::big_int::big_int{-1000000000000LL}) == -1000000000000LL);
+static_assert(static_cast<int>(BEMAN_BIG_INT_NAMESPACE::big_int{42}) == 42);
+static_assert(static_cast<int>(BEMAN_BIG_INT_NAMESPACE::big_int{-42}) == -42);
+static_assert(static_cast<int>(BEMAN_BIG_INT_NAMESPACE::big_int{0}) == 0);
+static_assert(static_cast<long long>(BEMAN_BIG_INT_NAMESPACE::big_int{1000000000000LL}) == 1000000000000LL);
+static_assert(static_cast<long long>(BEMAN_BIG_INT_NAMESPACE::big_int{-1000000000000LL}) == -1000000000000LL);
 
-static_assert(static_cast<unsigned int>(beman::big_int::big_int{42}) == 42U);
-static_assert(static_cast<unsigned int>(beman::big_int::big_int{0}) == 0U);
-static_assert(static_cast<unsigned int>(beman::big_int::big_int{-1}) == std::numeric_limits<unsigned int>::max());
-static_assert(static_cast<unsigned long long>(beman::big_int::big_int{-1}) ==
+static_assert(static_cast<unsigned int>(BEMAN_BIG_INT_NAMESPACE::big_int{42}) == 42U);
+static_assert(static_cast<unsigned int>(BEMAN_BIG_INT_NAMESPACE::big_int{0}) == 0U);
+static_assert(static_cast<unsigned int>(BEMAN_BIG_INT_NAMESPACE::big_int{-1}) ==
+              std::numeric_limits<unsigned int>::max());
+static_assert(static_cast<unsigned long long>(BEMAN_BIG_INT_NAMESPACE::big_int{-1}) ==
               std::numeric_limits<unsigned long long>::max());
 
-static_assert(static_cast<int>(beman::big_int::big_int{0x1'0000'0042LL}) == 0x42);
+static_assert(static_cast<int>(BEMAN_BIG_INT_NAMESPACE::big_int{0x1'0000'0042LL}) == 0x42);
 
 // TODO(alcxpr): Use `<<` of the operator instead of IILE when implemented.
 //                  Currently, only `<<=` and `>>=` are available.
@@ -42,19 +43,19 @@ BEMAN_BIG_INT_DIAGNOSTIC_PUSH()
 BEMAN_BIG_INT_DIAGNOSTIC_IGNORED_CLANG("-Wfloat-equal")
 BEMAN_BIG_INT_DIAGNOSTIC_IGNORED_GCC("-Wfloat-equal")
 static_assert([] {
-    beman::big_int::big_int x(std::numeric_limits<float>::max());
+    BEMAN_BIG_INT_NAMESPACE::big_int x(std::numeric_limits<float>::max());
     x <<= 1;
     return static_cast<float>(x);
 }() == std::numeric_limits<float>::infinity());
 
 static_assert([] {
-    beman::big_int::big_int x(std::numeric_limits<float>::max());
+    BEMAN_BIG_INT_NAMESPACE::big_int x(std::numeric_limits<float>::max());
     x <<= 1;
     return static_cast<float>(-x);
 }() == -std::numeric_limits<float>::infinity());
 
 static_assert([] {
-    beman::big_int::big_int x(std::numeric_limits<double>::max());
+    BEMAN_BIG_INT_NAMESPACE::big_int x(std::numeric_limits<double>::max());
     x <<= 1;
     return static_cast<double>(x);
 }() == std::numeric_limits<double>::infinity());
@@ -62,18 +63,18 @@ BEMAN_BIG_INT_DIAGNOSTIC_POP()
 #endif
 
 TEST(Conversion, ToBool) {
-    constexpr beman::big_int::big_int zero;
-    constexpr beman::big_int::big_int one(1);
+    constexpr BEMAN_BIG_INT_NAMESPACE::big_int zero;
+    constexpr BEMAN_BIG_INT_NAMESPACE::big_int one(1);
     static_assert(!static_cast<bool>(zero));
     static_assert(static_cast<bool>(one));
     EXPECT_FALSE(static_cast<bool>(zero));
     EXPECT_TRUE(static_cast<bool>(one));
-    EXPECT_TRUE(static_cast<bool>(beman::big_int::big_int(-42)));
+    EXPECT_TRUE(static_cast<bool>(BEMAN_BIG_INT_NAMESPACE::big_int(-42)));
 }
 
 TEST(Conversion, ToInt) {
-    constexpr beman::big_int::big_int x(42);
-    constexpr beman::big_int::big_int neg(-42);
+    constexpr BEMAN_BIG_INT_NAMESPACE::big_int x(42);
+    constexpr BEMAN_BIG_INT_NAMESPACE::big_int neg(-42);
     static_assert(static_cast<int>(x) == 42);
     static_assert(static_cast<int>(neg) == -42);
     EXPECT_EQ(static_cast<int>(x), 42);
@@ -83,40 +84,40 @@ TEST(Conversion, ToInt) {
 }
 
 TEST(Conversion, ToIntTruncates) {
-    beman::big_int::big_int x(0x1'0000'0042LL);
+    BEMAN_BIG_INT_NAMESPACE::big_int x(0x1'0000'0042LL);
     EXPECT_EQ(static_cast<int>(x), 0x42);
 }
 
 TEST(Conversion, ToDouble) {
-    beman::big_int::big_int x(1000000000000000LL);
+    BEMAN_BIG_INT_NAMESPACE::big_int x(1000000000000000LL);
     EXPECT_DOUBLE_EQ(static_cast<double>(x), 1e15);
-    beman::big_int::big_int neg(-42);
+    BEMAN_BIG_INT_NAMESPACE::big_int neg(-42);
     EXPECT_DOUBLE_EQ(static_cast<double>(neg), -42.0);
 }
 
 TEST(Conversion, ToFloat) {
-    beman::big_int::big_int x(123);
+    BEMAN_BIG_INT_NAMESPACE::big_int x(123);
     EXPECT_FLOAT_EQ(static_cast<float>(x), 123.0f);
 }
 
 TEST(Conversion, ToUnsignedWrapsNegative) {
-    beman::big_int::big_int neg(-1);
+    BEMAN_BIG_INT_NAMESPACE::big_int neg(-1);
     EXPECT_EQ(static_cast<unsigned int>(neg), std::numeric_limits<unsigned int>::max());
     EXPECT_EQ(static_cast<unsigned long long>(neg), std::numeric_limits<unsigned long long>::max());
 }
 
 TEST(Conversion, ToDoubleMultiLimb) {
-    beman::big_int::big_int x(static_cast<double>(1ULL << 63) * 4.0);
+    BEMAN_BIG_INT_NAMESPACE::big_int x(static_cast<double>(1ULL << 63) * 4.0);
     EXPECT_DOUBLE_EQ(static_cast<double>(x), static_cast<double>(1ULL << 63) * 4.0);
 }
 
 TEST(Conversion, ToFloatLarge) {
-    beman::big_int::big_int x(std::numeric_limits<float>::max());
+    BEMAN_BIG_INT_NAMESPACE::big_int x(std::numeric_limits<float>::max());
     EXPECT_FLOAT_EQ(static_cast<float>(x), std::numeric_limits<float>::max());
 }
 
 TEST(Conversion, ZeroToAllTypes) {
-    constexpr beman::big_int::big_int zero;
+    constexpr BEMAN_BIG_INT_NAMESPACE::big_int zero;
     static_assert(static_cast<int>(zero) == 0);
     static_assert(static_cast<unsigned int>(zero) == 0U);
     static_assert(static_cast<bool>(zero) == false);
@@ -125,20 +126,20 @@ TEST(Conversion, ZeroToAllTypes) {
 }
 
 TEST(Conversion, ToFloatInfinity) {
-    beman::big_int::big_int x(std::numeric_limits<float>::max());
+    BEMAN_BIG_INT_NAMESPACE::big_int x(std::numeric_limits<float>::max());
     x <<= 1;
     EXPECT_EQ(static_cast<float>(x), std::numeric_limits<float>::infinity());
 }
 
 TEST(Conversion, ToNegativeFloatInfinity) {
-    beman::big_int::big_int x(std::numeric_limits<float>::max());
+    BEMAN_BIG_INT_NAMESPACE::big_int x(std::numeric_limits<float>::max());
     x <<= 1;
     x = -x;
     EXPECT_EQ(static_cast<float>(x), -std::numeric_limits<float>::infinity());
 }
 
 TEST(Conversion, ToDoubleInfinity) {
-    beman::big_int::big_int x(std::numeric_limits<double>::max());
+    BEMAN_BIG_INT_NAMESPACE::big_int x(std::numeric_limits<double>::max());
     x <<= 1;
     EXPECT_EQ(static_cast<double>(x), std::numeric_limits<double>::infinity());
 }
@@ -150,16 +151,16 @@ TEST(Conversion, ToFloatRoundsToInfinity) {
     // which rounds the mantissa up and bumps the exponent to `max_exponent`, producing infinity.
     // We bypass `to<float>`'s up-front overflow shortcut to exercise the
     // post-rounding overflow check inside `compose_float`.
-    const beman::big_int::big_int x = 0xFFFF'FFFF'FFFF'FFFF'FFFF'FFFF'FFFF'FFFF_n;
-    EXPECT_EQ(beman::big_int::detail::compose_float<float>(x.representation(), false),
+    const BEMAN_BIG_INT_NAMESPACE::big_int x = 0xFFFF'FFFF'FFFF'FFFF'FFFF'FFFF'FFFF'FFFF_n;
+    EXPECT_EQ(BEMAN_BIG_INT_NAMESPACE::detail::compose_float<float>(x.representation(), false),
               std::numeric_limits<float>::infinity());
-    EXPECT_EQ(beman::big_int::detail::compose_float<float>(x.representation(), true),
+    EXPECT_EQ(BEMAN_BIG_INT_NAMESPACE::detail::compose_float<float>(x.representation(), true),
               -std::numeric_limits<float>::infinity());
 }
 
 TEST(Conversion, ToFloatTieWithStickyBit) {
     // Analog of ToLongDoubleThreeLimbTieWithStickyBit, but for binary32 `float`.
-    if constexpr (beman::big_int::detail::ieee_traits<float>::width != 32) {
+    if constexpr (BEMAN_BIG_INT_NAMESPACE::detail::ieee_traits<float>::width != 32) {
         GTEST_SKIP() << "Requires binary32 float (32-bit IEEE 754).";
     } else {
         // Strictly above the tie via a sticky bit far below the round bit.
@@ -179,7 +180,7 @@ TEST(Conversion, ToFloatTieWithStickyBit) {
 
 TEST(Conversion, ToDoubleTieWithStickyBit) {
     // Analog of ToLongDoubleThreeLimbTieWithStickyBit, but for binary64 `double`.
-    if constexpr (beman::big_int::detail::ieee_traits<double>::width != 64) {
+    if constexpr (BEMAN_BIG_INT_NAMESPACE::detail::ieee_traits<double>::width != 64) {
         GTEST_SKIP() << "Requires binary64 double (64-bit IEEE 754).";
     } else {
         // Strictly above the tie via a sticky bit far below the round bit.
@@ -206,7 +207,7 @@ TEST(Conversion, ToLongDoubleThreeLimbTieWithStickyBit) {
     // Correct final rounding is upward because the value is strictly above the tie.
     // This requires an implementation that correctly rounds the integer value
     // before forming the floating-point value.
-    if constexpr (beman::big_int::detail::ieee_traits<long double>::width != 80) {
+    if constexpr (BEMAN_BIG_INT_NAMESPACE::detail::ieee_traits<long double>::width != 80) {
         GTEST_SKIP() << "Requires x87 long double (80-bit storage, 64-bit precision).";
     } else {
 
@@ -257,8 +258,8 @@ TEST(Conversion, ToLongDoubleThreeLimbTieWithStickyBit) {
 
 #ifdef BEMAN_BIG_INT_HAS_BITINT
 TEST(Conversion, InplaceFastPathInt) {
-    beman::big_int::big_int x(42);
-    beman::big_int::big_int neg(-42);
+    BEMAN_BIG_INT_NAMESPACE::big_int x(42);
+    BEMAN_BIG_INT_NAMESPACE::big_int neg(-42);
     ASSERT_TRUE(is_inplace(x));
     ASSERT_TRUE(is_inplace(neg));
     EXPECT_EQ(static_cast<int>(x), 42);
@@ -267,14 +268,14 @@ TEST(Conversion, InplaceFastPathInt) {
 }
 
 TEST(Conversion, InplaceFastPathFloat) {
-    beman::big_int::big_int x(1000000000000000LL);
+    BEMAN_BIG_INT_NAMESPACE::big_int x(1000000000000000LL);
     ASSERT_TRUE(is_inplace(x));
     EXPECT_DOUBLE_EQ(static_cast<double>(x), 1e15);
     EXPECT_FLOAT_EQ(static_cast<float>(x), 1e15f);
 }
 
 TEST(Conversion, InplaceFastPathNegativeFloat) {
-    beman::big_int::big_int x(-1000000000000000LL);
+    BEMAN_BIG_INT_NAMESPACE::big_int x(-1000000000000000LL);
     ASSERT_TRUE(is_inplace(x));
     EXPECT_DOUBLE_EQ(static_cast<double>(x), -1e15);
     EXPECT_FLOAT_EQ(static_cast<float>(x), -1e15f);

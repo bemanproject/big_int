@@ -47,9 +47,9 @@
 import beman.big_int;
 namespace {
 
-using beman::big_int::big_int;
-using beman::big_int::uint_multiprecision_t;
-using namespace beman::big_int::literals;
+using BEMAN_BIG_INT_NAMESPACE::big_int;
+using BEMAN_BIG_INT_NAMESPACE::uint_multiprecision_t;
+using namespace BEMAN_BIG_INT_NAMESPACE::literals;
 
 // A memory_resource that counts bytes and allocation requests it services,
 // delegating the actual work to the process's new/delete resource. Used below
@@ -79,14 +79,14 @@ class counting_resource : public std::pmr::memory_resource {
 // [type identities] ============================================================
 
 TEST(Pmr, TypeIdentities) {
-    using pmr_big_int_128 = beman::big_int::pmr::basic_big_int<128>;
+    using pmr_big_int_128 = BEMAN_BIG_INT_NAMESPACE::pmr::basic_big_int<128>;
     static_assert(
         std::is_same_v<pmr_big_int_128::allocator_type, std::pmr::polymorphic_allocator<uint_multiprecision_t>>);
-    static_assert(std::is_same_v<beman::big_int::pmr::big_int::allocator_type,
+    static_assert(std::is_same_v<BEMAN_BIG_INT_NAMESPACE::pmr::big_int::allocator_type,
                                  std::pmr::polymorphic_allocator<uint_multiprecision_t>>);
     // pmr::big_int uses the same limb type and inplace width as big_int, only the allocator differs.
-    static_assert(
-        std::is_same_v<beman::big_int::pmr::big_int, beman::big_int::pmr::basic_big_int<big_int::inplace_bits>>);
+    static_assert(std::is_same_v<BEMAN_BIG_INT_NAMESPACE::pmr::big_int,
+                                 BEMAN_BIG_INT_NAMESPACE::pmr::basic_big_int<big_int::inplace_bits>>);
 }
 
 // [construction / resource identity] ==========================================
@@ -95,7 +95,7 @@ TEST(Pmr, ConstructsOverMonotonicBufferResource) {
     std::array<std::byte, 256>          buffer{};
     std::pmr::monotonic_buffer_resource resource(buffer.data(), buffer.size());
 
-    const beman::big_int::pmr::big_int x(42, &resource);
+    const BEMAN_BIG_INT_NAMESPACE::pmr::big_int x(42, &resource);
     EXPECT_EQ(x.get_allocator().resource(), &resource);
     EXPECT_EQ(x, 42);
 }
@@ -109,12 +109,12 @@ TEST(Pmr, CopyConstructionDoesNotPreserveResource) {
     std::array<std::byte, 256>          buffer{};
     std::pmr::monotonic_buffer_resource resource(buffer.data(), buffer.size());
 
-    const beman::big_int::pmr::big_int x(7, &resource);
-    const beman::big_int::pmr::big_int y(x);
+    const BEMAN_BIG_INT_NAMESPACE::pmr::big_int x(7, &resource);
+    const BEMAN_BIG_INT_NAMESPACE::pmr::big_int y(x);
     EXPECT_EQ(y.get_allocator().resource(), std::pmr::get_default_resource());
     EXPECT_EQ(y, x);
 
-    const beman::big_int::pmr::big_int z(x, &resource);
+    const BEMAN_BIG_INT_NAMESPACE::pmr::big_int z(x, &resource);
     EXPECT_EQ(z.get_allocator().resource(), &resource);
     EXPECT_EQ(z, x);
 }
@@ -123,8 +123,8 @@ TEST(Pmr, MoveConstructionPreservesResource) {
     std::array<std::byte, 256>          buffer{};
     std::pmr::monotonic_buffer_resource resource(buffer.data(), buffer.size());
 
-    beman::big_int::pmr::big_int       x(7, &resource);
-    const beman::big_int::pmr::big_int y(std::move(x));
+    BEMAN_BIG_INT_NAMESPACE::pmr::big_int       x(7, &resource);
+    const BEMAN_BIG_INT_NAMESPACE::pmr::big_int y(std::move(x));
     EXPECT_EQ(y.get_allocator().resource(), &resource);
     EXPECT_EQ(y, 7);
 }
@@ -136,8 +136,8 @@ TEST(Pmr, AllocatorExtendedMoveConstructionUsesNamedResource) {
     std::pmr::monotonic_buffer_resource resource_a(buffer_a.data(), buffer_a.size());
     std::pmr::monotonic_buffer_resource resource_b(buffer_b.data(), buffer_b.size());
 
-    beman::big_int::pmr::big_int       x(7, &resource_a);
-    const beman::big_int::pmr::big_int y(std::move(x), &resource_b);
+    BEMAN_BIG_INT_NAMESPACE::pmr::big_int       x(7, &resource_a);
+    const BEMAN_BIG_INT_NAMESPACE::pmr::big_int y(std::move(x), &resource_b);
     EXPECT_EQ(y.get_allocator().resource(), &resource_b);
     EXPECT_EQ(y, 7);
 }
@@ -152,8 +152,8 @@ TEST(Pmr, CopyAssignmentDoesNotPropagateResource) {
     std::pmr::monotonic_buffer_resource resource_a(buffer_a.data(), buffer_a.size());
     std::pmr::monotonic_buffer_resource resource_b(buffer_b.data(), buffer_b.size());
 
-    const beman::big_int::pmr::big_int source(123, &resource_a);
-    beman::big_int::pmr::big_int       dest(0, &resource_b);
+    const BEMAN_BIG_INT_NAMESPACE::pmr::big_int source(123, &resource_a);
+    BEMAN_BIG_INT_NAMESPACE::pmr::big_int       dest(0, &resource_b);
 
     dest = source;
     EXPECT_EQ(dest.get_allocator().resource(), &resource_b);
@@ -168,8 +168,8 @@ TEST(Pmr, MoveAssignmentDoesNotPropagateResource) {
     std::pmr::monotonic_buffer_resource resource_a(buffer_a.data(), buffer_a.size());
     std::pmr::monotonic_buffer_resource resource_b(buffer_b.data(), buffer_b.size());
 
-    beman::big_int::pmr::big_int source(123, &resource_a);
-    beman::big_int::pmr::big_int dest(0, &resource_b);
+    BEMAN_BIG_INT_NAMESPACE::pmr::big_int source(123, &resource_a);
+    BEMAN_BIG_INT_NAMESPACE::pmr::big_int dest(0, &resource_b);
 
     dest = std::move(source);
     EXPECT_EQ(dest.get_allocator().resource(), &resource_b);
@@ -186,8 +186,8 @@ TEST(Pmr, CompoundAssignmentKeepsLeftHandResource) {
     std::pmr::monotonic_buffer_resource resource_a(buffer_a.data(), buffer_a.size());
     std::pmr::monotonic_buffer_resource resource_b(buffer_b.data(), buffer_b.size());
 
-    beman::big_int::pmr::big_int       x(100, &resource_a);
-    const beman::big_int::pmr::big_int y(23, &resource_b);
+    BEMAN_BIG_INT_NAMESPACE::pmr::big_int       x(100, &resource_a);
+    const BEMAN_BIG_INT_NAMESPACE::pmr::big_int y(23, &resource_b);
 
     x += y;
     EXPECT_EQ(x.get_allocator().resource(), &resource_a);
@@ -205,10 +205,10 @@ TEST(Pmr, FreeOperatorPlusLandsOnDefaultResource) {
     std::pmr::monotonic_buffer_resource resource_a(buffer_a.data(), buffer_a.size());
     std::pmr::monotonic_buffer_resource resource_b(buffer_b.data(), buffer_b.size());
 
-    const beman::big_int::pmr::big_int x(100, &resource_a);
-    const beman::big_int::pmr::big_int y(23, &resource_b);
+    const BEMAN_BIG_INT_NAMESPACE::pmr::big_int x(100, &resource_a);
+    const BEMAN_BIG_INT_NAMESPACE::pmr::big_int y(23, &resource_b);
 
-    const beman::big_int::pmr::big_int sum = x + y;
+    const BEMAN_BIG_INT_NAMESPACE::pmr::big_int sum = x + y;
     EXPECT_EQ(sum, 123);
     EXPECT_EQ(sum.get_allocator().resource(), std::pmr::get_default_resource());
     EXPECT_NE(sum.get_allocator().resource(), &resource_a);
@@ -221,10 +221,10 @@ TEST(Pmr, HashAgreesWithBigInt) {
     std::array<std::byte, 256>          buffer{};
     std::pmr::monotonic_buffer_resource resource(buffer.data(), buffer.size());
 
-    const big_int                      plain = 98765432109876543210_n;
-    const beman::big_int::pmr::big_int mirrored(plain, &resource);
+    const big_int                               plain = 98765432109876543210_n;
+    const BEMAN_BIG_INT_NAMESPACE::pmr::big_int mirrored(plain, &resource);
 
-    EXPECT_EQ(std::hash<big_int>{}(plain), (std::hash<beman::big_int::pmr::big_int>{}(mirrored)));
+    EXPECT_EQ(std::hash<big_int>{}(plain), (std::hash<BEMAN_BIG_INT_NAMESPACE::pmr::big_int>{}(mirrored)));
 }
 
 // [vector on a custom resource] =================================================
@@ -233,7 +233,7 @@ TEST(Pmr, VectorOnCustomResource) {
     std::array<std::byte, 4096>         buffer{};
     std::pmr::monotonic_buffer_resource resource(buffer.data(), buffer.size());
 
-    std::pmr::vector<beman::big_int::pmr::big_int> values(&resource);
+    std::pmr::vector<BEMAN_BIG_INT_NAMESPACE::pmr::big_int> values(&resource);
     values.emplace_back(1);
     values.emplace_back(2);
     values.emplace_back(3);
@@ -259,8 +259,8 @@ TEST(Pmr, SwapOnSharedResource) {
     std::array<std::byte, 256>          buffer{};
     std::pmr::monotonic_buffer_resource resource(buffer.data(), buffer.size());
 
-    beman::big_int::pmr::big_int a(1, &resource);
-    beman::big_int::pmr::big_int b(2, &resource);
+    BEMAN_BIG_INT_NAMESPACE::pmr::big_int a(1, &resource);
+    BEMAN_BIG_INT_NAMESPACE::pmr::big_int b(2, &resource);
 
     swap(a, b);
     EXPECT_EQ(a, 2);
@@ -280,7 +280,8 @@ TEST(Pmr, WideValueAllocatesThroughItsResource) {
     const big_int mersenne = (big_int{1} << 4096) - 1_n;
     EXPECT_EQ(resource.allocations, 0u);
 
-    const beman::big_int::pmr::big_int wide(mersenne, beman::big_int::pmr::big_int::allocator_type(&resource));
+    const BEMAN_BIG_INT_NAMESPACE::pmr::big_int wide(mersenne,
+                                                     BEMAN_BIG_INT_NAMESPACE::pmr::big_int::allocator_type(&resource));
 
     EXPECT_GT(resource.allocations, 0u);
     EXPECT_GT(resource.bytes_allocated, 0u);

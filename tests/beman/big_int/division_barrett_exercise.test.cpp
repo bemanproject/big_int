@@ -27,8 +27,8 @@
 
 namespace {
 
-namespace detail = beman::big_int::detail;
-using uint_t     = beman::big_int::uint_multiprecision_t;
+namespace detail = BEMAN_BIG_INT_NAMESPACE::detail;
+using uint_t     = BEMAN_BIG_INT_NAMESPACE::uint_multiprecision_t;
 
 constexpr uint_t      limb_max  = std::numeric_limits<uint_t>::max();
 constexpr std::size_t limb_bits = detail::width_v<uint_t>;
@@ -290,7 +290,7 @@ TEST(DivisionBarrettExercise, MarchGateDivisors) {
 
 TEST(DivisionBarrettExercise, PublicOperatorsAtMarchGate) {
     // The public /, % and div_rem_to_zero at (16 c + 5, c) reach the Barrett march through the dispatcher.
-    using big = beman::big_int::big_int;
+    using big = BEMAN_BIG_INT_NAMESPACE::big_int;
     std::mt19937_64   rng{0x50b11c};
     const std::size_t c  = detail::barrett_march_cutoff;
     const auto        va = random_limbs(16 * c + 5, rng);
@@ -299,7 +299,7 @@ TEST(DivisionBarrettExercise, PublicOperatorsAtMarchGate) {
     const big         b(vb.begin(), vb.end());
     const big         q  = a / b;
     const big         r  = a % b;
-    const auto        qr = beman::big_int::div_rem_to_zero(a, b);
+    const auto        qr = BEMAN_BIG_INT_NAMESPACE::div_rem_to_zero(a, b);
     EXPECT_EQ(q * b + r, a);
     EXPECT_TRUE(r >= 0 && r < b);
     EXPECT_EQ(qr.quotient, q);
@@ -310,7 +310,7 @@ TEST(DivisionBarrettExercise, PublicBurnikelZieglerLongMarchBelowMarchLine) {
     // (16 z - 1, z) with z = burnikel_ziegler_cutoff sits just under the Barrett march line (m / 16 < s), so the
     // public operators take the Burnikel-Ziegler long block march (LongBlockMarch1200By50 now takes Barrett on
     // AArch64).
-    using big = beman::big_int::big_int;
+    using big = BEMAN_BIG_INT_NAMESPACE::big_int;
     std::mt19937_64   rng{0xb2ea11};
     const std::size_t z = detail::burnikel_ziegler_cutoff;
     for (const std::size_t m : {16 * z - 1, 16 * z - 2, 8 * z + 3}) {
@@ -320,7 +320,7 @@ TEST(DivisionBarrettExercise, PublicBurnikelZieglerLongMarchBelowMarchLine) {
         const big  b(vb.begin(), vb.end());
         const big  q  = a / b;
         const big  r  = a % b;
-        const auto qr = beman::big_int::div_rem_to_zero(a, b);
+        const auto qr = BEMAN_BIG_INT_NAMESPACE::div_rem_to_zero(a, b);
         EXPECT_EQ(q * b + r, a) << "m=" << m << " s=" << z;
         EXPECT_TRUE(r >= 0 && r < b) << "m=" << m << " s=" << z;
         EXPECT_EQ(qr.quotient, q);

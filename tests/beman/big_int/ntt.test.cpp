@@ -22,13 +22,13 @@
 
 namespace {
 
-using ::beman::big_int::detail::ntt_build_twiddles;
-using ::beman::big_int::detail::ntt_direction;
-using ::beman::big_int::detail::ntt_forward;
-using ::beman::big_int::detail::ntt_inverse;
-using ::beman::big_int::detail::ntt_modulus;
-using ::beman::big_int::detail::ntt_pointwise;
-using ::beman::big_int::detail::ntt_primes;
+using ::BEMAN_BIG_INT_NAMESPACE::detail::ntt_build_twiddles;
+using ::BEMAN_BIG_INT_NAMESPACE::detail::ntt_direction;
+using ::BEMAN_BIG_INT_NAMESPACE::detail::ntt_forward;
+using ::BEMAN_BIG_INT_NAMESPACE::detail::ntt_inverse;
+using ::BEMAN_BIG_INT_NAMESPACE::detail::ntt_modulus;
+using ::BEMAN_BIG_INT_NAMESPACE::detail::ntt_pointwise;
+using ::BEMAN_BIG_INT_NAMESPACE::detail::ntt_primes;
 using ::boost::multiprecision::cpp_int;
 
 // Build the forward or inverse twiddle table of size n/2 for modulus m.

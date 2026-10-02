@@ -49,9 +49,9 @@ import beman.big_int;
 
 namespace {
 
-using beman::big_int::basic_big_int;
-using beman::big_int::big_int;
-using beman::big_int::to_string;
+using BEMAN_BIG_INT_NAMESPACE::basic_big_int;
+using BEMAN_BIG_INT_NAMESPACE::big_int;
+using BEMAN_BIG_INT_NAMESPACE::to_string;
 
 // ============================================================================
 // std::hash
@@ -77,11 +77,11 @@ TEST(StdIntegration, HashIsValueBasedNotStorageBased) {
 TEST(StdIntegration, HashAgreesAcrossSpecializations) {
     const big_int value = (big_int{1} << 100) + big_int{7}; // wider than 64 bits
 
-    const beman::big_int::pmr::big_int pmr_value(value);
-    const basic_big_int<512>           wide_value(value);
+    const BEMAN_BIG_INT_NAMESPACE::pmr::big_int pmr_value(value);
+    const basic_big_int<512>                    wide_value(value);
 
     const auto h_default = std::hash<big_int>{}(value);
-    const auto h_pmr     = std::hash<beman::big_int::pmr::big_int>{}(pmr_value);
+    const auto h_pmr     = std::hash<BEMAN_BIG_INT_NAMESPACE::pmr::big_int>{}(pmr_value);
     const auto h_wide    = std::hash<basic_big_int<512>>{}(wide_value);
 
     EXPECT_EQ(h_default, h_pmr);

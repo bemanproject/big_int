@@ -5,7 +5,7 @@
 #include "testing.hpp"
 #include <gtest/gtest.h>
 
-namespace bmp = ::beman::big_int::boost_mp_testing;
+namespace bmp = ::BEMAN_BIG_INT_NAMESPACE::boost_mp_testing;
 
 namespace local {
 
@@ -26,7 +26,7 @@ std::uniform_int_distribution distribution_limb_length{std::size_t{UINT16_C(4600
 
 auto test_one_multiplication() -> void {
     constexpr std::size_t limb_bits{
-        static_cast<std::size_t>(std::numeric_limits<::beman::big_int::uint_multiprecision_t>::digits)};
+        static_cast<std::size_t>(std::numeric_limits<::BEMAN_BIG_INT_NAMESPACE::uint_multiprecision_t>::digits)};
 
     const std::size_t len_a_in_bits{detail::distribution_limb_length(detail::generator_limb_length) * limb_bits};
     const std::size_t len_b_in_bits{detail::distribution_limb_length(detail::generator_limb_length) * limb_bits};
