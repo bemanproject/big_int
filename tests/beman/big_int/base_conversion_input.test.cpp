@@ -35,8 +35,8 @@ BEMAN_BIG_INT_DIAGNOSTIC_IGNORED_GCC("-Wstringop-overread")
 
 namespace {
 
-namespace detail = beman::big_int::detail;
-using uint_t     = beman::big_int::uint_multiprecision_t;
+namespace detail = BEMAN_BIG_INT_NAMESPACE::detail;
+using uint_t     = BEMAN_BIG_INT_NAMESPACE::uint_multiprecision_t;
 
 // Per-digit Horner reference using only span primitives: value = value * base + d.
 // Independent of the chunking scheme; quadratic, so reserved for short inputs.

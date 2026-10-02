@@ -20,8 +20,8 @@
 
 namespace {
 
-using beman::big_int::big_int;
-using uint_t = beman::big_int::uint_multiprecision_t;
+using BEMAN_BIG_INT_NAMESPACE::big_int;
+using uint_t = BEMAN_BIG_INT_NAMESPACE::uint_multiprecision_t;
 
 constexpr std::size_t max_limbs = big_int{}.max_representation_size();
 constexpr std::size_t max_bits  = big_int{}.max_size();
@@ -43,7 +43,7 @@ struct never_alloc {
     }
 };
 
-using starved_big_int = beman::big_int::basic_big_int<64, uint_t, never_alloc<uint_t>>;
+using starved_big_int = BEMAN_BIG_INT_NAMESPACE::basic_big_int<64, uint_t, never_alloc<uint_t>>;
 
 // A shift amount is carried in a limb-wide type, so a shift large enough to
 // overflow the representation is only expressible when one limb can hold the
@@ -76,7 +76,7 @@ TEST(LengthError, ReserveIsStrongWhenLengthIsRejected) {
     // The value, its capacity, and the class invariants all survive the failure.
     EXPECT_EQ(x, 42U);
     EXPECT_EQ(x.representation_capacity(), cap);
-    EXPECT_TRUE(beman::big_int::is_normalized(x));
+    EXPECT_TRUE(BEMAN_BIG_INT_NAMESPACE::is_normalized(x));
     x *= 2U;
     EXPECT_EQ(x, 84U);
 }
@@ -84,7 +84,7 @@ TEST(LengthError, ReserveIsStrongWhenLengthIsRejected) {
 TEST(LengthError, InPlaceValueIsUntouchedWhenLengthIsRejected) {
     big_int x{42U};
     EXPECT_THROW(x.reserve_representation(max_limbs + 1), std::length_error);
-    EXPECT_TRUE(beman::big_int::is_inplace(x));
+    EXPECT_TRUE(BEMAN_BIG_INT_NAMESPACE::is_inplace(x));
     EXPECT_EQ(x, 42U);
 }
 
@@ -144,7 +144,7 @@ TEST(LengthError, ShiftLeftWithinMaxIsNotRejected) {
 }
 
 TEST(LengthError, PmrReserveBeyondMaxThrows) {
-    beman::big_int::pmr::big_int x{42U};
+    BEMAN_BIG_INT_NAMESPACE::pmr::big_int x{42U};
     EXPECT_THROW(x.reserve_representation(max_limbs + 1), std::length_error);
     EXPECT_EQ(x, 42U);
 }

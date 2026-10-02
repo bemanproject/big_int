@@ -14,12 +14,12 @@
 
 namespace {
 
-using beman::big_int::big_int;
-using beman::big_int::is_inplace;
-using beman::big_int::is_normalized;
-using beman::big_int::uint_multiprecision_t;
+using BEMAN_BIG_INT_NAMESPACE::big_int;
+using BEMAN_BIG_INT_NAMESPACE::is_inplace;
+using BEMAN_BIG_INT_NAMESPACE::is_normalized;
+using BEMAN_BIG_INT_NAMESPACE::uint_multiprecision_t;
 
-using pmr_big_int = beman::big_int::pmr::big_int;
+using pmr_big_int = BEMAN_BIG_INT_NAMESPACE::pmr::big_int;
 
 // `big_int` keeps a single inline limb, so any value >= 2^64 lives on the heap.
 constexpr big_int two_pow(unsigned e) {

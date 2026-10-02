@@ -17,16 +17,16 @@
 
 namespace {
 
-using beman::big_int::abs;
-using beman::big_int::basic_big_int;
-using beman::big_int::big_int;
-using beman::big_int::uint_multiprecision_t;
+using BEMAN_BIG_INT_NAMESPACE::abs;
+using BEMAN_BIG_INT_NAMESPACE::basic_big_int;
+using BEMAN_BIG_INT_NAMESPACE::big_int;
+using BEMAN_BIG_INT_NAMESPACE::uint_multiprecision_t;
 
 // A wide instantiation: inplace_capacity == 256 / 64 == 4, so values up to four
 // limbs stay inline and never reach the allocator.
 using big_int_256 = basic_big_int<256>;
 
-using pmr_big_int = beman::big_int::pmr::big_int;
+using pmr_big_int = BEMAN_BIG_INT_NAMESPACE::pmr::big_int;
 
 // ----- type-level checks -----
 
@@ -54,7 +54,7 @@ static_assert(!noexcept(abs(std::declval<const big_int>())));
 // Neither overload is viable for anything that is not a `basic_big_int`, so an
 // unqualified call on a fundamental type still finds `std::abs` (or none at all).
 template <class T>
-concept has_beman_abs = requires(T&& t) { beman::big_int::abs(static_cast<T&&>(t)); };
+concept has_beman_abs = requires(T&& t) { BEMAN_BIG_INT_NAMESPACE::abs(static_cast<T&&>(t)); };
 static_assert(has_beman_abs<big_int>);
 static_assert(!has_beman_abs<int>);
 static_assert(!has_beman_abs<long long>);
@@ -294,8 +294,8 @@ TEST(Abs, MatchesSignedMagnitudeOfFundamentalTypes) {
 TEST(Abs, CallableFullyQualified) {
     // The function is reachable both via the using-declaration above (ADL) and
     // when named explicitly through its namespace.
-    EXPECT_EQ(beman::big_int::abs(big_int{-7}), 7);
-    EXPECT_EQ(beman::big_int::abs(big_int{7}), 7);
+    EXPECT_EQ(BEMAN_BIG_INT_NAMESPACE::abs(big_int{-7}), 7);
+    EXPECT_EQ(BEMAN_BIG_INT_NAMESPACE::abs(big_int{7}), 7);
 }
 
 } // namespace

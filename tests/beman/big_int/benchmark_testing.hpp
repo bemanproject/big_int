@@ -9,7 +9,8 @@
 
 #include <beman/big_int/detail/config.hpp>
 
-namespace beman::big_int::benchmark_testing {
+BEMAN_BIG_INT_BEGIN_NAMESPACE
+namespace benchmark_testing {
 
 struct stopwatch {
   public:
@@ -52,6 +53,7 @@ struct stopwatch {
     }
 };
 
-} // namespace beman::big_int::benchmark_testing
+} // namespace benchmark_testing
+BEMAN_BIG_INT_END_NAMESPACE
 
 #endif // BEMAN_BIG_INT_BENCHMARK_TESTING_HPP

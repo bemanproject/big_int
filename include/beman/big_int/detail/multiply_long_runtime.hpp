@@ -10,25 +10,27 @@
 
 // Compile-time selection between the two x86-64 kernels (config.hpp resolves
 // BEMAN_BIG_INT_X86_64_BMI2_ADX), so there is no runtime dispatch cost.
-extern "C" void beman_big_int_multiply_long_runtime_generic(beman::big_int::uint_multiprecision_t*       p_result,
-                                                            const beman::big_int::uint_multiprecision_t* p_a,
-                                                            const std::size_t                            len_a,
-                                                            const beman::big_int::uint_multiprecision_t* p_b,
+extern "C" void beman_big_int_multiply_long_runtime_generic(BEMAN_BIG_INT_NAMESPACE::uint_multiprecision_t* p_result,
+                                                            const BEMAN_BIG_INT_NAMESPACE::uint_multiprecision_t* p_a,
+                                                            const std::size_t len_a,
+                                                            const BEMAN_BIG_INT_NAMESPACE::uint_multiprecision_t* p_b,
                                                             const std::size_t len_b) noexcept;
-extern "C" void beman_big_int_multiply_long_runtime_bmi2_adx(beman::big_int::uint_multiprecision_t*       p_result,
-                                                             const beman::big_int::uint_multiprecision_t* p_a,
-                                                             const std::size_t                            len_a,
-                                                             const beman::big_int::uint_multiprecision_t* p_b,
+extern "C" void beman_big_int_multiply_long_runtime_bmi2_adx(BEMAN_BIG_INT_NAMESPACE::uint_multiprecision_t* p_result,
+                                                             const BEMAN_BIG_INT_NAMESPACE::uint_multiprecision_t* p_a,
+                                                             const std::size_t len_a,
+                                                             const BEMAN_BIG_INT_NAMESPACE::uint_multiprecision_t* p_b,
                                                              const std::size_t len_b) noexcept;
 // Always declared on x86-64 (the .s/.asm stub or real kernel is always
 // assembled), even when BEMAN_BIG_INT_X86_64_AVX512_IFMA resolves to 0.
-extern "C" void beman_big_int_multiply_long_runtime_avx512_ifma(beman::big_int::uint_multiprecision_t*       p_result,
-                                                                const beman::big_int::uint_multiprecision_t* p_a,
-                                                                const std::size_t                            len_a,
-                                                                const beman::big_int::uint_multiprecision_t* p_b,
-                                                                const std::size_t len_b) noexcept;
+extern "C" void
+beman_big_int_multiply_long_runtime_avx512_ifma(BEMAN_BIG_INT_NAMESPACE::uint_multiprecision_t*       p_result,
+                                                const BEMAN_BIG_INT_NAMESPACE::uint_multiprecision_t* p_a,
+                                                const std::size_t                                     len_a,
+                                                const BEMAN_BIG_INT_NAMESPACE::uint_multiprecision_t* p_b,
+                                                const std::size_t                                     len_b) noexcept;
 
-namespace beman::big_int::detail {
+BEMAN_BIG_INT_BEGIN_NAMESPACE
+namespace detail {
 
 // The AVX-512 IFMA kernel has a fixed set-up cost, so it pays off from a size that shrinks as the operands get more
 // lopsided (its cost follows the shorter operand in 8-digit blocks, the BMI2/ADX kernel's the whole product). Tuned
@@ -65,18 +67,19 @@ constexpr bool ifma_multiply_worthwhile(const std::size_t len_a, const std::size
     return product >= ifma_multiply_min_product_low;
 }
 
-} // namespace beman::big_int::detail
+} // namespace detail
+BEMAN_BIG_INT_END_NAMESPACE
 
     // Feature macro for tools that print the gate constants above.
     #define BEMAN_BIG_INT_HAS_IFMA_MULTIPLY_GATE 1
 
-inline void beman_big_int_multiply_long_runtime(beman::big_int::uint_multiprecision_t*       p_result,
-                                                const beman::big_int::uint_multiprecision_t* p_a,
-                                                const std::size_t                            len_a,
-                                                const beman::big_int::uint_multiprecision_t* p_b,
-                                                const std::size_t                            len_b) noexcept {
+inline void beman_big_int_multiply_long_runtime(BEMAN_BIG_INT_NAMESPACE::uint_multiprecision_t*       p_result,
+                                                const BEMAN_BIG_INT_NAMESPACE::uint_multiprecision_t* p_a,
+                                                const std::size_t                                     len_a,
+                                                const BEMAN_BIG_INT_NAMESPACE::uint_multiprecision_t* p_b,
+                                                const std::size_t                                     len_b) noexcept {
     #if BEMAN_BIG_INT_X86_64_AVX512_IFMA
-    if (beman::big_int::detail::ifma_multiply_worthwhile(len_a, len_b)) {
+    if (BEMAN_BIG_INT_NAMESPACE::detail::ifma_multiply_worthwhile(len_a, len_b)) {
         beman_big_int_multiply_long_runtime_avx512_ifma(p_result, p_a, len_a, p_b, len_b);
         return;
     }
@@ -90,11 +93,12 @@ inline void beman_big_int_multiply_long_runtime(beman::big_int::uint_multiprecis
 
 #else
 
-BEMAN_BIG_INT_ASM_LINKAGE void beman_big_int_multiply_long_runtime(beman::big_int::uint_multiprecision_t* p_result,
-                                                                   const beman::big_int::uint_multiprecision_t* p_a,
-                                                                   const std::size_t                            len_a,
-                                                                   const beman::big_int::uint_multiprecision_t* p_b,
-                                                                   const std::size_t len_b) noexcept
+BEMAN_BIG_INT_ASM_LINKAGE void
+beman_big_int_multiply_long_runtime(BEMAN_BIG_INT_NAMESPACE::uint_multiprecision_t*       p_result,
+                                    const BEMAN_BIG_INT_NAMESPACE::uint_multiprecision_t* p_a,
+                                    const std::size_t                                     len_a,
+                                    const BEMAN_BIG_INT_NAMESPACE::uint_multiprecision_t* p_b,
+                                    const std::size_t                                     len_b) noexcept
     #if defined(BEMAN_BIG_INT_HAS_ASM_KERNELS)
     ;
     #else
@@ -104,26 +108,26 @@ BEMAN_BIG_INT_ASM_LINKAGE void beman_big_int_multiply_long_runtime(beman::big_in
     }
 
     {
-        beman::big_int::uint_multiprecision_t carry = 0;
+        BEMAN_BIG_INT_NAMESPACE::uint_multiprecision_t carry = 0;
         for (std::size_t j = 0; j < len_b; ++j) {
-            const auto [lo, hi] = beman::big_int::detail::widening_mul(*p_a, *(p_b + j));
-            const auto [s, c]   = beman::big_int::detail::carrying_add(lo, carry);
+            const auto [lo, hi] = BEMAN_BIG_INT_NAMESPACE::detail::widening_mul(*p_a, *(p_b + j));
+            const auto [s, c]   = BEMAN_BIG_INT_NAMESPACE::detail::carrying_add(lo, carry);
             *(p_result + j)     = s;
-            carry               = hi + static_cast<beman::big_int::uint_multiprecision_t>(c);
+            carry               = hi + static_cast<BEMAN_BIG_INT_NAMESPACE::uint_multiprecision_t>(c);
         }
         *(p_result + len_b) = carry;
     }
 
     // Subsequent rows: accumulate onto values written by previous rows.
     for (std::size_t i = 1; i < len_a; ++i) {
-        beman::big_int::uint_multiprecision_t carry = 0;
+        BEMAN_BIG_INT_NAMESPACE::uint_multiprecision_t carry = 0;
         for (std::size_t j = 0; j < len_b; ++j) {
-            const auto [lo, hi]   = beman::big_int::detail::widening_mul(*(p_a + i), *(p_b + j));
-            const auto [s1, c1]   = beman::big_int::detail::carrying_add(lo, *(p_result + (i + j)));
-            const auto [s2, c2]   = beman::big_int::detail::carrying_add(s1, carry);
+            const auto [lo, hi]   = BEMAN_BIG_INT_NAMESPACE::detail::widening_mul(*(p_a + i), *(p_b + j));
+            const auto [s1, c1]   = BEMAN_BIG_INT_NAMESPACE::detail::carrying_add(lo, *(p_result + (i + j)));
+            const auto [s2, c2]   = BEMAN_BIG_INT_NAMESPACE::detail::carrying_add(s1, carry);
             *(p_result + (i + j)) = s2;
-            carry                 = hi + static_cast<beman::big_int::uint_multiprecision_t>(c1) +
-                                    static_cast<beman::big_int::uint_multiprecision_t>(c2);
+            carry                 = hi + static_cast<BEMAN_BIG_INT_NAMESPACE::uint_multiprecision_t>(c1) +
+                                    static_cast<BEMAN_BIG_INT_NAMESPACE::uint_multiprecision_t>(c2);
         }
         *(p_result + (i + len_b)) = carry;
     }

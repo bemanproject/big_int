@@ -9,7 +9,8 @@
 // `import std` configuration. It is built in both configurations so it cannot go
 // stale, and it is deliberately broad: under `import std` it is the whole coverage.
 //
-// Nothing here includes a beman header or uses a BEMAN_BIG_INT_* macro. Macros do not
+// Nothing here includes a beman header or uses a BEMAN_BIG_INT_* macro other than
+// BEMAN_BIG_INT_NAMESPACE, which CMake passes on the command line. Macros do not
 // cross a module boundary, and under BEMAN_BIG_INT_BUILD_MODULE the public
 // declarations are marked `export`, which is ill-formed outside a module purview.
 
@@ -44,9 +45,9 @@ void record(const bool ok, const char* const expression, const int line) {
 #define BEMAN_BIG_INT_QUICK_CHECK(...) record(static_cast<bool>(__VA_ARGS__), #__VA_ARGS__, __LINE__)
 
 int main() {
-    using beman::big_int::big_int;
-    using beman::big_int::to_string;
-    using namespace beman::big_int::literals;
+    using BEMAN_BIG_INT_NAMESPACE::big_int;
+    using BEMAN_BIG_INT_NAMESPACE::to_string;
+    using namespace BEMAN_BIG_INT_NAMESPACE::literals;
 
     // The operators, on values no builtin integer can hold.
     const big_int a = 12'345'678'901'234'567'890_n;

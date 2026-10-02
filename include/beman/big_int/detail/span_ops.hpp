@@ -16,7 +16,8 @@
     #include <span>
 #endif
 
-namespace beman::big_int::detail {
+BEMAN_BIG_INT_BEGIN_NAMESPACE
+namespace detail {
 
 // ---------------------------------------------------------------------------
 // In-place +1 on a little-endian unsigned span. Returns true on carry out.
@@ -1141,6 +1142,7 @@ struct subsystem_signs {
     bool inner;
 };
 
-} // namespace beman::big_int::detail
+} // namespace detail
+BEMAN_BIG_INT_END_NAMESPACE
 
 #endif // BEMAN_BIG_INT_SPAN_OPS_HPP

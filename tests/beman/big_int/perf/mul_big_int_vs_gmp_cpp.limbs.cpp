@@ -95,7 +95,7 @@ auto get_hex_string_pair(const unsigned len_in_bits_lhs, const unsigned len_in_b
 
 } // namespace detail
 
-using beman::big_int::big_int;
+using BEMAN_BIG_INT_NAMESPACE::big_int;
 using ctrl_int = boost::multiprecision::number<boost::multiprecision::gmp_int, boost::multiprecision::et_off>;
 
 auto to_hex_string_bn(big_int value_to_convert) -> std::string {
@@ -120,7 +120,7 @@ auto main(int argc, char** argv) -> int {
     auto result_total_is_ok = true;
 
     constexpr unsigned limb_bits{
-        static_cast<unsigned>(std::numeric_limits<::beman::big_int::uint_multiprecision_t>::digits)};
+        static_cast<unsigned>(std::numeric_limits<::BEMAN_BIG_INT_NAMESPACE::uint_multiprecision_t>::digits)};
 
     // argv[1] = trial count (optional, default is 0x4000). The limb-widths are
     // hard-coded over a uniform integral distribution.

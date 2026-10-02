@@ -21,14 +21,14 @@
 
 namespace {
 
-using ::beman::big_int::detail::fp_center;
-using ::beman::big_int::detail::ntt_direction;
-using ::beman::big_int::detail::ntt_fp_build_twiddles;
-using ::beman::big_int::detail::ntt_fp_dispatch;
-using ::beman::big_int::detail::ntt_fp_forward_scalar;
-using ::beman::big_int::detail::ntt_fp_inverse_scalar;
-using ::beman::big_int::detail::ntt_fp_pointwise_scalar;
-using ::beman::big_int::detail::ntt_fp_primes;
+using ::BEMAN_BIG_INT_NAMESPACE::detail::fp_center;
+using ::BEMAN_BIG_INT_NAMESPACE::detail::ntt_direction;
+using ::BEMAN_BIG_INT_NAMESPACE::detail::ntt_fp_build_twiddles;
+using ::BEMAN_BIG_INT_NAMESPACE::detail::ntt_fp_dispatch;
+using ::BEMAN_BIG_INT_NAMESPACE::detail::ntt_fp_forward_scalar;
+using ::BEMAN_BIG_INT_NAMESPACE::detail::ntt_fp_inverse_scalar;
+using ::BEMAN_BIG_INT_NAMESPACE::detail::ntt_fp_pointwise_scalar;
+using ::BEMAN_BIG_INT_NAMESPACE::detail::ntt_fp_primes;
 
 [[nodiscard]] bool bit_equal(const std::vector<double>& x, const std::vector<double>& y) {
     if (x.size() != y.size()) {

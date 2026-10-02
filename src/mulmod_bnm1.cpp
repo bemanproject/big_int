@@ -18,7 +18,8 @@
 // scratch_allocator<Allocator> installs them) for the internal products and
 // the cyclic NTT workspaces.
 
-namespace beman::big_int::detail {
+BEMAN_BIG_INT_BEGIN_NAMESPACE
+namespace detail {
 
 namespace {
 
@@ -195,4 +196,5 @@ void multiply_mod_bnm1(const std::span<uint_multiprecision_t>       r,
     scratch.deallocate(h + 1);
 }
 
-} // namespace beman::big_int::detail
+} // namespace detail
+BEMAN_BIG_INT_END_NAMESPACE

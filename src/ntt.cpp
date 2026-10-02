@@ -19,7 +19,8 @@
 // bandwidth-bound transforms (it may pay off later in a compute-bound, e.g.
 // SIMD, regime).
 
-namespace beman::big_int::detail {
+BEMAN_BIG_INT_BEGIN_NAMESPACE
+namespace detail {
 
 void ntt_build_twiddles(const std::span<std::uint64_t> twiddles,
                         const std::size_t              n,
@@ -108,4 +109,5 @@ void ntt_pointwise(const std::span<std::uint64_t>       a,
     }
 }
 
-} // namespace beman::big_int::detail
+} // namespace detail
+BEMAN_BIG_INT_END_NAMESPACE

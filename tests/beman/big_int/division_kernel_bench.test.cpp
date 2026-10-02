@@ -33,14 +33,14 @@
 
 namespace local {
 
-using uint_t           = ::beman::big_int::uint_multiprecision_t;
-using stopwatch        = ::beman::big_int::benchmark_testing::stopwatch;
+using uint_t           = ::BEMAN_BIG_INT_NAMESPACE::uint_multiprecision_t;
+using stopwatch        = ::BEMAN_BIG_INT_NAMESPACE::benchmark_testing::stopwatch;
 using std_allocator    = std::allocator<uint_t>;
-using scratch_for_test = ::beman::big_int::detail::scratch_allocator<std_allocator>;
+using scratch_for_test = ::BEMAN_BIG_INT_NAMESPACE::detail::scratch_allocator<std_allocator>;
 
 inline constexpr unsigned reps_per_point = 5;
 
-constexpr uint_t top_bit = uint_t{1} << (::beman::big_int::detail::width_v<uint_t> - 1);
+constexpr uint_t top_bit = uint_t{1} << (::BEMAN_BIG_INT_NAMESPACE::detail::width_v<uint_t> - 1);
 
 // NOLINTNEXTLINE(cert-msc32-c,cert-msc51-cpp)
 static std::mt19937_64 rng{0xd0ULL};
@@ -74,7 +74,7 @@ double submul_ns_per_limb(const std::size_t n) {
     for (unsigned rep = 0; rep < reps_per_point; ++rep) {
         const stopwatch sw{};
         for (unsigned i = 0; i < iters; ++i) {
-            sink ^= ::beman::big_int::detail::submul_single_limb(r_view, a_view, sink | 1u);
+            sink ^= ::BEMAN_BIG_INT_NAMESPACE::detail::submul_single_limb(r_view, a_view, sink | 1u);
         }
         best = std::min(best, stopwatch::elapsed_time<double>(sw));
     }
@@ -89,7 +89,7 @@ double submul_ns_per_limb(const std::size_t n) {
 double div_3by2_chain_ns() {
     const uint_t d1 = (static_cast<uint_t>(rng()) | top_bit);
     const uint_t d0 = static_cast<uint_t>(rng());
-    const uint_t v  = ::beman::big_int::detail::reciprocal_word_3by2(d1, d0);
+    const uint_t v  = ::BEMAN_BIG_INT_NAMESPACE::detail::reciprocal_word_3by2(d1, d0);
 
     uint_t         u2    = d1 - 1;
     uint_t         u1    = static_cast<uint_t>(rng());
@@ -100,7 +100,7 @@ double div_3by2_chain_ns() {
     for (unsigned rep = 0; rep < reps_per_point; ++rep) {
         const stopwatch sw{};
         for (unsigned i = 0; i < iters; ++i) {
-            const auto step = ::beman::big_int::detail::div_3by2_preinv(u2, u1, u0, d1, d0, v);
+            const auto step = ::BEMAN_BIG_INT_NAMESPACE::detail::div_3by2_preinv(u2, u1, u0, d1, d0, v);
             u2              = step.remainder.high_bits; // remainder < d keeps the precondition
             u1              = step.remainder.low_bits;
             u0 ^= step.quotient;
@@ -146,7 +146,7 @@ double short_division_ns(const std::size_t m) {
     for (unsigned rep = 0; rep < reps_per_point; ++rep) {
         const stopwatch sw{};
         for (unsigned i = 0; i < iters; ++i) {
-            const uint_t r = ::beman::big_int::detail::divide_unsigned_short(
+            const uint_t r = ::BEMAN_BIG_INT_NAMESPACE::detail::divide_unsigned_short(
                 std::span<uint_t>{quotient}, std::span<const uint_t>{dividend}, divisor);
             divisor = (divisor ^ (r << 1)) | (uint_t{1} << 9) | 1u;
         }
@@ -162,8 +162,8 @@ double short_division_ns(const std::size_t m) {
 // full 2n-limb product of the same operands: the ratio the cyclic NTT entry
 // is meant to push toward ~0.5 at FFT sizes.
 double mulmod_ratio(const std::size_t n) {
-    const std::size_t w = ::beman::big_int::detail::multiply_mod_bnm1_next_size(
-        n + 1, ::beman::big_int::detail::multiply_mod_bnm1_cutoff);
+    const std::size_t w = ::BEMAN_BIG_INT_NAMESPACE::detail::multiply_mod_bnm1_next_size(
+        n + 1, ::BEMAN_BIG_INT_NAMESPACE::detail::multiply_mod_bnm1_cutoff);
     std::vector<uint_t> a(n);
     std::vector<uint_t> b(n);
     fill_random(a);
@@ -182,15 +182,16 @@ double mulmod_ratio(const std::size_t n) {
             const stopwatch sw{};
             for (unsigned i = 0; i < iters; ++i) {
                 std::ranges::fill(full, uint_t{0});
-                ::beman::big_int::detail::multiply_dispatch(std::span<uint_t>{full}, a_view, b_view, alloc);
+                ::BEMAN_BIG_INT_NAMESPACE::detail::multiply_dispatch(std::span<uint_t>{full}, a_view, b_view, alloc);
             }
             best_full = std::min(best_full, stopwatch::elapsed_time<double>(sw));
         }
         {
-            scratch_for_test scratch(::beman::big_int::detail::multiply_mod_bnm1_storage_size(w), alloc);
+            scratch_for_test scratch(::BEMAN_BIG_INT_NAMESPACE::detail::multiply_mod_bnm1_storage_size(w), alloc);
             const stopwatch  sw{};
             for (unsigned i = 0; i < iters; ++i) {
-                ::beman::big_int::detail::multiply_mod_bnm1(std::span<uint_t>{wrapped}, a_view, b_view, scratch);
+                ::BEMAN_BIG_INT_NAMESPACE::detail::multiply_mod_bnm1(
+                    std::span<uint_t>{wrapped}, a_view, b_view, scratch);
             }
             best_mm = std::min(best_mm, stopwatch::elapsed_time<double>(sw));
         }
@@ -204,7 +205,7 @@ double mulmod_ratio(const std::size_t n) {
 // below the linear FFT cutoff are probed too, because the cyclic transform
 // can pay before the full product does.
 double cyclic_over_crt(const std::size_t min_w, std::size_t& wrap_out) {
-    namespace bd = ::beman::big_int::detail;
+    namespace bd = ::BEMAN_BIG_INT_NAMESPACE::detail;
 
     const bd::fft_cyclic_params params = bd::multiply_fft_cyclic_next_size(min_w);
     const std::size_t           w      = params.wrap_limbs;
@@ -277,13 +278,13 @@ double div_q_ratio(const std::size_t n) {
         for (unsigned rep = 0; rep < 3; ++rep) {
             {
                 const stopwatch sw{};
-                ::beman::big_int::detail::divide_burnikel_ziegler(
+                ::BEMAN_BIG_INT_NAMESPACE::detail::divide_burnikel_ziegler(
                     std::span<uint_t>{q}, std::span<uint_t>{r}, a_view, b_view, alloc);
                 best_qr = std::min(best_qr, stopwatch::elapsed_time<double>(sw));
             }
             {
                 const stopwatch sw{};
-                ::beman::big_int::detail::divide_quotient(std::span<uint_t>{q}, a_view, b_view, alloc);
+                ::BEMAN_BIG_INT_NAMESPACE::detail::divide_quotient(std::span<uint_t>{q}, a_view, b_view, alloc);
                 best_q = std::min(best_q, stopwatch::elapsed_time<double>(sw));
             }
         }
@@ -309,10 +310,10 @@ void run_all() {
 
     emit("div_3by2_chain_ns", 0, div_3by2_chain_ns());
     emit("reciprocal_word_ns", 0, reciprocal_chain_ns([](const uint_t d) {
-             return ::beman::big_int::detail::reciprocal_word(d) ^ d;
+             return ::BEMAN_BIG_INT_NAMESPACE::detail::reciprocal_word(d) ^ d;
          }));
     emit("reciprocal_word_3by2_ns", 0, reciprocal_chain_ns([](const uint_t d) {
-             return ::beman::big_int::detail::reciprocal_word_3by2(d, ~d) ^ d;
+             return ::BEMAN_BIG_INT_NAMESPACE::detail::reciprocal_word_3by2(d, ~d) ^ d;
          }));
     std::cout.flush();
 

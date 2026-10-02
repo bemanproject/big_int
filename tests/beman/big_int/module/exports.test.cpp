@@ -35,26 +35,26 @@ import beman.big_int;
 // A using-declaration naming a non-exported (and not otherwise reachable) name is a
 // hard compile error, so this block alone is a regression test for every free
 // function's export annotation.
-using beman::big_int::abs;
-using beman::big_int::copy_to_runtime;
-using beman::big_int::div_rem_to_zero;
-using beman::big_int::from_chars;
-using beman::big_int::gcd;
-using beman::big_int::in_range;
-using beman::big_int::lcm;
-using beman::big_int::midpoint;
-using beman::big_int::saturating_cast;
-using beman::big_int::swap;
-using beman::big_int::to_chars;
-using beman::big_int::to_string;
-using beman::big_int::to_wstring;
+using BEMAN_BIG_INT_NAMESPACE::abs;
+using BEMAN_BIG_INT_NAMESPACE::copy_to_runtime;
+using BEMAN_BIG_INT_NAMESPACE::div_rem_to_zero;
+using BEMAN_BIG_INT_NAMESPACE::from_chars;
+using BEMAN_BIG_INT_NAMESPACE::gcd;
+using BEMAN_BIG_INT_NAMESPACE::in_range;
+using BEMAN_BIG_INT_NAMESPACE::lcm;
+using BEMAN_BIG_INT_NAMESPACE::midpoint;
+using BEMAN_BIG_INT_NAMESPACE::saturating_cast;
+using BEMAN_BIG_INT_NAMESPACE::swap;
+using BEMAN_BIG_INT_NAMESPACE::to_chars;
+using BEMAN_BIG_INT_NAMESPACE::to_string;
+using BEMAN_BIG_INT_NAMESPACE::to_wstring;
 
 namespace {
 
-using beman::big_int::basic_big_int;
-using beman::big_int::big_int;
-using beman::big_int::div_result;
-using beman::big_int::uint_multiprecision_t;
+using BEMAN_BIG_INT_NAMESPACE::basic_big_int;
+using BEMAN_BIG_INT_NAMESPACE::big_int;
+using BEMAN_BIG_INT_NAMESPACE::div_result;
+using BEMAN_BIG_INT_NAMESPACE::uint_multiprecision_t;
 
 // A non-default width, so the class template itself (and its default `Limb` /
 // `Allocator` template arguments) is exercised, not just the `big_int` alias.
@@ -64,9 +64,10 @@ using wide_int = basic_big_int<512>;
 
 static_assert(
     std::is_same_v<big_int, basic_big_int<64, uint_multiprecision_t, std::allocator<uint_multiprecision_t>>>);
-static_assert(std::is_same_v<beman::big_int::pmr::big_int, beman::big_int::pmr::basic_big_int<big_int::inplace_bits>>);
+static_assert(std::is_same_v<BEMAN_BIG_INT_NAMESPACE::pmr::big_int,
+                             BEMAN_BIG_INT_NAMESPACE::pmr::basic_big_int<big_int::inplace_bits>>);
 static_assert(
-    std::is_same_v<beman::big_int::pmr::basic_big_int<256>,
+    std::is_same_v<BEMAN_BIG_INT_NAMESPACE::pmr::basic_big_int<256>,
                    basic_big_int<256, uint_multiprecision_t, std::pmr::polymorphic_allocator<uint_multiprecision_t>>>);
 static_assert(std::is_same_v<wide_int::allocator_type, std::allocator<uint_multiprecision_t>>);
 
@@ -286,7 +287,7 @@ TEST(Exports, TextConversions) {
 }
 
 TEST(Exports, LiteralsAndWideWidth) {
-    using namespace beman::big_int::literals;
+    using namespace BEMAN_BIG_INT_NAMESPACE::literals;
 
     const big_int a = 12'345'678'901'234'567'890_n;
     const big_int b = 12345678901234567890_N;

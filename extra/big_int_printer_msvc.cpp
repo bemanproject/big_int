@@ -38,8 +38,8 @@
 
 namespace {
 
-using limb_type = beman::big_int::uint_multiprecision_t;
-using big_int   = beman::big_int::big_int;
+using limb_type = BEMAN_BIG_INT_NAMESPACE::uint_multiprecision_t;
+using big_int   = BEMAN_BIG_INT_NAMESPACE::big_int;
 
 // The debuggee's representation header. basic_big_int is standard-layout with
 // these two words first, and the union that follows is limb-aligned, so the
@@ -165,7 +165,7 @@ std::string render(const std::vector<limb_type>& limbs, const bool negative, con
         value = -value;
     }
 
-    std::string text = beman::big_int::to_string(value, base);
+    std::string text = BEMAN_BIG_INT_NAMESPACE::to_string(value, base);
     if (base == 16) {
         text.insert(text.front() == '-' ? 1 : 0, "0x");
     }

@@ -19,15 +19,15 @@
 
 namespace {
 
-using beman::big_int::abs;
-using beman::big_int::basic_big_int;
-using beman::big_int::big_int;
-using beman::big_int::gcd;
-using beman::big_int::in_range;
-using beman::big_int::lcm;
-using beman::big_int::saturating_cast;
-using beman::big_int::to_string;
-using beman::big_int::uint_multiprecision_t;
+using BEMAN_BIG_INT_NAMESPACE::abs;
+using BEMAN_BIG_INT_NAMESPACE::basic_big_int;
+using BEMAN_BIG_INT_NAMESPACE::big_int;
+using BEMAN_BIG_INT_NAMESPACE::gcd;
+using BEMAN_BIG_INT_NAMESPACE::in_range;
+using BEMAN_BIG_INT_NAMESPACE::lcm;
+using BEMAN_BIG_INT_NAMESPACE::saturating_cast;
+using BEMAN_BIG_INT_NAMESPACE::to_string;
+using BEMAN_BIG_INT_NAMESPACE::uint_multiprecision_t;
 
 // ============================================================================
 // saturating_cast
@@ -201,7 +201,7 @@ static_assert(!has_gcd<big_int, bool>);
 static_assert(!has_gcd<big_int, char>);
 static_assert(!has_gcd<big_int, double>);
 static_assert(!has_gcd<int, long>);
-static_assert(!has_gcd<big_int, beman::big_int::pmr::big_int>);
+static_assert(!has_gcd<big_int, BEMAN_BIG_INT_NAMESPACE::pmr::big_int>);
 
 // The function is usable in a constant expression, for in-place values and for
 // multi-limb values whose reduction allocates.
@@ -219,7 +219,7 @@ namespace adl_probe {
 // namespace std into argument-dependent lookup through its allocator, so an
 // unqualified call finds both. Ours is the more constrained overload and wins;
 // this pins that down.
-constexpr bool resolves_unqualified() { return gcd(beman::big_int::big_int{270}, 192) == 6; }
+constexpr bool resolves_unqualified() { return gcd(BEMAN_BIG_INT_NAMESPACE::big_int{270}, 192) == 6; }
 } // namespace adl_probe
 static_assert(adl_probe::resolves_unqualified());
 
@@ -509,7 +509,7 @@ TEST(Gcd, BorrowedOperandsAreNotCopied) {
     // The operands are forwarding references, so a call that needs no mutable copy
     // of either one -- every path where a magnitude fits a single limb -- allocates
     // nothing at all, however wide the borrowed operand is.
-    using pmr_big_int = beman::big_int::pmr::big_int;
+    using pmr_big_int = BEMAN_BIG_INT_NAMESPACE::pmr::big_int;
     counting_resource resource;
     const pmr_big_int wide{(big_int{1} << 4096) * 21, &resource};
     const pmr_big_int narrow{35, &resource};
@@ -527,7 +527,7 @@ TEST(Gcd, BorrowedOperandsAreNotCopied) {
 }
 
 TEST(Gcd, PmrOperands) {
-    using pmr_big_int = beman::big_int::pmr::big_int;
+    using pmr_big_int = BEMAN_BIG_INT_NAMESPACE::pmr::big_int;
     std::pmr::monotonic_buffer_resource resource;
     const pmr_big_int                   a{(big_int{1} << 300) * 12, &resource};
     const pmr_big_int                   b{(big_int{1} << 290) * 18, &resource};
@@ -551,7 +551,7 @@ TEST(Gcd, PmrOperands) {
 TEST(Gcd, CallableFullyQualified) {
     // Reachable both through the using-declaration above (and ADL) and when
     // named explicitly through its namespace.
-    EXPECT_EQ(beman::big_int::gcd(big_int{270}, 192), 6);
+    EXPECT_EQ(BEMAN_BIG_INT_NAMESPACE::gcd(big_int{270}, 192), 6);
 }
 
 #ifdef BEMAN_BIG_INT_HAS_BITINT
@@ -595,7 +595,7 @@ static_assert(!has_lcm<big_int, bool>);
 static_assert(!has_lcm<big_int, char>);
 static_assert(!has_lcm<big_int, double>);
 static_assert(!has_lcm<int, long>);
-static_assert(!has_lcm<big_int, beman::big_int::pmr::big_int>);
+static_assert(!has_lcm<big_int, BEMAN_BIG_INT_NAMESPACE::pmr::big_int>);
 
 // The function is usable in a constant expression, for in-place values and for
 // multi-limb values whose computation allocates.
@@ -613,7 +613,7 @@ namespace lcm_adl_probe {
 // namespace std into argument-dependent lookup through its allocator, so an
 // unqualified call finds both. Ours is the more constrained overload and wins;
 // this pins that down.
-constexpr bool resolves_unqualified() { return lcm(beman::big_int::big_int{270}, 192) == 8640; }
+constexpr bool resolves_unqualified() { return lcm(BEMAN_BIG_INT_NAMESPACE::big_int{270}, 192) == 8640; }
 } // namespace lcm_adl_probe
 static_assert(lcm_adl_probe::resolves_unqualified());
 
@@ -878,7 +878,7 @@ TEST(Lcm, SingleLimbOperandsDoNotAllocate) {
     // Both magnitudes fitting a limb is the scalar path: a result that fits a
     // limb as well is built directly, so the call allocates nothing -- and a zero
     // operand short-circuits before any of that.
-    using pmr_big_int = beman::big_int::pmr::big_int;
+    using pmr_big_int = BEMAN_BIG_INT_NAMESPACE::pmr::big_int;
     counting_resource resource;
     const pmr_big_int a{21, &resource};
     const pmr_big_int b{35, &resource};
@@ -893,7 +893,7 @@ TEST(Lcm, SingleLimbOperandsDoNotAllocate) {
 }
 
 TEST(Lcm, PmrOperands) {
-    using pmr_big_int = beman::big_int::pmr::big_int;
+    using pmr_big_int = BEMAN_BIG_INT_NAMESPACE::pmr::big_int;
     std::pmr::monotonic_buffer_resource resource;
     const pmr_big_int                   a{(big_int{1} << 300) * 12, &resource};
     const pmr_big_int                   b{(big_int{1} << 290) * 18, &resource};
@@ -912,7 +912,7 @@ TEST(Lcm, PmrOperands) {
 TEST(Lcm, CallableFullyQualified) {
     // Reachable both through the using-declaration above (and ADL) and when
     // named explicitly through its namespace.
-    EXPECT_EQ(beman::big_int::lcm(big_int{270}, 192), 8640);
+    EXPECT_EQ(BEMAN_BIG_INT_NAMESPACE::lcm(big_int{270}, 192), 8640);
 }
 
 #ifdef BEMAN_BIG_INT_HAS_BITINT

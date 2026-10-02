@@ -26,7 +26,8 @@ BEMAN_BIG_INT_DIAGNOSTIC_IGNORED_GCC("-Wstringop-overread")
 #include <string_view>
 #include <system_error>
 
-namespace beman::big_int::boost_mp_testing {
+BEMAN_BIG_INT_BEGIN_NAMESPACE
+namespace boost_mp_testing {
 
 namespace detail {
 
@@ -59,11 +60,11 @@ using cpp_int = ::boost::multiprecision::cpp_int;
 }
 
 // Parses a signed hex string (e.g. "deadbeef" or "-deadbeef"; no "0x" prefix) into a beman::big_int.
-[[nodiscard]] inline ::beman::big_int::big_int parse_big_int(const std::string_view signed_hex) {
-    ::beman::big_int::big_int out;
-    const char* const         first = signed_hex.data();
-    const char* const         last  = first + signed_hex.size();
-    const auto [p, ec]              = ::beman::big_int::from_chars(first, last, out, 16);
+[[nodiscard]] inline ::BEMAN_BIG_INT_NAMESPACE::big_int parse_big_int(const std::string_view signed_hex) {
+    ::BEMAN_BIG_INT_NAMESPACE::big_int out;
+    const char* const                  first = signed_hex.data();
+    const char* const                  last  = first + signed_hex.size();
+    const auto [p, ec]                       = ::BEMAN_BIG_INT_NAMESPACE::from_chars(first, last, out, 16);
     if (ec != std::errc{} || p != last) {
         throw std::runtime_error("parse_big_int: from_chars failed to parse hex string");
     }
@@ -96,7 +97,8 @@ using cpp_int = ::boost::multiprecision::cpp_int;
 // Compares sign + zeroness directly, then compares magnitudes via std::as_bytes.
 // Both libraries store limbs in little endian order,
 // so the byte sequences are identical regardless of limb width
-[[nodiscard]] inline ::testing::AssertionResult same_value(const ::beman::big_int::big_int& bn, const cpp_int& cp) {
+[[nodiscard]] inline ::testing::AssertionResult same_value(const ::BEMAN_BIG_INT_NAMESPACE::big_int& bn,
+                                                           const cpp_int&                            cp) {
     const bool bn_zero = (bn == 0);
     const bool cp_zero = cp.is_zero();
     if (bn_zero != cp_zero) {
@@ -192,7 +194,8 @@ template <class UnaryOp>
     return signed_hex;
 }
 
-} // namespace beman::big_int::boost_mp_testing
+} // namespace boost_mp_testing
+BEMAN_BIG_INT_END_NAMESPACE
 
 BEMAN_BIG_INT_DIAGNOSTIC_POP()
 

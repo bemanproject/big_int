@@ -36,10 +36,10 @@
 
 namespace local {
 
-using uint_t           = ::beman::big_int::uint_multiprecision_t;
-using stopwatch        = ::beman::big_int::benchmark_testing::stopwatch;
+using uint_t           = ::BEMAN_BIG_INT_NAMESPACE::uint_multiprecision_t;
+using stopwatch        = ::BEMAN_BIG_INT_NAMESPACE::benchmark_testing::stopwatch;
 using std_allocator    = std::allocator<uint_t>;
-using scratch_for_test = ::beman::big_int::detail::scratch_allocator<std_allocator>;
+using scratch_for_test = ::BEMAN_BIG_INT_NAMESPACE::detail::scratch_allocator<std_allocator>;
 
 inline constexpr unsigned reps_per_point = 5;
 
@@ -111,22 +111,23 @@ double measure_division(const std::size_t m, const std::size_t s, Algo algo) {
 double run_schoolbook_at(const std::size_t m, const std::size_t s) {
     return measure_division(m, s, [](const auto q, const auto r, const auto a, const auto b) {
         std_allocator    alloc;
-        scratch_for_test scratch(::beman::big_int::detail::divide_unsigned_storage_size(a.size(), b.size()), alloc);
-        ::beman::big_int::detail::divide_unsigned(q, r, a, b, scratch);
+        scratch_for_test scratch(::BEMAN_BIG_INT_NAMESPACE::detail::divide_unsigned_storage_size(a.size(), b.size()),
+                                 alloc);
+        ::BEMAN_BIG_INT_NAMESPACE::detail::divide_unsigned(q, r, a, b, scratch);
     });
 }
 
 double run_burnikel_ziegler_at(const std::size_t m, const std::size_t s) {
     return measure_division(m, s, [](const auto q, const auto r, const auto a, const auto b) {
         std_allocator alloc;
-        ::beman::big_int::detail::divide_burnikel_ziegler(q, r, a, b, alloc);
+        ::BEMAN_BIG_INT_NAMESPACE::detail::divide_burnikel_ziegler(q, r, a, b, alloc);
     });
 }
 
 double run_barrett_at(const std::size_t m, const std::size_t s) {
     return measure_division(m, s, [](const auto q, const auto r, const auto a, const auto b) {
         std_allocator alloc;
-        ::beman::big_int::detail::divide_barrett(q, r, a, b, alloc);
+        ::BEMAN_BIG_INT_NAMESPACE::detail::divide_barrett(q, r, a, b, alloc);
     });
 }
 

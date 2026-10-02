@@ -44,10 +44,10 @@
 
 namespace local {
 
-using uint_t           = ::beman::big_int::uint_multiprecision_t;
-using stopwatch        = ::beman::big_int::benchmark_testing::stopwatch;
+using uint_t           = ::BEMAN_BIG_INT_NAMESPACE::uint_multiprecision_t;
+using stopwatch        = ::BEMAN_BIG_INT_NAMESPACE::benchmark_testing::stopwatch;
 using std_allocator    = std::allocator<uint_t>;
-using scratch_for_test = ::beman::big_int::detail::scratch_allocator<std_allocator>;
+using scratch_for_test = ::BEMAN_BIG_INT_NAMESPACE::detail::scratch_allocator<std_allocator>;
 
 // Fill a span with random limbs and force the top limb non-zero so the
 // operand actually has `dest.size()` significant limbs (no accidental trim).
@@ -101,14 +101,15 @@ double measure_algorithm(const std::size_t limbs, const unsigned trials, const s
 // algorithm's own internal threshold).
 
 double run_long_at(const std::size_t limbs, const unsigned trials) {
-    return measure_algorithm(
-        limbs,
-        trials,
-        /*scratch_size=*/0,
-        [](const std::span<uint_t>       r,
-           const std::span<const uint_t> a,
-           const std::span<const uint_t> b,
-           scratch_for_test&) { ::beman::big_int::detail::multiply_long(r.first(a.size() + b.size()), a, b); });
+    return measure_algorithm(limbs,
+                             trials,
+                             /*scratch_size=*/0,
+                             [](const std::span<uint_t>       r,
+                                const std::span<const uint_t> a,
+                                const std::span<const uint_t> b,
+                                scratch_for_test&) {
+                                 ::BEMAN_BIG_INT_NAMESPACE::detail::multiply_long(r.first(a.size() + b.size()), a, b);
+                             });
 }
 
 // The runtime multiplication basecase (the assembly kernel (x86_64/AArch64)
@@ -160,7 +161,7 @@ double run_multiply_long_runtime_bmi2_adx_at(const std::size_t limbs, const unsi
 // Same rationale, for the AVX-512 IFMA kernel. Returns 0 (a row of zeros in
 // the CSV, not a crash) when the running CPU lacks the required features.
 double run_multiply_long_runtime_avx512_ifma_at(const std::size_t limbs, const unsigned trials) {
-    if (!::beman::big_int::tests::avx512_ifma_kernels_are_usable()) {
+    if (!::BEMAN_BIG_INT_NAMESPACE::tests::avx512_ifma_kernels_are_usable()) {
         return 0.0;
     }
     return measure_algorithm(limbs,
@@ -179,14 +180,14 @@ double run_multiply_long_runtime_avx512_ifma_at(const std::size_t limbs, const u
 double run_karatsuba_at(const std::size_t limbs, const unsigned trials) {
     return measure_algorithm(limbs,
                              trials,
-                             ::beman::big_int::detail::karatsuba_storage_size(limbs),
+                             ::BEMAN_BIG_INT_NAMESPACE::detail::karatsuba_storage_size(limbs),
                              [](const std::span<uint_t>       r,
                                 const std::span<const uint_t> a,
                                 const std::span<const uint_t> b,
                                 scratch_for_test&             s) {
                                  // cutoff_override=1 forces a Karatsuba split at any splittable size;
                                  // recursive sub-products use the production fallback.
-                                 ::beman::big_int::detail::multiply_karatsuba(
+                                 ::BEMAN_BIG_INT_NAMESPACE::detail::multiply_karatsuba(
                                      r.first(a.size() + b.size()), a, b, s, std::size_t{1});
                              });
 }
@@ -194,14 +195,14 @@ double run_karatsuba_at(const std::size_t limbs, const unsigned trials) {
 double run_toom_cook_3_at(const std::size_t limbs, const unsigned trials) {
     return measure_algorithm(limbs,
                              trials,
-                             ::beman::big_int::detail::toom_cook_3_storage_size(limbs),
+                             ::BEMAN_BIG_INT_NAMESPACE::detail::toom_cook_3_storage_size(limbs),
                              [](const std::span<uint_t>       r,
                                 const std::span<const uint_t> a,
                                 const std::span<const uint_t> b,
                                 scratch_for_test&             s) {
                                  // cutoff_override=1 forces the Toom-3 split; recursive sub-products
                                  // fall back to Karatsuba/schoolbook at the production cutoffs.
-                                 ::beman::big_int::detail::multiply_toom_cook_3(
+                                 ::BEMAN_BIG_INT_NAMESPACE::detail::multiply_toom_cook_3(
                                      r.first(a.size() + b.size()), a, b, s, std::size_t{1});
                              });
 }
@@ -213,12 +214,12 @@ double run_toom_cook_4_at(const std::size_t limbs, const unsigned trials) {
     // as they would in production.
     return measure_algorithm(limbs,
                              trials,
-                             ::beman::big_int::detail::toom_cook_4_storage_size(limbs),
+                             ::BEMAN_BIG_INT_NAMESPACE::detail::toom_cook_4_storage_size(limbs),
                              [](const std::span<uint_t>       r,
                                 const std::span<const uint_t> a,
                                 const std::span<const uint_t> b,
                                 scratch_for_test&             s) {
-                                 ::beman::big_int::detail::multiply_toom_cook_4(
+                                 ::BEMAN_BIG_INT_NAMESPACE::detail::multiply_toom_cook_4(
                                      r.first(a.size() + b.size()), a, b, s, std::size_t{1});
                              });
 }
@@ -229,12 +230,12 @@ double run_toom_cook_6_5_at(const std::size_t limbs, const unsigned trials) {
     // they fall back to Toom-4 / Toom-3 / Karatsuba / schoolbook as in production.
     return measure_algorithm(limbs,
                              trials,
-                             ::beman::big_int::detail::toom_cook_6_5_storage_size(limbs),
+                             ::BEMAN_BIG_INT_NAMESPACE::detail::toom_cook_6_5_storage_size(limbs),
                              [](const std::span<uint_t>       r,
                                 const std::span<const uint_t> a,
                                 const std::span<const uint_t> b,
                                 scratch_for_test&             s) {
-                                 ::beman::big_int::detail::multiply_toom_cook_6_5(
+                                 ::BEMAN_BIG_INT_NAMESPACE::detail::multiply_toom_cook_6_5(
                                      r.first(a.size() + b.size()), a, b, s, std::size_t{1});
                              });
 }
@@ -245,12 +246,12 @@ double run_toom_cook_8_5_at(const std::size_t limbs, const unsigned trials) {
     // they fall back to Toom-6.5 / Toom-4 / ... / schoolbook as in production.
     return measure_algorithm(limbs,
                              trials,
-                             ::beman::big_int::detail::toom_cook_8_5_storage_size(limbs),
+                             ::BEMAN_BIG_INT_NAMESPACE::detail::toom_cook_8_5_storage_size(limbs),
                              [](const std::span<uint_t>       r,
                                 const std::span<const uint_t> a,
                                 const std::span<const uint_t> b,
                                 scratch_for_test&             s) {
-                                 ::beman::big_int::detail::multiply_toom_cook_8_5(
+                                 ::BEMAN_BIG_INT_NAMESPACE::detail::multiply_toom_cook_8_5(
                                      r.first(a.size() + b.size()), a, b, s, std::size_t{1});
                              });
 }
@@ -260,8 +261,8 @@ double run_fft_at(const std::size_t limbs, const unsigned trials) {
     // any size. We pre-allocate its workspace(s) and capture them (the lambda
     // ignores the harness scratch). The signature depends on BEMAN_BIG_INT_SIMD_MUL.
 #if defined(BEMAN_BIG_INT_SIMD_MUL)
-    std::vector<double>        fp_ws(::beman::big_int::detail::fft_mul_fp_storage_size(limbs, limbs));
-    std::vector<std::uint64_t> int_ws(::beman::big_int::detail::fft_mul_int_storage_size(limbs, limbs));
+    std::vector<double>        fp_ws(::BEMAN_BIG_INT_NAMESPACE::detail::fft_mul_fp_storage_size(limbs, limbs));
+    std::vector<std::uint64_t> int_ws(::BEMAN_BIG_INT_NAMESPACE::detail::fft_mul_int_storage_size(limbs, limbs));
     return measure_algorithm(limbs,
                              trials,
                              /*scratch_size=*/0,
@@ -269,19 +270,21 @@ double run_fft_at(const std::size_t limbs, const unsigned trials) {
                                                const std::span<const uint_t> a,
                                                const std::span<const uint_t> b,
                                                scratch_for_test&) {
-                                 ::beman::big_int::detail::multiply_fft(
+                                 ::BEMAN_BIG_INT_NAMESPACE::detail::multiply_fft(
                                      r.first(a.size() + b.size()), a, b, fp_ws, int_ws);
                              });
 #else
-    std::vector<std::uint64_t> ws(::beman::big_int::detail::fft_mul_storage_size(limbs, limbs));
-    return measure_algorithm(
-        limbs,
-        trials,
-        /*scratch_size=*/0,
-        [&ws](const std::span<uint_t>       r,
-              const std::span<const uint_t> a,
-              const std::span<const uint_t> b,
-              scratch_for_test&) { ::beman::big_int::detail::multiply_fft(r.first(a.size() + b.size()), a, b, ws); });
+    std::vector<std::uint64_t> ws(::BEMAN_BIG_INT_NAMESPACE::detail::fft_mul_storage_size(limbs, limbs));
+    return measure_algorithm(limbs,
+                             trials,
+                             /*scratch_size=*/0,
+                             [&ws](const std::span<uint_t>       r,
+                                   const std::span<const uint_t> a,
+                                   const std::span<const uint_t> b,
+                                   scratch_for_test&) {
+                                 ::BEMAN_BIG_INT_NAMESPACE::detail::multiply_fft(
+                                     r.first(a.size() + b.size()), a, b, ws);
+                             });
 #endif
 }
 
@@ -297,7 +300,7 @@ double run_square_long_at(const std::size_t limbs, const unsigned trials) {
         [](const std::span<uint_t>       r,
            const std::span<const uint_t> a,
            const std::span<const uint_t>,
-           scratch_for_test&) { ::beman::big_int::detail::square_long(r.first(2 * a.size()), a); });
+           scratch_for_test&) { ::BEMAN_BIG_INT_NAMESPACE::detail::square_long(r.first(2 * a.size()), a); });
 }
 
 // The runtime squaring basecase (the assembly kernel (x86_64/AArch64) or its
@@ -342,7 +345,7 @@ double run_square_long_runtime_bmi2_adx_at(const std::size_t limbs, const unsign
 // Same rationale, for the AVX-512 IFMA kernel. Returns 0 (a row of zeros in
 // the CSV, not a crash) when the running CPU lacks the required features.
 double run_square_long_runtime_avx512_ifma_at(const std::size_t limbs, const unsigned trials) {
-    if (!::beman::big_int::tests::avx512_ifma_kernels_are_usable()) {
+    if (!::BEMAN_BIG_INT_NAMESPACE::tests::avx512_ifma_kernels_are_usable()) {
         return 0.0;
     }
     return measure_algorithm(
@@ -361,12 +364,12 @@ double run_square_karatsuba_at(const std::size_t limbs, const unsigned trials) {
     // sub-squares use the default cutoff, as in production.
     return measure_algorithm(limbs,
                              trials,
-                             ::beman::big_int::detail::karatsuba_storage_size(limbs),
+                             ::BEMAN_BIG_INT_NAMESPACE::detail::karatsuba_storage_size(limbs),
                              [](const std::span<uint_t>       r,
                                 const std::span<const uint_t> a,
                                 const std::span<const uint_t>,
                                 scratch_for_test& s) {
-                                 ::beman::big_int::detail::square_karatsuba(
+                                 ::BEMAN_BIG_INT_NAMESPACE::detail::square_karatsuba(
                                      r.first(2 * a.size()), a, s, std::size_t{1});
                              });
 }
@@ -376,12 +379,12 @@ double run_square_toom_cook_3_at(const std::size_t limbs, const unsigned trials)
     // use the default cutoffs, as in production.
     return measure_algorithm(limbs,
                              trials,
-                             ::beman::big_int::detail::toom_cook_3_storage_size(limbs),
+                             ::BEMAN_BIG_INT_NAMESPACE::detail::toom_cook_3_storage_size(limbs),
                              [](const std::span<uint_t>       r,
                                 const std::span<const uint_t> a,
                                 const std::span<const uint_t>,
                                 scratch_for_test& s) {
-                                 ::beman::big_int::detail::square_toom_cook_3(
+                                 ::BEMAN_BIG_INT_NAMESPACE::detail::square_toom_cook_3(
                                      r.first(2 * a.size()), a, s, std::size_t{1});
                              });
 }
@@ -391,12 +394,12 @@ double run_square_toom_cook_4_at(const std::size_t limbs, const unsigned trials)
     // use the default cutoffs, as in production.
     return measure_algorithm(limbs,
                              trials,
-                             ::beman::big_int::detail::toom_cook_4_storage_size(limbs),
+                             ::BEMAN_BIG_INT_NAMESPACE::detail::toom_cook_4_storage_size(limbs),
                              [](const std::span<uint_t>       r,
                                 const std::span<const uint_t> a,
                                 const std::span<const uint_t>,
                                 scratch_for_test& s) {
-                                 ::beman::big_int::detail::square_toom_cook_4(
+                                 ::BEMAN_BIG_INT_NAMESPACE::detail::square_toom_cook_4(
                                      r.first(2 * a.size()), a, s, std::size_t{1});
                              });
 }
@@ -406,12 +409,12 @@ double run_square_toom_cook_6_5_at(const std::size_t limbs, const unsigned trial
     // use the default cutoffs, as in production.
     return measure_algorithm(limbs,
                              trials,
-                             ::beman::big_int::detail::toom_cook_6_5_storage_size(limbs),
+                             ::BEMAN_BIG_INT_NAMESPACE::detail::toom_cook_6_5_storage_size(limbs),
                              [](const std::span<uint_t>       r,
                                 const std::span<const uint_t> a,
                                 const std::span<const uint_t>,
                                 scratch_for_test& s) {
-                                 ::beman::big_int::detail::square_toom_cook_6_5(
+                                 ::BEMAN_BIG_INT_NAMESPACE::detail::square_toom_cook_6_5(
                                      r.first(2 * a.size()), a, s, std::size_t{1});
                              });
 }
@@ -421,20 +424,20 @@ double run_square_toom_cook_8_5_at(const std::size_t limbs, const unsigned trial
     // use the default cutoffs, as in production.
     return measure_algorithm(limbs,
                              trials,
-                             ::beman::big_int::detail::toom_cook_8_5_storage_size(limbs),
+                             ::BEMAN_BIG_INT_NAMESPACE::detail::toom_cook_8_5_storage_size(limbs),
                              [](const std::span<uint_t>       r,
                                 const std::span<const uint_t> a,
                                 const std::span<const uint_t>,
                                 scratch_for_test& s) {
-                                 ::beman::big_int::detail::square_toom_cook_8_5(
+                                 ::BEMAN_BIG_INT_NAMESPACE::detail::square_toom_cook_8_5(
                                      r.first(2 * a.size()), a, s, std::size_t{1});
                              });
 }
 
 double run_square_fft_at(const std::size_t limbs, const unsigned trials) {
 #if defined(BEMAN_BIG_INT_SIMD_MUL)
-    std::vector<double>        fp_ws(::beman::big_int::detail::square_fft_fp_storage_size(limbs));
-    std::vector<std::uint64_t> int_ws(::beman::big_int::detail::square_fft_int_storage_size(limbs));
+    std::vector<double>        fp_ws(::BEMAN_BIG_INT_NAMESPACE::detail::square_fft_fp_storage_size(limbs));
+    std::vector<std::uint64_t> int_ws(::BEMAN_BIG_INT_NAMESPACE::detail::square_fft_int_storage_size(limbs));
     return measure_algorithm(limbs,
                              trials,
                              /*scratch_size=*/0,
@@ -442,10 +445,11 @@ double run_square_fft_at(const std::size_t limbs, const unsigned trials) {
                                                const std::span<const uint_t> a,
                                                const std::span<const uint_t>,
                                                scratch_for_test&) {
-                                 ::beman::big_int::detail::square_fft(r.first(2 * a.size()), a, fp_ws, int_ws);
+                                 ::BEMAN_BIG_INT_NAMESPACE::detail::square_fft(
+                                     r.first(2 * a.size()), a, fp_ws, int_ws);
                              });
 #else
-    std::vector<std::uint64_t> ws(::beman::big_int::detail::square_fft_storage_size(limbs));
+    std::vector<std::uint64_t> ws(::BEMAN_BIG_INT_NAMESPACE::detail::square_fft_storage_size(limbs));
     return measure_algorithm(
         limbs,
         trials,
@@ -453,7 +457,7 @@ double run_square_fft_at(const std::size_t limbs, const unsigned trials) {
         [&ws](const std::span<uint_t>       r,
               const std::span<const uint_t> a,
               const std::span<const uint_t>,
-              scratch_for_test&) { ::beman::big_int::detail::square_fft(r.first(2 * a.size()), a, ws); });
+              scratch_for_test&) { ::BEMAN_BIG_INT_NAMESPACE::detail::square_fft(r.first(2 * a.size()), a, ws); });
 #endif
 }
 

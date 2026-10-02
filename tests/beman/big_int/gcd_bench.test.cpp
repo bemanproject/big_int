@@ -25,10 +25,10 @@
 
 namespace local {
 
-using big_int_type = ::beman::big_int::big_int;
+using big_int_type = ::BEMAN_BIG_INT_NAMESPACE::big_int;
 using cpp_int_type =
     ::boost::multiprecision::number<::boost::multiprecision::cpp_int_backend<>, ::boost::multiprecision::et_off>;
-using stopwatch = ::beman::big_int::benchmark_testing::stopwatch;
+using stopwatch = ::BEMAN_BIG_INT_NAMESPACE::benchmark_testing::stopwatch;
 
 // One operand pair in both libraries, built from the same limbs so the two
 // timings measure the same reduction.

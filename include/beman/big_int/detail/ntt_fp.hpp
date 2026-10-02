@@ -13,7 +13,8 @@
 #include <beman/big_int/detail/mod_arith.hpp>
 #include <beman/big_int/detail/ntt.hpp> // for ntt_direction
 
-namespace beman::big_int::detail {
+BEMAN_BIG_INT_BEGIN_NAMESPACE
+namespace detail {
 
 // Double-precision floating-point NTT, the SIMD-friendly transform (FLINT
 // fft_small / van der Hoeven). Residues are doubles in a CENTERED representation;
@@ -273,6 +274,7 @@ ntt_fp_pointwise(const std::span<double> a, const std::span<const double> b, con
     ntt_fp_dispatch().pointwise(a.data(), b.data(), a.size(), m);
 }
 
-} // namespace beman::big_int::detail
+} // namespace detail
+BEMAN_BIG_INT_END_NAMESPACE
 
 #endif // BEMAN_BIG_INT_NTT_FP_HPP

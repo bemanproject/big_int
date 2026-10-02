@@ -21,9 +21,10 @@
 #include <string>
 #include <vector>
 
-namespace beman::big_int::kernel_testing {
+BEMAN_BIG_INT_BEGIN_NAMESPACE
+namespace kernel_testing {
 
-using kernel_uint = ::beman::big_int::uint_multiprecision_t;
+using kernel_uint = ::BEMAN_BIG_INT_NAMESPACE::uint_multiprecision_t;
 
 inline std::vector<kernel_uint> make_random_limbs(const std::size_t limbs, const std::uint64_t seed) {
     std::mt19937_64                            rng{seed};
@@ -49,14 +50,14 @@ void expect_kernel_matches_long(Kernel&& kernel, const std::size_t na, const std
     std::vector<kernel_uint> got(na + nb, kernel_uint{0});
     std::vector<kernel_uint> ref(na + nb, kernel_uint{0});
 
-    alloc_t                                              alloc;
-    ::beman::big_int::detail::scratch_allocator<alloc_t> scratch(16 * std::max(na, nb) + 4096, alloc);
+    alloc_t                                                       alloc;
+    ::BEMAN_BIG_INT_NAMESPACE::detail::scratch_allocator<alloc_t> scratch(16 * std::max(na, nb) + 4096, alloc);
     kernel(std::span<kernel_uint>{got},
            std::span<const kernel_uint>{a},
            std::span<const kernel_uint>{b},
            scratch,
            std::size_t{1});
-    ::beman::big_int::detail::multiply_long(
+    ::BEMAN_BIG_INT_NAMESPACE::detail::multiply_long(
         std::span<kernel_uint>{ref}, std::span<const kernel_uint>{a}, std::span<const kernel_uint>{b});
     EXPECT_EQ(got, ref);
 }
@@ -73,14 +74,14 @@ void expect_kernels_match(Kernel&& kernel, Reference&& reference, const std::siz
     std::vector<kernel_uint> got(na + nb, kernel_uint{0});
     std::vector<kernel_uint> ref(na + nb, kernel_uint{0});
 
-    alloc_t                                              alloc;
-    ::beman::big_int::detail::scratch_allocator<alloc_t> scratch(16 * std::max(na, nb) + 4096, alloc);
+    alloc_t                                                       alloc;
+    ::BEMAN_BIG_INT_NAMESPACE::detail::scratch_allocator<alloc_t> scratch(16 * std::max(na, nb) + 4096, alloc);
     kernel(std::span<kernel_uint>{got},
            std::span<const kernel_uint>{a},
            std::span<const kernel_uint>{b},
            scratch,
            std::size_t{1});
-    ::beman::big_int::detail::scratch_allocator<alloc_t> ref_scratch(16 * std::max(na, nb) + 4096, alloc);
+    ::BEMAN_BIG_INT_NAMESPACE::detail::scratch_allocator<alloc_t> ref_scratch(16 * std::max(na, nb) + 4096, alloc);
     reference(std::span<kernel_uint>{ref},
               std::span<const kernel_uint>{a},
               std::span<const kernel_uint>{b},
@@ -89,6 +90,7 @@ void expect_kernels_match(Kernel&& kernel, Reference&& reference, const std::siz
     EXPECT_EQ(got, ref);
 }
 
-} // namespace beman::big_int::kernel_testing
+} // namespace kernel_testing
+BEMAN_BIG_INT_END_NAMESPACE
 
 #endif // BEMAN_BIG_INT_TESTS_MUL_KERNEL_TESTING_HPP

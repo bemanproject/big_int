@@ -46,18 +46,18 @@ import beman.big_int;
 // Defined over there.
 namespace beman_big_int_abi {
 
-beman::big_int::big_int      twice(const beman::big_int::big_int& x);
-beman::big_int::pmr::big_int pmr_twice(const beman::big_int::pmr::big_int& x);
-std::string                  decimal(const beman::big_int::big_int& x);
-std::size_t                  hashed(const beman::big_int::big_int& x);
-beman::big_int::big_int      parse(const std::string& text);
+BEMAN_BIG_INT_NAMESPACE::big_int      twice(const BEMAN_BIG_INT_NAMESPACE::big_int& x);
+BEMAN_BIG_INT_NAMESPACE::pmr::big_int pmr_twice(const BEMAN_BIG_INT_NAMESPACE::pmr::big_int& x);
+std::string                           decimal(const BEMAN_BIG_INT_NAMESPACE::big_int& x);
+std::size_t                           hashed(const BEMAN_BIG_INT_NAMESPACE::big_int& x);
+BEMAN_BIG_INT_NAMESPACE::big_int      parse(const std::string& text);
 
 } // namespace beman_big_int_abi
 
 namespace {
 
-using beman::big_int::big_int;
-using namespace beman::big_int::literals;
+using BEMAN_BIG_INT_NAMESPACE::big_int;
+using namespace BEMAN_BIG_INT_NAMESPACE::literals;
 
 } // namespace
 
@@ -92,7 +92,7 @@ TEST(AbiCompat, AllocatingValueCrossesIntact) {
     const big_int mersenne = (big_int{1} << 4096) - 1_n;
 
     // Read intact by the header side.
-    EXPECT_EQ(beman_big_int_abi::decimal(mersenne), beman::big_int::to_string(mersenne));
+    EXPECT_EQ(beman_big_int_abi::decimal(mersenne), BEMAN_BIG_INT_NAMESPACE::to_string(mersenne));
 
     // Doubled by the header side, read back intact on the module side.
     const big_int doubled = beman_big_int_abi::twice(mersenne);
@@ -116,7 +116,7 @@ TEST(AbiCompat, HashAgreesAcrossBoundary) {
 
 // The pmr specialization crosses the boundary too.
 TEST(AbiCompat, PmrSpecializationCrossesBoundary) {
-    const beman::big_int::pmr::big_int x(555);
-    const beman::big_int::pmr::big_int doubled = beman_big_int_abi::pmr_twice(x);
-    EXPECT_EQ(doubled, beman::big_int::pmr::big_int(1110));
+    const BEMAN_BIG_INT_NAMESPACE::pmr::big_int x(555);
+    const BEMAN_BIG_INT_NAMESPACE::pmr::big_int doubled = beman_big_int_abi::pmr_twice(x);
+    EXPECT_EQ(doubled, BEMAN_BIG_INT_NAMESPACE::pmr::big_int(1110));
 }

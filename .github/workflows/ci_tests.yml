@@ -34,6 +34,7 @@ jobs:
           {"preset": "msvc-release", "runner": "windows-latest"},
           {"preset": "llvm-debug-simd", "image": "ghcr.io/bemanproject/infra-containers-clang:latest"},
           {"preset": "appleclang-debug-simd", "runner": "macos-latest"},
+          {"preset": "gcc-release-namespace", "image": "ghcr.io/bemanproject/infra-containers-gcc:latest"},
           {"preset": "llvm-release-module", "image": "ghcr.io/bemanproject/infra-containers-clang:latest"},
           {"preset": "gcc-release-module", "image": "ghcr.io/bemanproject/infra-containers-gcc:latest"}
         ]

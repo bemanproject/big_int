@@ -36,10 +36,10 @@
 import beman.big_int;
 namespace {
 
-using beman::big_int::big_int;
-using beman::big_int::div_rem_to_zero;
-using beman::big_int::div_result;
-using beman::big_int::uint_multiprecision_t;
+using BEMAN_BIG_INT_NAMESPACE::big_int;
+using BEMAN_BIG_INT_NAMESPACE::div_rem_to_zero;
+using BEMAN_BIG_INT_NAMESPACE::div_result;
+using BEMAN_BIG_INT_NAMESPACE::uint_multiprecision_t;
 
 // ----- small-value ladder: binary operators against pinned values -----
 

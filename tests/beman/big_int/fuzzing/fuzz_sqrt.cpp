@@ -19,7 +19,7 @@ struct sqrt_exec<void> {
     }
 };
 
-namespace beman::big_int {
+BEMAN_BIG_INT_BEGIN_NAMESPACE
 
 namespace detail {
 
@@ -48,7 +48,7 @@ static auto msb(const big_int& m) -> int {
     int bpos{msb_limb(hi_limb)};
 
     bpos += static_cast<int>(m.representation().size() - 1U) *
-            std::numeric_limits<beman::big_int::uint_multiprecision_t>::digits;
+            std::numeric_limits<BEMAN_BIG_INT_NAMESPACE::uint_multiprecision_t>::digits;
 
     return bpos;
 }
@@ -95,8 +95,8 @@ static auto sqrt(big_int m) -> big_int {
     return s;
 }
 
-} // namespace beman::big_int
+BEMAN_BIG_INT_END_NAMESPACE
 
 extern "C" int LLVMFuzzerTestOneInput(const std::uint8_t* data, std::size_t size) {
-    return ::beman::big_int::fuzz::run_unary(sqrt_exec<>{}, data, size, false);
+    return ::BEMAN_BIG_INT_NAMESPACE::fuzz::run_unary(sqrt_exec<>{}, data, size, false);
 }

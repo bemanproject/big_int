@@ -23,7 +23,8 @@
 // serves every allocator. Contracts live at the declarations in
 // div_impl.hpp.
 
-namespace beman::big_int::detail {
+BEMAN_BIG_INT_BEGIN_NAMESPACE
+namespace detail {
 
 // ---------------------------------------------------------------------------
 // Leaf of the Burnikel-Ziegler recursion: divide the 2n-limb window `a` by
@@ -894,4 +895,5 @@ void divide_barrett_preinv(const std::span<uint_multiprecision_t>       quotient
 // Convenience overload: sizes and owns the workspace, then forwards to the
 // scratch-based driver above.
 
-} // namespace beman::big_int::detail
+} // namespace detail
+BEMAN_BIG_INT_END_NAMESPACE

@@ -23,14 +23,14 @@
 
 namespace {
 
-using beman::big_int::big_int;
-using beman::big_int::div_rem_to_zero;
-using beman::big_int::to_string;
-using uint_t = beman::big_int::uint_multiprecision_t;
+using BEMAN_BIG_INT_NAMESPACE::big_int;
+using BEMAN_BIG_INT_NAMESPACE::div_rem_to_zero;
+using BEMAN_BIG_INT_NAMESPACE::to_string;
+using uint_t = BEMAN_BIG_INT_NAMESPACE::uint_multiprecision_t;
 
 using ring_alloc_type = util::ring_allocator<uint_t, std::size_t{64} << 20U>;
 
-using ring_big_int = beman::big_int::basic_big_int<big_int::inplace_bits, uint_t, ring_alloc_type>;
+using ring_big_int = BEMAN_BIG_INT_NAMESPACE::basic_big_int<big_int::inplace_bits, uint_t, ring_alloc_type>;
 
 big_int random_value(const std::size_t limbs, std::mt19937_64& rng, const bool negative) {
     big_int x = 1;

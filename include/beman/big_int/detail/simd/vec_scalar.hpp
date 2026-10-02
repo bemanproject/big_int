@@ -7,11 +7,14 @@
 #include <cmath>
 #include <cstddef>
 
+#include <beman/big_int/detail/config.hpp>
+
 // The scalar (width-1) vector type: the portable fallback and the executable
 // specification the SIMD kernels must match bit for bit. std::fma / std::rint are
 // correctly rounded and bit-exact even without hardware FMA.
 
-namespace beman::big_int::detail {
+BEMAN_BIG_INT_BEGIN_NAMESPACE
+namespace detail {
 
 struct vec1d {
     inline static constexpr std::size_t width = 1;
@@ -35,6 +38,7 @@ struct vec1d {
 }
 [[nodiscard]] inline vec1d vround(const vec1d a) noexcept { return vec1d{std::rint(a.v)}; }
 
-} // namespace beman::big_int::detail
+} // namespace detail
+BEMAN_BIG_INT_END_NAMESPACE
 
 #endif // BEMAN_BIG_INT_SIMD_VEC_SCALAR_HPP

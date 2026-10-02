@@ -21,7 +21,7 @@
 
 namespace {
 
-using namespace beman::big_int;
+using namespace BEMAN_BIG_INT_NAMESPACE;
 
 static_assert(std::has_single_bit(detail::width_v<uint_multiprecision_t>),
               "The to_chars and from_chars implementations assume "
@@ -1165,7 +1165,7 @@ TEST(FromCharsInPlace, ValuesThatFitDoNotAllocate) {
 }
 
 TEST(FromCharsInPlace, PmrNullResourceParsesInPlaceValues) {
-    using pmr_wide = beman::big_int::pmr::basic_big_int<512>;
+    using pmr_wide = BEMAN_BIG_INT_NAMESPACE::pmr::basic_big_int<512>;
     for (const auto& [base, n] : {std::pair<int, std::size_t>{10, 100}, {10, 40}, {16, 120}}) {
         pmr_wide          x{std::pmr::polymorphic_allocator<uint_multiprecision_t>{std::pmr::null_memory_resource()}};
         const std::string text = digits_of_length(n, base);

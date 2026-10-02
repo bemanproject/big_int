@@ -22,7 +22,8 @@
     #include <type_traits>
 #endif
 
-namespace beman::big_int::detail {
+BEMAN_BIG_INT_BEGIN_NAMESPACE
+namespace detail {
 
 // ---------------------------------------------------------------------------
 // Sub-quadratic base conversion (Modern Computer Arithmetic, Brent &
@@ -967,6 +968,7 @@ constexpr std::size_t limbs_to_digits(const std::span<unsigned char>            
     return limbs_to_digits(out, value, base, static_cast<scratch_allocator_base&>(scratch), alloc, basecase_override);
 }
 
-} // namespace beman::big_int::detail
+} // namespace detail
+BEMAN_BIG_INT_END_NAMESPACE
 
 #endif // BEMAN_BIG_INT_BASE_CONVERSION_HPP

@@ -13,8 +13,8 @@
 
 #include "testing.hpp"
 
-using beman::big_int::big_int;
-using beman::big_int::uint_multiprecision_t;
+using BEMAN_BIG_INT_NAMESPACE::big_int;
+using BEMAN_BIG_INT_NAMESPACE::uint_multiprecision_t;
 
 // Build a big_int from a little-endian array of 64-bit limbs without relying on
 // std::from_range, which is not yet available on every toolchain in CI.

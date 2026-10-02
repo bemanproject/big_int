@@ -12,7 +12,8 @@
 
 #include <beman/big_int/big_int.hpp>
 
-namespace beman::big_int::detail {
+BEMAN_BIG_INT_BEGIN_NAMESPACE
+namespace detail {
 
 // The digit counts below are derived exactly as Boost.Multiprecision derives them for cpp_int
 inline constexpr double log10_of_2 = 0.301029995663981195213738894724493026768189881462108541310;
@@ -28,7 +29,8 @@ inline constexpr double log10_of_2 = 0.30102999566398119521373889472449302676818
     return static_cast<int>(log10_of_2 * static_cast<double>(d)) + 2;
 }
 
-} // namespace beman::big_int::detail
+} // namespace detail
+BEMAN_BIG_INT_END_NAMESPACE
 
 // `has_denorm` and `has_denorm_loss` are deprecated in C++23.
 BEMAN_BIG_INT_DIAGNOSTIC_PUSH()
@@ -45,9 +47,9 @@ BEMAN_BIG_INT_DIAGNOSTIC_IGNORED_MSVC(4996)
 // out at `max_size()` bits -- but it is a property of one object's storage rather than
 // of the type, and it is far beyond any reachable allocation.
 template <std::size_t b, class L, class A>
-class std::numeric_limits<beman::big_int::basic_big_int<b, L, A>> {
+class std::numeric_limits<BEMAN_BIG_INT_NAMESPACE::basic_big_int<b, L, A>> {
 
-    using type = beman::big_int::basic_big_int<b, L, A>;
+    using type = BEMAN_BIG_INT_NAMESPACE::basic_big_int<b, L, A>;
 
     // Every value-returning member below returns a default-constructed `type`, so each
     // is exactly as noexcept as that constructor: unconditionally so for the default
@@ -76,8 +78,8 @@ class std::numeric_limits<beman::big_int::basic_big_int<b, L, A>> {
     static constexpr bool is_modulo = false;
 
     static constexpr int digits       = (std::numeric_limits<int>::max)();
-    static constexpr int digits10     = beman::big_int::detail::limits_digits10(digits);
-    static constexpr int max_digits10 = beman::big_int::detail::limits_max_digits10(digits);
+    static constexpr int digits10     = BEMAN_BIG_INT_NAMESPACE::detail::limits_digits10(digits);
+    static constexpr int max_digits10 = BEMAN_BIG_INT_NAMESPACE::detail::limits_max_digits10(digits);
     static constexpr int radix        = 2;
 
     static constexpr int min_exponent   = 0;

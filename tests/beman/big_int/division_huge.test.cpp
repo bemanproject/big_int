@@ -9,8 +9,8 @@
 
 #include "testing.hpp"
 
-using beman::big_int::big_int;
-using namespace beman::big_int::literals;
+using BEMAN_BIG_INT_NAMESPACE::big_int;
+using namespace BEMAN_BIG_INT_NAMESPACE::literals;
 
 TEST(DivisionHuge, TenByFiveLimbs) {
     const big_int a =

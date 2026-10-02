@@ -13,7 +13,8 @@
     #include <cstddef>
 #endif
 
-namespace beman::big_int::detail {
+BEMAN_BIG_INT_BEGIN_NAMESPACE
+namespace detail {
 
 [[nodiscard]] consteval unsigned char limb_max_input_digits_naive(const int base) {
     BEMAN_BIG_INT_ASSERT(base >= 2);
@@ -121,6 +122,7 @@ inline constexpr std::array<unsigned char, 37> approximate_ceil_div_log2_q0_8_ta
     return (scaled_result >> fractional_bits) + static_cast<std::size_t>((scaled_result & fractional_mask) != 0);
 }
 
-} // namespace beman::big_int::detail
+} // namespace detail
+BEMAN_BIG_INT_END_NAMESPACE
 
 #endif // BEMAN_BIG_INT_BASE_TABLES_HPP

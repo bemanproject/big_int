@@ -22,8 +22,8 @@
 
 namespace {
 
-namespace detail = beman::big_int::detail;
-using uint_t     = beman::big_int::uint_multiprecision_t;
+namespace detail = BEMAN_BIG_INT_NAMESPACE::detail;
+using uint_t     = BEMAN_BIG_INT_NAMESPACE::uint_multiprecision_t;
 
 // Per-digit reference: repeated short division by `base` itself. Quadratic
 // with a large constant; reserved for short values.

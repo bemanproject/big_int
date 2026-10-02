@@ -21,15 +21,15 @@
 
 namespace {
 
-using ::beman::big_int::detail::fp_center;
-using ::beman::big_int::detail::fp_mulmod;
-using ::beman::big_int::detail::fp_reduce_to_0n;
-using ::beman::big_int::detail::ntt_direction;
-using ::beman::big_int::detail::ntt_fp_build_twiddles;
-using ::beman::big_int::detail::ntt_fp_forward;
-using ::beman::big_int::detail::ntt_fp_inverse;
-using ::beman::big_int::detail::ntt_fp_pointwise;
-using ::beman::big_int::detail::ntt_fp_primes;
+using ::BEMAN_BIG_INT_NAMESPACE::detail::fp_center;
+using ::BEMAN_BIG_INT_NAMESPACE::detail::fp_mulmod;
+using ::BEMAN_BIG_INT_NAMESPACE::detail::fp_reduce_to_0n;
+using ::BEMAN_BIG_INT_NAMESPACE::detail::ntt_direction;
+using ::BEMAN_BIG_INT_NAMESPACE::detail::ntt_fp_build_twiddles;
+using ::BEMAN_BIG_INT_NAMESPACE::detail::ntt_fp_forward;
+using ::BEMAN_BIG_INT_NAMESPACE::detail::ntt_fp_inverse;
+using ::BEMAN_BIG_INT_NAMESPACE::detail::ntt_fp_pointwise;
+using ::BEMAN_BIG_INT_NAMESPACE::detail::ntt_fp_primes;
 using ::boost::multiprecision::cpp_int;
 
 // Bit width of nn^2, computed exactly via cpp_int (portable; no 128-bit type).

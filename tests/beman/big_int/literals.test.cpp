@@ -25,9 +25,9 @@ BEMAN_BIG_INT_DIAGNOSTIC_IGNORED_MSVC(4455)
 
 namespace {
 
-using namespace beman::big_int::literals;
+using namespace BEMAN_BIG_INT_NAMESPACE::literals;
 
-using beman::big_int::big_int;
+using BEMAN_BIG_INT_NAMESPACE::big_int;
 
 // [big.int.literal]
 // `operator""N`, `operator""_n` and `operator""_N` delegate to `operator""n`, so every
@@ -118,13 +118,13 @@ TEST(Literals, CapitalizedSuffixMatchesLowercase) {
 // the same storage and normalization invariants as any other `big_int`.
 TEST(Literals, AllocatingLiteralInvariants) {
     const auto small = 255_N;
-    EXPECT_TRUE(beman::big_int::is_inplace(small));
-    EXPECT_TRUE(beman::big_int::is_normalized(small));
+    EXPECT_TRUE(BEMAN_BIG_INT_NAMESPACE::is_inplace(small));
+    EXPECT_TRUE(BEMAN_BIG_INT_NAMESPACE::is_normalized(small));
 
     // 2^256, both in decimal and in hexadecimal.
     const auto large = 115792089237316195423570985008687907853269984665640564039457584007913129639936_N;
-    EXPECT_FALSE(beman::big_int::is_inplace(large));
-    EXPECT_TRUE(beman::big_int::is_normalized(large));
+    EXPECT_FALSE(BEMAN_BIG_INT_NAMESPACE::is_inplace(large));
+    EXPECT_TRUE(BEMAN_BIG_INT_NAMESPACE::is_normalized(large));
     EXPECT_EQ(large, 1_N << 256);
     EXPECT_EQ(large, 0x1'0000'0000'0000'0000'0000'0000'0000'0000'0000'0000'0000'0000'0000'0000'0000'0000_N);
 }

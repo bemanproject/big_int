@@ -31,12 +31,12 @@
 #include <utility>
 #include <vector>
 
-namespace bmp    = ::beman::big_int::boost_mp_testing;
-namespace detail = ::beman::big_int::detail;
+namespace bmp    = ::BEMAN_BIG_INT_NAMESPACE::boost_mp_testing;
+namespace detail = ::BEMAN_BIG_INT_NAMESPACE::detail;
 
 namespace {
 
-using uint_t  = ::beman::big_int::uint_multiprecision_t;
+using uint_t  = ::BEMAN_BIG_INT_NAMESPACE::uint_multiprecision_t;
 using alloc_t = std::allocator<uint_t>;
 using limbs_t = std::vector<uint_t>;
 
@@ -527,7 +527,7 @@ TEST(MultiplicationUnbalanced, SlicedPiecesTakeFft) {
 // fft_model_worthwhile against an exact big_int recomputation, with the AArch64 constant pairs and others, over a
 // grid of power-of-two lengths and operand sizes that reaches the 64-bit overflow region (config independent).
 TEST(MultiplicationUnbalanced, FftModelWorthwhileIsExact) {
-    using big                                              = ::beman::big_int::big_int;
+    using big                                              = ::BEMAN_BIG_INT_NAMESPACE::big_int;
     constexpr std::uint64_t                       u64_max  = std::numeric_limits<std::uint64_t>::max();
     const std::pair<std::uint64_t, std::uint64_t> ratios[] = {
         {13, 16}, {5, 8}, {7, 10}, {7, 16}, {1, 1}, {3, 1}, {1, 7}};
@@ -765,12 +765,12 @@ namespace {
 // Divides a by b with the public operators and checks q*b + r == a and 0 <= r < b.
 void check_division(const std::size_t la, const std::size_t lb, const std::uint64_t seed) {
     SCOPED_TRACE("dividend limbs=" + std::to_string(la) + " divisor limbs=" + std::to_string(lb));
-    const limbs_t                   va = make_random(la, seed);
-    const limbs_t                   vb = make_random(lb, seed + 1);
-    const ::beman::big_int::big_int a(va.begin(), va.end());
-    const ::beman::big_int::big_int b(vb.begin(), vb.end());
-    const auto                      q = a / b;
-    const auto                      r = a % b;
+    const limbs_t                            va = make_random(la, seed);
+    const limbs_t                            vb = make_random(lb, seed + 1);
+    const ::BEMAN_BIG_INT_NAMESPACE::big_int a(va.begin(), va.end());
+    const ::BEMAN_BIG_INT_NAMESPACE::big_int b(vb.begin(), vb.end());
+    const auto                               q = a / b;
+    const auto                               r = a % b;
     EXPECT_EQ(q * b + r, a);
     EXPECT_TRUE(r >= 0 && r < b);
 }

@@ -5,7 +5,7 @@
 #include "testing.hpp"
 #include <functional>
 
-using ::beman::big_int::boost_mp_testing::check_cpp_int_equal;
+using ::BEMAN_BIG_INT_NAMESPACE::boost_mp_testing::check_cpp_int_equal;
 
 TEST(OldFuzzerCrashes, Div1) {
     EXPECT_TRUE(check_cpp_int_equal(std::divides<>{},

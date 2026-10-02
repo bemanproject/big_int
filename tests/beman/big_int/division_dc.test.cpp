@@ -12,8 +12,8 @@
 #include <string_view>
 #include <system_error>
 
-using beman::big_int::big_int;
-using namespace beman::big_int::literals;
+using BEMAN_BIG_INT_NAMESPACE::big_int;
+using namespace BEMAN_BIG_INT_NAMESPACE::literals;
 
 namespace {
 
@@ -21,7 +21,7 @@ namespace {
 // _n literal (compiler constexpr step limits).
 [[nodiscard]] big_int parse(const std::string_view s) {
     big_int v;
-    const auto [p, ec] = beman::big_int::from_chars(s.data(), s.data() + s.size(), v, 10);
+    const auto [p, ec] = BEMAN_BIG_INT_NAMESPACE::from_chars(s.data(), s.data() + s.size(), v, 10);
     if (ec != std::errc{} || p != s.data() + s.size()) {
         ADD_FAILURE() << "failed to parse test literal";
     }

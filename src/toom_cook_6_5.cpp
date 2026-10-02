@@ -3,7 +3,8 @@
 
 #include <beman/big_int/detail/mul_impl.hpp>
 
-namespace beman::big_int::detail {
+BEMAN_BIG_INT_BEGIN_NAMESPACE
+namespace detail {
 
 // Solves one palindromic 5x5 subsystem of the Toom-6.5 interpolation (shared
 // by the general and squaring kernels; works on a, b, c, d, e where
@@ -1110,4 +1111,5 @@ void square_toom_cook_6_5(const std::span<uint_multiprecision_t>       result,
     scratch.deallocate(total_scratch);
 }
 
-} // namespace beman::big_int::detail
+} // namespace detail
+BEMAN_BIG_INT_END_NAMESPACE

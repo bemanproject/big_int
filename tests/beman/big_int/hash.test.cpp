@@ -23,9 +23,9 @@
 
 namespace {
 
-using beman::big_int::basic_big_int;
-using beman::big_int::big_int;
-using namespace beman::big_int::literals;
+using BEMAN_BIG_INT_NAMESPACE::basic_big_int;
+using BEMAN_BIG_INT_NAMESPACE::big_int;
+using namespace BEMAN_BIG_INT_NAMESPACE::literals;
 
 // ----- An independent SipHash-2-4, taking bytes rather than limbs -----
 
@@ -100,7 +100,7 @@ using namespace beman::big_int::literals;
 // significant zero byte. Built from value-level operations only, so it never
 // observes a limb, and zero yields the empty string.
 [[nodiscard]] std::vector<std::uint8_t> magnitude_bytes(const big_int& x) {
-    big_int                   magnitude = beman::big_int::abs(x);
+    big_int                   magnitude = BEMAN_BIG_INT_NAMESPACE::abs(x);
     std::vector<std::uint8_t> bytes;
     while (magnitude != 0) {
         bytes.push_back(static_cast<std::uint8_t>(static_cast<std::uint64_t>(magnitude & big_int{0xFF})));
@@ -121,7 +121,7 @@ using namespace beman::big_int::literals;
 
 // ----- The ladder of signed `_BitInt` types std::hash defers to -----
 
-namespace detail = beman::big_int::detail;
+namespace detail = BEMAN_BIG_INT_NAMESPACE::detail;
 
 // The rungs as the implementation generates them, narrowest first.
 template <std::size_t i>
@@ -229,10 +229,11 @@ static_assert(std::is_nothrow_invocable_r_v<std::size_t, std::hash<basic_big_int
 // std::hash::operator() is not constexpr, so nothing else in the suite evaluates the
 // digest at compile time. A zero magnitude is the empty input to SipHash-2-4, whose
 // published digest for that input is 726fdb47dd0e0e31.
-constexpr beman::big_int::uint_multiprecision_t zero_magnitude[]{0};
-static_assert(beman::big_int::detail::siphash(zero_magnitude, false) == fold_to_size_t(0x726fdb47dd0e0e31ULL));
-static_assert(beman::big_int::detail::siphash(zero_magnitude, false) !=
-              beman::big_int::detail::siphash(zero_magnitude, true));
+constexpr BEMAN_BIG_INT_NAMESPACE::uint_multiprecision_t zero_magnitude[]{0};
+static_assert(BEMAN_BIG_INT_NAMESPACE::detail::siphash(zero_magnitude, false) ==
+              fold_to_size_t(0x726fdb47dd0e0e31ULL));
+static_assert(BEMAN_BIG_INT_NAMESPACE::detail::siphash(zero_magnitude, false) !=
+              BEMAN_BIG_INT_NAMESPACE::detail::siphash(zero_magnitude, true));
 
 // ----- Determinism: hashing the same value twice yields the same hash -----
 
@@ -501,14 +502,16 @@ TEST(Hash, MatchesPublishedSipHash24Vectors) {
         0x93f5f5799a932462ULL, // {0x00, 0x01, ..., 0x07}
     };
 
-    EXPECT_EQ(beman::big_int::detail::siphash(big_int{0}.representation(), false), fold_to_size_t(short_digests[0]));
+    EXPECT_EQ(BEMAN_BIG_INT_NAMESPACE::detail::siphash(big_int{0}.representation(), false),
+              fold_to_size_t(short_digests[0]));
 
     for (std::size_t k = 2; k <= 8; ++k) {
         big_int x{0};
         for (std::size_t i = k; i-- > 0;) {
             x = (x << 8) + big_int{i};
         }
-        EXPECT_EQ(beman::big_int::detail::siphash(x.representation(), false), fold_to_size_t(short_digests[k - 1]))
+        EXPECT_EQ(BEMAN_BIG_INT_NAMESPACE::detail::siphash(x.representation(), false),
+                  fold_to_size_t(short_digests[k - 1]))
             << "length " << k;
     }
 }

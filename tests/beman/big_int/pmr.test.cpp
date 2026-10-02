@@ -24,17 +24,17 @@
 
 namespace {
 
-using beman::big_int::basic_big_int;
-using beman::big_int::big_int;
-using beman::big_int::from_chars;
-using beman::big_int::to_chars;
-using beman::big_int::to_string;
-using beman::big_int::uint_multiprecision_t;
-using namespace beman::big_int::literals;
+using BEMAN_BIG_INT_NAMESPACE::basic_big_int;
+using BEMAN_BIG_INT_NAMESPACE::big_int;
+using BEMAN_BIG_INT_NAMESPACE::from_chars;
+using BEMAN_BIG_INT_NAMESPACE::to_chars;
+using BEMAN_BIG_INT_NAMESPACE::to_string;
+using BEMAN_BIG_INT_NAMESPACE::uint_multiprecision_t;
+using namespace BEMAN_BIG_INT_NAMESPACE::literals;
 
-using pmr_big_int = beman::big_int::pmr::big_int;
+using pmr_big_int = BEMAN_BIG_INT_NAMESPACE::pmr::big_int;
 template <std::size_t b>
-using pmr_basic_big_int = beman::big_int::pmr::basic_big_int<b>;
+using pmr_basic_big_int = BEMAN_BIG_INT_NAMESPACE::pmr::basic_big_int<b>;
 using poly_alloc        = std::pmr::polymorphic_allocator<uint_multiprecision_t>;
 
 // ----- A counting/tracking pmr resource -----
@@ -207,8 +207,8 @@ TEST(Pmr, ConstructFromNonPmrBigIntWithDifferentInplaceBits) {
 // ----- Construction from a range / iterator pair -----
 
 TEST(Pmr, FromIteratorPairWithResource) {
-    counting_resource                                    cr;
-    std::array<beman::big_int::uint_multiprecision_t, 3> limbs{
+    counting_resource                                             cr;
+    std::array<BEMAN_BIG_INT_NAMESPACE::uint_multiprecision_t, 3> limbs{
         0x1111'1111'1111'1111ULL, 0x2222'2222'2222'2222ULL, 0x3333'3333'3333'3333ULL};
     const pmr_big_int x{limbs.begin(), limbs.end(), &cr};
     EXPECT_EQ(x.representation().size(), 3U);
@@ -222,9 +222,9 @@ TEST(Pmr, FromIteratorPairWithResource) {
 
 #if defined(__cpp_lib_containers_ranges) && __cpp_lib_containers_ranges >= 202202L
 TEST(Pmr, FromRangeWithResource) {
-    counting_resource                                    cr;
-    std::array<beman::big_int::uint_multiprecision_t, 2> limbs{0xDEADBEEFU, 0xCAFEBABEU};
-    const pmr_big_int                                    x{std::from_range, limbs, &cr};
+    counting_resource                                             cr;
+    std::array<BEMAN_BIG_INT_NAMESPACE::uint_multiprecision_t, 2> limbs{0xDEADBEEFU, 0xCAFEBABEU};
+    const pmr_big_int                                             x{std::from_range, limbs, &cr};
     EXPECT_EQ(x.representation().size(), 2U);
     EXPECT_EQ(x.representation()[0], 0xDEADBEEFU);
     EXPECT_EQ(x.representation()[1], 0xCAFEBABEU);
@@ -366,8 +366,8 @@ TEST(Pmr, AllocatorExtendedConstructionDeducesTypeFromValue) {
     counting_resource cr;
     pmr_big_int       x{7, &cr};
 
-    const beman::big_int::basic_big_int copy(x, &cr);
-    const beman::big_int::basic_big_int moved(std::move(x), &cr);
+    const BEMAN_BIG_INT_NAMESPACE::basic_big_int copy(x, &cr);
+    const BEMAN_BIG_INT_NAMESPACE::basic_big_int moved(std::move(x), &cr);
     static_assert(std::is_same_v<decltype(copy), const pmr_big_int>);
     static_assert(std::is_same_v<decltype(moved), const pmr_big_int>);
     EXPECT_EQ(copy, 7);

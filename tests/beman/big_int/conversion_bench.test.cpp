@@ -25,7 +25,7 @@ BEMAN_BIG_INT_DIAGNOSTIC_IGNORED_GCC("-Wstringop-overread")
 namespace local {
 
 struct conversion_input_buffers {
-    using big_int_type = beman::big_int::big_int;
+    using big_int_type = BEMAN_BIG_INT_NAMESPACE::big_int;
     using cpp_int_type =
         boost::multiprecision::number<boost::multiprecision::cpp_int_backend<>, boost::multiprecision::et_off>;
 
@@ -45,16 +45,17 @@ struct conversion_input_buffers {
     out.cpp_int_values.reserve(count);
 
     for (std::size_t i = 0; i < count; ++i) {
-        const std::string hex = beman::big_int::boost_mp_testing::random_big_int(bit_dist(rng), sign_dist(rng));
-        out.big_int_values.push_back(beman::big_int::boost_mp_testing::detail::parse_big_int(hex));
-        out.cpp_int_values.push_back(beman::big_int::boost_mp_testing::detail::parse_cpp_int(hex));
+        const std::string hex =
+            BEMAN_BIG_INT_NAMESPACE::boost_mp_testing::random_big_int(bit_dist(rng), sign_dist(rng));
+        out.big_int_values.push_back(BEMAN_BIG_INT_NAMESPACE::boost_mp_testing::detail::parse_big_int(hex));
+        out.cpp_int_values.push_back(BEMAN_BIG_INT_NAMESPACE::boost_mp_testing::detail::parse_cpp_int(hex));
     }
 
     return out;
 }
 
 [[nodiscard]] bool run_conversion_benchmarks(const std::size_t max_bits) {
-    using local_stopwatch_type = beman::big_int::benchmark_testing::stopwatch;
+    using local_stopwatch_type = BEMAN_BIG_INT_NAMESPACE::benchmark_testing::stopwatch;
 
     constexpr std::uint64_t hash_offset_basis = 1469598103934665603;
     constexpr std::uint64_t hash_prime        = 1099511628211;

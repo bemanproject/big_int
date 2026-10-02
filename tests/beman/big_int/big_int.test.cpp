@@ -12,7 +12,7 @@
 
 #include "testing.hpp"
 
-namespace beman::big_int {
+BEMAN_BIG_INT_BEGIN_NAMESPACE
 
 static_assert(detail::width_v<detail::wider_t<std::int8_t>> == 16);
 static_assert(detail::width_v<detail::wider_t<std::int16_t>> == 32);
@@ -85,7 +85,7 @@ static_assert(
     detail::is_basic_big_int_v<basic_big_int<128, uint_multiprecision_t, std::allocator<uint_multiprecision_t>>>);
 static_assert(std::is_same_v<detail::limb_type_of_t<big_int>, uint_multiprecision_t>);
 
-using namespace beman::big_int::literals;
+using namespace BEMAN_BIG_INT_NAMESPACE::literals;
 
 static_assert(0_n == 0_n);
 static_assert(1_n != 0_n);
@@ -97,14 +97,14 @@ static_assert(0B1111_n == 15_n);
 static_assert(1000_n == 1'0'00_n);
 static_assert(1'000'000'000'000'000'000'000'000'000_n == 0x33b'2e3c'9fd0'803c'e800'0000_n);
 
-} // namespace beman::big_int
+BEMAN_BIG_INT_END_NAMESPACE
 
 // Exercise the fully explicit three-argument spelling, so the limb parameter is instantiated
 // through real arithmetic rather than only named in a type comparison.
 TEST(BigIntType, ExplicitLimbTypeArgument) {
-    using beman::big_int::uint_multiprecision_t;
+    using BEMAN_BIG_INT_NAMESPACE::uint_multiprecision_t;
     using explicit_big_int =
-        beman::big_int::basic_big_int<256, uint_multiprecision_t, std::allocator<uint_multiprecision_t>>;
+        BEMAN_BIG_INT_NAMESPACE::basic_big_int<256, uint_multiprecision_t, std::allocator<uint_multiprecision_t>>;
 
     explicit_big_int x{1};
     for (int i = 0; i < 40; ++i) {
@@ -117,5 +117,5 @@ TEST(BigIntType, ExplicitLimbTypeArgument) {
     EXPECT_EQ(-x + x, explicit_big_int{0});
 
     // The default spelling names the same type, so hashing must agree with it.
-    EXPECT_EQ(std::hash<explicit_big_int>{}(x), std::hash<beman::big_int::basic_big_int<256>>{}(x));
+    EXPECT_EQ(std::hash<explicit_big_int>{}(x), std::hash<BEMAN_BIG_INT_NAMESPACE::basic_big_int<256>>{}(x));
 }

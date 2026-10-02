@@ -18,13 +18,13 @@
 import beman.big_int;
 namespace {
 
-using beman::big_int::abs;
-using beman::big_int::big_int;
-using beman::big_int::gcd;
-using beman::big_int::in_range;
-using beman::big_int::lcm;
-using beman::big_int::midpoint;
-using beman::big_int::saturating_cast;
+using BEMAN_BIG_INT_NAMESPACE::abs;
+using BEMAN_BIG_INT_NAMESPACE::big_int;
+using BEMAN_BIG_INT_NAMESPACE::gcd;
+using BEMAN_BIG_INT_NAMESPACE::in_range;
+using BEMAN_BIG_INT_NAMESPACE::lcm;
+using BEMAN_BIG_INT_NAMESPACE::midpoint;
+using BEMAN_BIG_INT_NAMESPACE::saturating_cast;
 
 // ----- abs on lvalue and rvalue -----
 
@@ -56,7 +56,7 @@ template <class R>
 // into argument-dependent lookup, so an unqualified probe can pick up a std overload
 // instead of ours -- and whether that overload SFINAEs out or static_asserts in its
 // body differs between libc++ and libstdc++. Qualifying tests our constraint only.
-concept has_saturating_cast = requires(const big_int& x) { beman::big_int::saturating_cast<R>(x); };
+concept has_saturating_cast = requires(const big_int& x) { BEMAN_BIG_INT_NAMESPACE::saturating_cast<R>(x); };
 
 static_assert(has_saturating_cast<int>);
 static_assert(has_saturating_cast<unsigned>);
@@ -90,7 +90,7 @@ template <class R>
 // Qualified for the same reason as has_saturating_cast above: `std::in_range` from
 // <utility> is an ADL candidate here, and libstdc++ rejects it with a static_assert in
 // the body rather than a constraint, which would make an unqualified probe succeed.
-concept has_in_range = requires(const big_int& x) { beman::big_int::in_range<R>(x); };
+concept has_in_range = requires(const big_int& x) { BEMAN_BIG_INT_NAMESPACE::in_range<R>(x); };
 
 static_assert(has_in_range<int>);
 static_assert(has_in_range<unsigned>);

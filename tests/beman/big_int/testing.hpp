@@ -10,7 +10,7 @@
 
 #include <beman/big_int.hpp>
 
-namespace beman::big_int {
+BEMAN_BIG_INT_BEGIN_NAMESPACE
 
 template <std::size_t b, class L, class A>
 std::ostream& operator<<(std::ostream& out, const basic_big_int<b, L, A>& x) {
@@ -71,6 +71,6 @@ template <std::size_t b, class L, class A>
     return n;
 }
 
-} // namespace beman::big_int
+BEMAN_BIG_INT_END_NAMESPACE
 
 #endif // BEMAN_BIG_INT_TEST_HPP

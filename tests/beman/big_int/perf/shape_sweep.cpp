@@ -75,8 +75,8 @@ void                     __gmpn_tdiv_qr(
 
 namespace {
 
-namespace bb = ::beman::big_int;
-namespace dt = ::beman::big_int::detail;
+namespace bb = ::BEMAN_BIG_INT_NAMESPACE;
+namespace dt = ::BEMAN_BIG_INT_NAMESPACE::detail;
 
 using limb_t = bb::uint_multiprecision_t;
 using u64    = std::uint64_t;

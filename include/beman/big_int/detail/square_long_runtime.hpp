@@ -17,19 +17,21 @@
 
 // Compile-time selection between the two x86-64 kernels (config.hpp resolves
 // BEMAN_BIG_INT_X86_64_BMI2_ADX), so there is no runtime dispatch cost.
-extern "C" void beman_big_int_square_long_runtime_generic(beman::big_int::uint_multiprecision_t*       p_result,
-                                                          const beman::big_int::uint_multiprecision_t* p_a,
-                                                          const std::size_t                            len_a) noexcept;
-extern "C" void beman_big_int_square_long_runtime_bmi2_adx(beman::big_int::uint_multiprecision_t*       p_result,
-                                                           const beman::big_int::uint_multiprecision_t* p_a,
+extern "C" void beman_big_int_square_long_runtime_generic(BEMAN_BIG_INT_NAMESPACE::uint_multiprecision_t* p_result,
+                                                          const BEMAN_BIG_INT_NAMESPACE::uint_multiprecision_t* p_a,
+                                                          const std::size_t len_a) noexcept;
+extern "C" void beman_big_int_square_long_runtime_bmi2_adx(BEMAN_BIG_INT_NAMESPACE::uint_multiprecision_t* p_result,
+                                                           const BEMAN_BIG_INT_NAMESPACE::uint_multiprecision_t* p_a,
                                                            const std::size_t len_a) noexcept;
 // Always declared on x86-64 (the .s/.asm stub or real kernel is always
 // assembled), even when BEMAN_BIG_INT_X86_64_AVX512_IFMA resolves to 0.
-extern "C" void beman_big_int_square_long_runtime_avx512_ifma(beman::big_int::uint_multiprecision_t*       p_result,
-                                                              const beman::big_int::uint_multiprecision_t* p_a,
-                                                              const std::size_t len_a) noexcept;
+extern "C" void
+beman_big_int_square_long_runtime_avx512_ifma(BEMAN_BIG_INT_NAMESPACE::uint_multiprecision_t*       p_result,
+                                              const BEMAN_BIG_INT_NAMESPACE::uint_multiprecision_t* p_a,
+                                              const std::size_t                                     len_a) noexcept;
 
-namespace beman::big_int::detail {
+BEMAN_BIG_INT_BEGIN_NAMESPACE
+namespace detail {
 
 // Below this many limbs the AVX-512 IFMA square kernel routes back to the
 // BMI2/ADX-or-generic choice.
@@ -40,13 +42,14 @@ inline constexpr std::size_t ifma_square_min_limbs = 16;
 // square kernel instead.
 inline constexpr std::size_t ifma_square_native_max_limbs = 256;
 
-} // namespace beman::big_int::detail
+} // namespace detail
+BEMAN_BIG_INT_END_NAMESPACE
 
-inline void beman_big_int_square_long_runtime(beman::big_int::uint_multiprecision_t*       p_result,
-                                              const beman::big_int::uint_multiprecision_t* p_a,
-                                              const std::size_t                            len_a) noexcept {
+inline void beman_big_int_square_long_runtime(BEMAN_BIG_INT_NAMESPACE::uint_multiprecision_t*       p_result,
+                                              const BEMAN_BIG_INT_NAMESPACE::uint_multiprecision_t* p_a,
+                                              const std::size_t                                     len_a) noexcept {
     #if BEMAN_BIG_INT_X86_64_AVX512_IFMA
-    if (len_a >= beman::big_int::detail::ifma_square_min_limbs) {
+    if (len_a >= BEMAN_BIG_INT_NAMESPACE::detail::ifma_square_min_limbs) {
         beman_big_int_square_long_runtime_avx512_ifma(p_result, p_a, len_a);
         return;
     }
@@ -60,14 +63,15 @@ inline void beman_big_int_square_long_runtime(beman::big_int::uint_multiprecisio
 
 #else
 
-BEMAN_BIG_INT_ASM_LINKAGE void beman_big_int_square_long_runtime(beman::big_int::uint_multiprecision_t*       p_result,
-                                                                 const beman::big_int::uint_multiprecision_t* p_a,
-                                                                 const std::size_t len_a) noexcept
+BEMAN_BIG_INT_ASM_LINKAGE void
+beman_big_int_square_long_runtime(BEMAN_BIG_INT_NAMESPACE::uint_multiprecision_t*       p_result,
+                                  const BEMAN_BIG_INT_NAMESPACE::uint_multiprecision_t* p_a,
+                                  const std::size_t                                     len_a) noexcept
     #if defined(BEMAN_BIG_INT_HAS_ASM_KERNELS)
     ;
     #else
 {
-    using limb = beman::big_int::uint_multiprecision_t;
+    using limb = BEMAN_BIG_INT_NAMESPACE::uint_multiprecision_t;
 
     if (len_a == 0) {
         return;
@@ -78,8 +82,8 @@ BEMAN_BIG_INT_ASM_LINKAGE void beman_big_int_square_long_runtime(beman::big_int:
     {
         limb carry = 0;
         for (std::size_t j = 1; j < len_a; ++j) {
-            const auto [lo, hi] = beman::big_int::detail::widening_mul(*p_a, *(p_a + j));
-            const auto [s, c]   = beman::big_int::detail::carrying_add(lo, carry);
+            const auto [lo, hi] = BEMAN_BIG_INT_NAMESPACE::detail::widening_mul(*p_a, *(p_a + j));
+            const auto [s, c]   = BEMAN_BIG_INT_NAMESPACE::detail::carrying_add(lo, carry);
             *(p_result + j)     = s;
             carry               = hi + static_cast<limb>(c);
         }
@@ -89,9 +93,9 @@ BEMAN_BIG_INT_ASM_LINKAGE void beman_big_int_square_long_runtime(beman::big_int:
     for (std::size_t i = 1; i + 1 < len_a; ++i) {
         limb carry = 0;
         for (std::size_t j = i + 1; j < len_a; ++j) {
-            const auto [lo, hi]   = beman::big_int::detail::widening_mul(*(p_a + i), *(p_a + j));
-            const auto [s1, c1]   = beman::big_int::detail::carrying_add(lo, *(p_result + (i + j)));
-            const auto [s2, c2]   = beman::big_int::detail::carrying_add(s1, carry);
+            const auto [lo, hi]   = BEMAN_BIG_INT_NAMESPACE::detail::widening_mul(*(p_a + i), *(p_a + j));
+            const auto [s1, c1]   = BEMAN_BIG_INT_NAMESPACE::detail::carrying_add(lo, *(p_result + (i + j)));
+            const auto [s2, c2]   = BEMAN_BIG_INT_NAMESPACE::detail::carrying_add(s1, carry);
             *(p_result + (i + j)) = s2;
             carry                 = hi + static_cast<limb>(c1) + static_cast<limb>(c2);
         }
@@ -105,7 +109,7 @@ BEMAN_BIG_INT_ASM_LINKAGE void beman_big_int_square_long_runtime(beman::big_int:
     // Double the triangle and add the diagonal squares, pair by pair. `extra`
     // (at most 2) carries the bit doubling shifts out of the pair's high limb
     // plus the carry out of the pair's sum.
-    constexpr std::size_t top_shift = beman::big_int::detail::width_v<limb> - 1;
+    constexpr std::size_t top_shift = BEMAN_BIG_INT_NAMESPACE::detail::width_v<limb> - 1;
 
     limb extra = 0;
     for (std::size_t i = 0; i < len_a; ++i) {
@@ -115,11 +119,11 @@ BEMAN_BIG_INT_ASM_LINKAGE void beman_big_int_square_long_runtime(beman::big_int:
         const limb d_lo = t_lo << 1u;
         const limb d_hi = (t_hi << 1u) | (t_lo >> top_shift);
 
-        const auto [sq_lo, sq_hi] = beman::big_int::detail::widening_mul(*(p_a + i), *(p_a + i));
-        const auto [s0, c0]       = beman::big_int::detail::carrying_add(sq_lo, d_lo);
-        const auto [s1, c1]       = beman::big_int::detail::carrying_add(sq_hi, d_hi, c0);
-        const auto [s2, c2]       = beman::big_int::detail::carrying_add(s0, extra);
-        const auto [s3, c3]       = beman::big_int::detail::carrying_add(s1, limb{0}, c2);
+        const auto [sq_lo, sq_hi] = BEMAN_BIG_INT_NAMESPACE::detail::widening_mul(*(p_a + i), *(p_a + i));
+        const auto [s0, c0]       = BEMAN_BIG_INT_NAMESPACE::detail::carrying_add(sq_lo, d_lo);
+        const auto [s1, c1]       = BEMAN_BIG_INT_NAMESPACE::detail::carrying_add(sq_hi, d_hi, c0);
+        const auto [s2, c2]       = BEMAN_BIG_INT_NAMESPACE::detail::carrying_add(s0, extra);
+        const auto [s3, c3]       = BEMAN_BIG_INT_NAMESPACE::detail::carrying_add(s1, limb{0}, c2);
 
         *(p_result + 2 * i)       = s2;
         *(p_result + (2 * i + 1)) = s3;

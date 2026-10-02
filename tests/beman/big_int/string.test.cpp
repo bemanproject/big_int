@@ -19,7 +19,7 @@
 
 namespace {
 
-using namespace beman::big_int;
+using namespace BEMAN_BIG_INT_NAMESPACE;
 
 // to_string and its wide twin to_wstring both render through the same to_chars
 // path; to_wstring additionally widens the narrow ASCII output. The ToWString

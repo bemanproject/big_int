@@ -11,8 +11,8 @@
 
 #include <beman/big_int.hpp>
 
-using beman::big_int::big_int;
-using beman::big_int::uint_multiprecision_t;
+using BEMAN_BIG_INT_NAMESPACE::big_int;
+using BEMAN_BIG_INT_NAMESPACE::uint_multiprecision_t;
 
 namespace {
 

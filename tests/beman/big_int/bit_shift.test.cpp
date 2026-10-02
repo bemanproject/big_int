@@ -11,10 +11,10 @@
 
 namespace {
 
-using beman::big_int::basic_big_int;
-using beman::big_int::big_int;
-using beman::big_int::uint_multiprecision_t;
-using beman::big_int::detail::int_multiprecision_t;
+using BEMAN_BIG_INT_NAMESPACE::basic_big_int;
+using BEMAN_BIG_INT_NAMESPACE::big_int;
+using BEMAN_BIG_INT_NAMESPACE::uint_multiprecision_t;
+using BEMAN_BIG_INT_NAMESPACE::detail::int_multiprecision_t;
 
 TEST(BitShift, LeftShiftBasic) {
     big_int x{0};

@@ -52,7 +52,7 @@ BEMAN_BIG_INT_DIAGNOSTIC_IGNORED_GCC("-Wpadded")
 #endif
 
 #if defined(ELLIPTIC_CPP_INT_USE_STD_BIG_INT)
-using big_sint_type = beman::big_int::big_int;
+using big_sint_type = BEMAN_BIG_INT_NAMESPACE::big_int;
 #elif defined(ELLIPTIC_CPP_INT_USE_GMP_INT)
 using big_sint_backend_type = boost::multiprecision::gmp_int;
 using big_sint_type         = boost::multiprecision::number<big_sint_backend_type, boost::multiprecision::et_off>;

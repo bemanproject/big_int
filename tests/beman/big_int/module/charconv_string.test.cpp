@@ -24,8 +24,8 @@
 import beman.big_int;
 namespace {
 
-using beman::big_int::big_int;
-using namespace beman::big_int::literals;
+using BEMAN_BIG_INT_NAMESPACE::big_int;
+using namespace BEMAN_BIG_INT_NAMESPACE::literals;
 
 // A handful of representative values, exercised across every base under test.
 constexpr long long some_positive = 123456789;

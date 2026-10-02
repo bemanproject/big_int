@@ -8,16 +8,16 @@
 #include <gtest/gtest.h>
 #include <cstddef>
 
-namespace bmp = ::beman::big_int::boost_mp_testing;
-namespace kt  = ::beman::big_int::kernel_testing;
+namespace bmp = ::BEMAN_BIG_INT_NAMESPACE::boost_mp_testing;
+namespace kt  = ::BEMAN_BIG_INT_NAMESPACE::kernel_testing;
 
 constexpr std::size_t limb_bits =
-    static_cast<std::size_t>(std::numeric_limits<::beman::big_int::uint_multiprecision_t>::digits);
+    static_cast<std::size_t>(std::numeric_limits<::BEMAN_BIG_INT_NAMESPACE::uint_multiprecision_t>::digits);
 
 // Toom-Cook 4 routing starts at detail::toom_cook_4_cutoff (`cutoff` below). Tests around the boundary verify
 // that the dispatcher produces correct results on both sides of it and for varying input sizes. Shapes are derived
 // from the constant, so they follow retuning.
-constexpr std::size_t cutoff = ::beman::big_int::detail::toom_cook_4_cutoff;
+constexpr std::size_t cutoff = ::BEMAN_BIG_INT_NAMESPACE::detail::toom_cook_4_cutoff;
 
 void check_balanced(const std::size_t limbs_a, const std::size_t limbs_b) {
     const std::string a = bmp::random_big_int(limbs_a * limb_bits);
@@ -54,10 +54,10 @@ TEST(Multiplication, ToomCook4DeepRecursionKernel) {
     // Force the top level (cutoff_override = 1) at a size whose sub-products clear the tier's own cutoff, so the
     // kernel recurses into itself, and compare with the next lower kernel.
     const auto kernel = [](auto r, auto a, auto b, auto& s, const std::size_t c) {
-        ::beman::big_int::detail::multiply_toom_cook_4(r, a, b, s, c);
+        ::BEMAN_BIG_INT_NAMESPACE::detail::multiply_toom_cook_4(r, a, b, s, c);
     };
     const auto reference = [](auto r, auto a, auto b, auto& s, const std::size_t c) {
-        ::beman::big_int::detail::multiply_toom_cook_3(r, a, b, s, c);
+        ::BEMAN_BIG_INT_NAMESPACE::detail::multiply_toom_cook_3(r, a, b, s, c);
     };
     kt::expect_kernels_match(kernel, reference, 4 * cutoff + 4, 4 * cutoff + 4);
 }
@@ -81,7 +81,7 @@ TEST(Multiplication, ToomCook4KernelRatioFallback) {
     // Drive the kernel directly with cutoff_override = 1: shapes inside the ratio gate run Toom, the rest fall
     // back inside the kernel; all must match schoolbook.
     const auto kernel = [](auto r, auto a, auto b, auto& s, const std::size_t c) {
-        ::beman::big_int::detail::multiply_toom_cook_4(r, a, b, s, c);
+        ::BEMAN_BIG_INT_NAMESPACE::detail::multiply_toom_cook_4(r, a, b, s, c);
     };
     for (const auto& [na, nb] :
          {std::pair<std::size_t, std::size_t>{100, 180}, {90, 400}, {150, 180}, {200, 240}, {50, 300}}) {

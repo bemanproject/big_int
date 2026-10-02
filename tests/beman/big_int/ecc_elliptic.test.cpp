@@ -54,7 +54,7 @@ BEMAN_BIG_INT_DIAGNOSTIC_IGNORED_GCC("-Wpadded")
 #endif
 
 #if defined(ELLIPTIC_CPP_INT_USE_STD_BIG_INT)
-using big_sint_type = beman::big_int::big_int;
+using big_sint_type = BEMAN_BIG_INT_NAMESPACE::big_int;
 #elif defined(ELLIPTIC_CPP_INT_USE_GMP_INT)
 using big_sint_backend_type = boost::multiprecision::gmp_int;
 using big_sint_type         = boost::multiprecision::number<big_sint_backend_type, boost::multiprecision::et_off>;
@@ -63,7 +63,8 @@ using big_sint_backend_type = boost::multiprecision::cpp_int_backend<>;
 using big_sint_type         = boost::multiprecision::number<big_sint_backend_type, boost::multiprecision::et_off>;
 #endif
 
-namespace beman::big_int::example::local::concurrency {
+BEMAN_BIG_INT_BEGIN_NAMESPACE
+namespace example::local::concurrency {
 
 template <class ClockType = std::chrono::high_resolution_clock>
 struct stopwatch {
@@ -101,9 +102,11 @@ struct stopwatch {
     }
 };
 
-} // namespace beman::big_int::example::local::concurrency
+} // namespace example::local::concurrency
+BEMAN_BIG_INT_END_NAMESPACE
 
-namespace beman::big_int::example {
+BEMAN_BIG_INT_BEGIN_NAMESPACE
+namespace example {
 
 namespace detail {
 
@@ -796,13 +799,16 @@ inline constexpr auto SubGroupCoFactorH      = 1;
 
 } // namespace curve_params
 
-} // namespace beman::big_int::example
+} // namespace example
+BEMAN_BIG_INT_END_NAMESPACE
 
-namespace beman::big_int::example {
+BEMAN_BIG_INT_BEGIN_NAMESPACE
+namespace example {
 auto ecdsa_sign_verify() -> bool;
-} // namespace beman::big_int::example
+} // namespace example
+BEMAN_BIG_INT_END_NAMESPACE
 
-auto beman::big_int::example::ecdsa_sign_verify() -> bool {
+auto BEMAN_BIG_INT_NAMESPACE::example::ecdsa_sign_verify() -> bool {
     auto result_is_ok = true;
 
     using elliptic_curve_type = elliptic_curve;
@@ -833,7 +839,7 @@ auto beman::big_int::example::ecdsa_sign_verify() -> bool {
         const auto hash_result = my_elliptic_curve.hash_message(msg_as_array.cbegin(), msg_as_array.cend());
 
         const auto result_hash_is_ok =
-            (hash_result == beman::big_int::example::detail::from_chars_16(
+            (hash_result == BEMAN_BIG_INT_NAMESPACE::example::detail::from_chars_16(
                                 "334D016F755CD6DC58C53A86E183882F8EC14F52FB05345887C8A5EDD42C87B7"));
 
         result_is_ok = (result_hash_is_ok && result_is_ok);
@@ -843,7 +849,7 @@ auto beman::big_int::example::ecdsa_sign_verify() -> bool {
         // Test ECC key generation, sign and verify. In this case we use random
         // (but pre-defined) seeds for both keygen as well as signing.
 
-        const auto seed_keygen = beman::big_int::example::detail::from_chars_16(
+        const auto seed_keygen = BEMAN_BIG_INT_NAMESPACE::example::detail::from_chars_16(
             "C6455BF2F380F6B81F5FD1A1DBC2392B3783ED1E7D91B62942706E5584BA0B92");
 
         const auto keypair = my_elliptic_curve.make_keypair(&seed_keygen);
@@ -854,29 +860,29 @@ auto beman::big_int::example::ecdsa_sign_verify() -> bool {
             my_elliptic_curve.is_on_curve(local_point_type{std::get<1>(keypair).first, std::get<1>(keypair).second})};
 
         const auto result_private_is_ok =
-            (std::get<0>(keypair) == beman::big_int::example::detail::from_chars_16(
+            (std::get<0>(keypair) == BEMAN_BIG_INT_NAMESPACE::example::detail::from_chars_16(
                                          "C6455BF2F380F6B81F5FD1A1DBC2392B3783ED1E7D91B62942706E5584BA0B92"));
         const auto result_public_x_is_ok =
-            (std::get<1>(keypair).first == beman::big_int::example::detail::from_chars_16(
+            (std::get<1>(keypair).first == BEMAN_BIG_INT_NAMESPACE::example::detail::from_chars_16(
                                                "C6235629F157690E1DF37248256C4FB7EFF073D0250F5BD85DF40B9E127A8461"));
         const auto result_public_y_is_ok =
-            (std::get<1>(keypair).second == beman::big_int::example::detail::from_chars_16(
+            (std::get<1>(keypair).second == BEMAN_BIG_INT_NAMESPACE::example::detail::from_chars_16(
                                                 "CBAA679F07F9B98F915C1FB7D85A379D0559A9EEE6735B1BE0CE0E2E2B2E94DE"));
 
         const auto result_keygen_is_ok = (result_private_is_ok && result_public_x_is_ok && result_public_y_is_ok);
 
         result_is_ok = (result_is_on_curve_is_ok && result_keygen_is_ok && result_is_ok);
 
-        const big_sint_type priv = beman::big_int::example::detail::from_chars_16(
+        const big_sint_type priv = BEMAN_BIG_INT_NAMESPACE::example::detail::from_chars_16(
             "6F73D8E95D6DDBF0EB352A9F0B2CE91931511EDAF9AC8F128D5A4F877C4F0450");
 
         const std::pair<big_sint_type, big_sint_type> sig{
             my_elliptic_curve.sign_message(std::get<0>(keypair), msg_as_string.cbegin(), msg_as_string.cend(), &priv)};
 
         const bool result_sig_is_ok = {
-            (sig == std::make_pair(beman::big_int::example::detail::from_chars_16(
+            (sig == std::make_pair(BEMAN_BIG_INT_NAMESPACE::example::detail::from_chars_16(
                                        "65717A860F315A21E6E23CDE411C8940DE42A69D8AB26C2465902BE8F3B75E7B"),
-                                   beman::big_int::example::detail::from_chars_16(
+                                   BEMAN_BIG_INT_NAMESPACE::example::detail::from_chars_16(
                                        "DB8B8E75A7B0C2F0D9EB8DBF1B5236EDEB89B2116F5AEBD40E770F8CCC3D6605")))};
 
         result_is_ok = (result_sig_is_ok && result_is_ok);
@@ -891,11 +897,11 @@ auto beman::big_int::example::ecdsa_sign_verify() -> bool {
 }
 
 TEST(Benchmarks, EccElliptic01) {
-    using local_stopwatch_type = beman::big_int::example::local::concurrency::stopwatch<>;
+    using local_stopwatch_type = BEMAN_BIG_INT_NAMESPACE::example::local::concurrency::stopwatch<>;
 
     local_stopwatch_type my_stopwatch{};
 
-    const bool result_is_ok{beman::big_int::example::ecdsa_sign_verify()};
+    const bool result_is_ok{BEMAN_BIG_INT_NAMESPACE::example::ecdsa_sign_verify()};
 
     const float elapsed{local_stopwatch_type::elapsed_time<float>(my_stopwatch)};
 

@@ -89,7 +89,7 @@ auto get_hex_string_pair(const unsigned len_in_bits) -> std::pair<std::string, s
 
 } // namespace detail
 
-using beman::big_int::big_int;
+using BEMAN_BIG_INT_NAMESPACE::big_int;
 using gmp_int = boost::multiprecision::number<boost::multiprecision::gmp_int, boost::multiprecision::et_off>;
 using cpp_int = boost::multiprecision::number<boost::multiprecision::cpp_int_backend<>, boost::multiprecision::et_off>;
 
@@ -115,7 +115,7 @@ auto main(int argc, char** argv) -> int {
     auto result_total_is_ok = true;
 
     constexpr unsigned limb_bits{
-        static_cast<unsigned>(std::numeric_limits<::beman::big_int::uint_multiprecision_t>::digits)};
+        static_cast<unsigned>(std::numeric_limits<::BEMAN_BIG_INT_NAMESPACE::uint_multiprecision_t>::digits)};
 
     // argv[1] = operand width in limbs, argv[2] = trial count (both optional). The
     // defaults reproduce the original single 512-limb, 0x4000-trial run; passing a

@@ -18,11 +18,11 @@
 
 namespace {
 
-using beman::big_int::basic_big_int;
-using beman::big_int::big_int;
-using beman::big_int::div_rem_to_zero;
-using beman::big_int::div_result;
-using beman::big_int::uint_multiprecision_t;
+using BEMAN_BIG_INT_NAMESPACE::basic_big_int;
+using BEMAN_BIG_INT_NAMESPACE::big_int;
+using BEMAN_BIG_INT_NAMESPACE::div_rem_to_zero;
+using BEMAN_BIG_INT_NAMESPACE::div_result;
+using BEMAN_BIG_INT_NAMESPACE::uint_multiprecision_t;
 
 // ----- compile-time sanity -----
 
@@ -291,7 +291,7 @@ TEST(Division, CompoundAssignmentMultiLimbDivisorPrimitive) {
 #else
     // uint128_t spans multiple limbs: exercises the integer-rhs slow path in
     // operator/= where to_limbs(...) yields a multi-limb span.
-    using beman::big_int::detail::uint128_t;
+    using BEMAN_BIG_INT_NAMESPACE::detail::uint128_t;
 
     const uint128_t divisor  = (static_cast<uint128_t>(1) << 100) + uint128_t{12345};
     const big_int   big_div  = big_int{divisor};
@@ -462,8 +462,8 @@ uint_t
 reference_short(const std::span<uint_t> quotient, const std::span<const uint_t> dividend, const uint_t divisor) {
     uint_t remainder = 0;
     for (std::size_t i = dividend.size(); i-- > 0;) {
-        const beman::big_int::detail::wide<uint_t> num{.low_bits = dividend[i], .high_bits = remainder};
-        const auto [q, r] = beman::big_int::detail::narrowing_div(num, divisor);
+        const BEMAN_BIG_INT_NAMESPACE::detail::wide<uint_t> num{.low_bits = dividend[i], .high_bits = remainder};
+        const auto [q, r] = BEMAN_BIG_INT_NAMESPACE::detail::narrowing_div(num, divisor);
         quotient[i]       = q;
         remainder         = r;
     }
@@ -473,7 +473,7 @@ reference_short(const std::span<uint_t> quotient, const std::span<const uint_t> 
 void check_short(const std::vector<uint_t>& dividend, const uint_t divisor) {
     std::vector<uint_t> got(dividend.size());
     std::vector<uint_t> expected(dividend.size());
-    const uint_t        got_r = beman::big_int::detail::divide_unsigned_short(
+    const uint_t        got_r = BEMAN_BIG_INT_NAMESPACE::detail::divide_unsigned_short(
         std::span<uint_t>{got}, std::span<const uint_t>{dividend}, divisor);
     const uint_t expected_r = reference_short(std::span<uint_t>{expected}, std::span<const uint_t>{dividend}, divisor);
     EXPECT_EQ(got_r, expected_r) << "divisor=" << divisor;
@@ -498,10 +498,10 @@ TEST(DivisionShortPreinv, MatchesReferenceLoop) {
             check_short(dividend, 2);
             check_short(dividend, 10);
             check_short(dividend, static_cast<uint_multiprecision_t>(rng()) | 1u);
-            check_short(
-                dividend,
-                static_cast<uint_multiprecision_t>(rng()) |
-                    (uint_multiprecision_t{1} << (beman::big_int::detail::width_v<uint_multiprecision_t> - 1)));
+            check_short(dividend,
+                        static_cast<uint_multiprecision_t>(rng()) |
+                            (uint_multiprecision_t{1}
+                             << (BEMAN_BIG_INT_NAMESPACE::detail::width_v<uint_multiprecision_t> - 1)));
             check_short(dividend, uint_multiprecision_t{1} << 7);
             check_short(dividend, max);
             check_short(dividend, max - 1);
@@ -525,7 +525,8 @@ TEST(DivisionShortPreinv, InPlaceAliasing) {
         std::span<uint_multiprecision_t>{expected}, std::span<const uint_multiprecision_t>{original}, divisor);
 
     const auto                  buf_span = std::span<uint_multiprecision_t>{buffer};
-    const uint_multiprecision_t got_r    = beman::big_int::detail::divide_unsigned_short(buf_span, buf_span, divisor);
+    const uint_multiprecision_t got_r =
+        BEMAN_BIG_INT_NAMESPACE::detail::divide_unsigned_short(buf_span, buf_span, divisor);
 
     EXPECT_EQ(got_r, expected_r);
     EXPECT_TRUE(std::ranges::equal(buffer, expected));
@@ -552,16 +553,16 @@ TEST(SubmulSingleLimb, ReconstructionIdentity) {
             const uint_t val = static_cast<uint_t>(rng());
 
             std::vector<uint_t> r_after = r_before;
-            const uint_t        borrow  = beman::big_int::detail::submul_single_limb(
+            const uint_t        borrow  = BEMAN_BIG_INT_NAMESPACE::detail::submul_single_limb(
                 std::span<uint_t>{r_after}, std::span<const uint_t>{a}, val);
 
             // r_after + a*val must equal r_before + borrow * B^n.
             std::vector<uint_t> sum(n + 1, 0);
             std::copy(r_after.begin(), r_after.end(), sum.begin());
             std::vector<uint_t> product(n + 1, 0);
-            const std::size_t   p_size = beman::big_int::detail::multiply_single_limb(
+            const std::size_t   p_size = BEMAN_BIG_INT_NAMESPACE::detail::multiply_single_limb(
                 std::span<uint_t>{product}, std::span<const uint_t>{a}, val);
-            const bool carry = beman::big_int::detail::add_unsigned_spans(
+            const bool carry = BEMAN_BIG_INT_NAMESPACE::detail::add_unsigned_spans(
                 std::span<uint_t>{sum}, std::span<const uint_t>{sum}, std::span<const uint_t>{product.data(), p_size});
             EXPECT_FALSE(carry);
 
@@ -580,7 +581,8 @@ TEST(SubmulSingleLimb, Boundaries) {
     // val == 0 leaves the buffer untouched with no borrow.
     std::vector<uint_t>       r{1, 2, 3};
     const std::vector<uint_t> a{max, max, max};
-    EXPECT_EQ(beman::big_int::detail::submul_single_limb(std::span<uint_t>{r}, std::span<const uint_t>{a}, 0), 0u);
+    EXPECT_EQ(BEMAN_BIG_INT_NAMESPACE::detail::submul_single_limb(std::span<uint_t>{r}, std::span<const uint_t>{a}, 0),
+              0u);
     EXPECT_EQ(r[0], 1u);
     EXPECT_EQ(r[2], 3u);
 
@@ -589,7 +591,7 @@ TEST(SubmulSingleLimb, Boundaries) {
     // borrow * B^3 = (B - 1) * B^3).
     std::vector<uint_t> zero{0, 0, 0};
     const uint_t        borrow =
-        beman::big_int::detail::submul_single_limb(std::span<uint_t>{zero}, std::span<const uint_t>{a}, max);
+        BEMAN_BIG_INT_NAMESPACE::detail::submul_single_limb(std::span<uint_t>{zero}, std::span<const uint_t>{a}, max);
     EXPECT_EQ(borrow, max);
     EXPECT_EQ(zero[0], max);
     EXPECT_EQ(zero[1], 0u);
@@ -597,7 +599,8 @@ TEST(SubmulSingleLimb, Boundaries) {
 
     // Empty `a` is a no-op.
     std::vector<uint_t> untouched{42};
-    EXPECT_EQ(beman::big_int::detail::submul_single_limb(std::span<uint_t>{untouched}, std::span<const uint_t>{}, max),
+    EXPECT_EQ(BEMAN_BIG_INT_NAMESPACE::detail::submul_single_limb(
+                  std::span<uint_t>{untouched}, std::span<const uint_t>{}, max),
               0u);
     EXPECT_EQ(untouched[0], 42u);
 }

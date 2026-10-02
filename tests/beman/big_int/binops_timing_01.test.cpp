@@ -15,7 +15,7 @@
 #include <utility>
 #include <vector>
 
-namespace bmp = ::beman::big_int::boost_mp_testing;
+namespace bmp = ::BEMAN_BIG_INT_NAMESPACE::boost_mp_testing;
 
 namespace local {
 
@@ -29,7 +29,7 @@ using random_engine_length_type = std::minstd_rand;
 random_engine_length_type generator_bits_length{static_cast<typename random_engine_length_type::result_type>(42)};
 
 inline constexpr std::size_t limb_bits{
-    static_cast<std::size_t>(std::numeric_limits<::beman::big_int::uint_multiprecision_t>::digits)};
+    static_cast<std::size_t>(std::numeric_limits<::BEMAN_BIG_INT_NAMESPACE::uint_multiprecision_t>::digits)};
 
 std::uniform_int_distribution distribution_bits_length{std::size_t{4U} * static_cast<std::size_t>(limb_bits),
                                                        std::size_t{96U} * static_cast<std::size_t>(limb_bits)};
@@ -132,7 +132,7 @@ template <class BinOp>
 auto time_bin_op_execs_all(BinOp op, const vector_str_pair_type& str_pairs) -> void {
 
     // Prepare all the binary operations for an upcoming compariative timing analysis.
-    using big_int_type = beman::big_int::big_int;
+    using big_int_type = BEMAN_BIG_INT_NAMESPACE::big_int;
     using cpp_int_type =
         boost::multiprecision::number<boost::multiprecision::cpp_int_backend<>, boost::multiprecision::et_off>;
 

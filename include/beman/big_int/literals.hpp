@@ -16,7 +16,7 @@
 #include <beman/big_int/big_int.hpp>
 #include <beman/big_int/charconv.hpp>
 
-namespace beman::big_int {
+BEMAN_BIG_INT_BEGIN_NAMESPACE
 
 // [big.int.literal]
 namespace detail {
@@ -200,6 +200,6 @@ BEMAN_BIG_INT_DIAGNOSTIC_POP()
 
 } // namespace big_int_literals
 } // namespace literals
-} // namespace beman::big_int
+BEMAN_BIG_INT_END_NAMESPACE
 
 #endif // BEMAN_BIG_INT_LITERALS_HPP

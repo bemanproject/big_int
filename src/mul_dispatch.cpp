@@ -21,7 +21,8 @@
 // multi-limb product here; kernel workspaces come from the type-erased heap
 // hooks, so a single compiled definition serves every allocator.
 
-namespace beman::big_int::detail {
+BEMAN_BIG_INT_BEGIN_NAMESPACE
+namespace detail {
 
 std::size_t square_runtime(const std::span<uint_multiprecision_t>       result,
                            const std::span<const uint_multiprecision_t> a,
@@ -366,4 +367,5 @@ std::size_t multiply_runtime_any(const std::span<uint_multiprecision_t>       re
     return multiply_runtime(result, a, b, heap);
 }
 
-} // namespace beman::big_int::detail
+} // namespace detail
+BEMAN_BIG_INT_END_NAMESPACE

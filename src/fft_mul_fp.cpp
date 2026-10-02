@@ -26,7 +26,8 @@
 // buffers) and a uint64 scratch span (the per-prime residues), keeping the kernel
 // independent of the library limb width.
 
-namespace beman::big_int::detail {
+BEMAN_BIG_INT_BEGIN_NAMESPACE
+namespace detail {
 
 namespace {
 
@@ -435,4 +436,5 @@ void multiply_fft_cyclic(const std::span<uint_multiprecision_t>       result,
     fft_recompose_cyclic(result, res[0], res[1], res[2], crt3_make_constants(), params.coeff_bits);
 }
 
-} // namespace beman::big_int::detail
+} // namespace detail
+BEMAN_BIG_INT_END_NAMESPACE
