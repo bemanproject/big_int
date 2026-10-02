@@ -25,6 +25,13 @@
     #define BEMAN_BIG_INT_TEST_EXPORT
 #endif
 
+#ifndef BEMAN_BIG_INT_NAMESPACE
+#define BEMAN_BIG_INT_NAMESPACE beman::big_int
+#endif // BEMAN_BIG_INT_NAMESPACE
+
+#define BEMAN_BIG_INT_BEGIN_NAMESPACE namespace BEMAN_BIG_INT_NAMESPACE {
+#define BEMAN_BIG_INT_END_NAMESPACE }
+
 #ifdef BEMAN_BIG_INT_BUILD_MODULE
     #define BEMAN_BIG_INT_EXPORT export
     // An internal-linkage namespace-scope entity reachable from an exported
