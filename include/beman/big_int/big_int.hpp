@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 // SPDX-License-Identifier: BSL-1.0
 
-#ifndef BEMAN_BIG_INT_HPP
-#define BEMAN_BIG_INT_HPP
+#ifndef BEMAN_BIG_INT_BIG_INT_HPP
+#define BEMAN_BIG_INT_BIG_INT_HPP
 
 // Convenience header that pulls in the entire beman::big_int library.
 // Include this when you want the arbitrary-precision integer type together
@@ -19,4 +19,4 @@
 #include <beman/big_int/format.hpp>
 #include <beman/big_int/numeric.hpp>
 
-#endif // BEMAN_BIG_INT_HPP
+#endif // BEMAN_BIG_INT_BIG_INT_HPP

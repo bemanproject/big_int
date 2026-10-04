@@ -7,7 +7,7 @@
 // small operands plus reciprocal-threshold overrides cover deep Newton
 // recursion and every correction path cheaply.
 
-#include <beman/big_int.hpp>
+#include <beman/big_int/big_int.hpp>
 #include <beman/big_int/detail/div_impl.hpp>
 #include <beman/big_int/detail/mul_impl.hpp>
 #include <beman/big_int/detail/span_ops.hpp>

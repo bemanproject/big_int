@@ -33,7 +33,7 @@
     #error "build shape_sweep through CMake, or define BEMAN_BIG_INT_SWEEP_MANUAL_OK and match the library flags"
 #endif
 
-#include <beman/big_int.hpp>
+#include <beman/big_int/big_int.hpp>
 #include <beman/big_int/detail/base_conversion.hpp>
 #include <beman/big_int/detail/div_impl.hpp>
 #include <beman/big_int/detail/mul_impl.hpp>
