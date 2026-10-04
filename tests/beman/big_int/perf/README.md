@@ -3,7 +3,7 @@
 The benchmark results, the methodology behind them, and an index of the source
 programs in this directory all live in the project documentation, on the
 **Benchmarks** page:
-[`doc/modules/ROOT/pages/benchmarks.adoc`](../../../../doc/modules/ROOT/pages/benchmarks.adoc).
+[`docs/modules/ROOT/pages/benchmarks.adoc`](../../../../docs/modules/ROOT/pages/benchmarks.adoc).
 
 It consolidates the small-value optimization micro-benchmarks (`big_int` vs the
 builtin integer types), the large-integer comparisons against `boost.cpp_int` and

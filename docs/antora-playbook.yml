@@ -4,7 +4,7 @@ site:
 content:
   sources:
     - url: ..
-      start_path: doc
+      start_path: docs
       edit_url: 'https://github.com/eisenwave/std-big-int/edit/develop/{path}'
 output:
   dir: html

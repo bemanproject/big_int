@@ -15,10 +15,10 @@ permissions:
 jobs:
   build:
     runs-on: ubuntu-latest
-    # package.json and antora-playbook.yml live under doc/; run steps from there
+    # package.json and antora-playbook.yml live under docs/; run steps from there
     defaults:
       run:
-        working-directory: doc
+        working-directory: docs
     steps:
       - name: Checkout repository
         uses: actions/checkout@v6
@@ -36,6 +36,6 @@ jobs:
         uses: peaceiris/actions-gh-pages@v4
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
-          publish_dir: doc/html
+          publish_dir: docs/html
           publish_branch: gh-pages
           force_orphan: true

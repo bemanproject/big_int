@@ -3,8 +3,8 @@
 
 // Mirror the canonical example sources into the Antora "example" family.
 //
-// The examples/ directory lives at the repository root, outside the doc/
-// content source (start_path: doc), so Antora cannot reach it directly and a
+// The examples/ directory lives at the repository root, outside the docs/
+// content source (start_path: docs), so Antora cannot reach it directly and a
 // symlink into it escapes the content-source root. Instead we copy the .cpp
 // files into modules/ROOT/examples/ (gitignored) before each build; Antora
 // reads them from the worktree. Run via `npm run build`.
