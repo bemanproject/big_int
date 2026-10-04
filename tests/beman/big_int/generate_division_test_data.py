@@ -128,7 +128,7 @@ def print_file(cases, with_parse_helper: bool = False) -> None:
     print()
     print("#include <gtest/gtest.h>")
     print()
-    print("#include <beman/big_int.hpp>")
+    print("#include <beman/big_int/big_int.hpp>")
     print()
     print('#include "testing.hpp"')
     print()

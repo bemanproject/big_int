@@ -8,7 +8,7 @@
 `<beman/big_int/limits.hpp>` specializes `std::numeric_limits` for every
 `basic_big_int`, so generic code can query the type the same way it queries
 `int` or `double`. Include it directly, or transitively through the umbrella
-`<beman/big_int.hpp>`.
+`<beman/big_int/big_int.hpp>`.
 
 `basic_big_int` is *unbounded*: it grows to fit its value, so it has no largest
 or smallest value for the specialization to report. Every value-returning

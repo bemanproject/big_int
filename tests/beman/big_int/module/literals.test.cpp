@@ -4,7 +4,7 @@
 // Consumer-side tests of the `n`/`N`/`_n`/`_N` literal suffixes through
 // `import beman.big_int;`. Modeled on tests/beman/big_int/literals.test.cpp, with
 // everything that needs a library macro (BEMAN_BIG_INT_*) or a header
-// (testing.hpp, beman/big_int.hpp) stripped: macros do not cross a module
+// (testing.hpp, beman/big_int/big_int.hpp) stripped: macros do not cross a module
 // boundary, and including a public header under BEMAN_BIG_INT_BUILD_MODULE is
 // ill-formed. BEMAN_BIG_INT_NAMESPACE is the exception: CMake passes it on the
 // command line.

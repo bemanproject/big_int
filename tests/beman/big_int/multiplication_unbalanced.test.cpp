@@ -11,7 +11,7 @@
 #include "boost_mp_testing.hpp"
 #include "testing.hpp"
 
-#include <beman/big_int.hpp>
+#include <beman/big_int/big_int.hpp>
 #include <beman/big_int/detail/mul_impl.hpp>
 #include <beman/big_int/detail/scratch_allocator.hpp>
 #include <beman/big_int/detail/span_ops.hpp>
