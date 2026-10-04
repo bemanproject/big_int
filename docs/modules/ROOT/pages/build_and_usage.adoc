@@ -34,8 +34,8 @@ These are not necessarily the only supported platforms, but these are the ones t
 |===
 | Compiler | Version | pass:[C++] Standards | Standard Library
 
-| GCC | >= 11 | >= pass:[C++23] | pass:[libstdc++]
-| Clang | >= 17 | >= pass:[C++23] | pass:[libstdc++], pass:[libc++]
+| GCC | >= 14 | >= pass:[C++23] | pass:[libstdc++]
+| Clang | >= 19 | >= pass:[C++23] | pass:[libstdc++], pass:[libc++]
 | AppleClang | latest | >= pass:[C++23] | pass:[libc++]
 | MSVC | latest | >= pass:[C++23] | MSVC STL
 |===
