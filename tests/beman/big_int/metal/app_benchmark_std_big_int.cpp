@@ -3,7 +3,7 @@
 
 #include <util/util_ring_allocator.hpp>
 
-#include <beman/big_int/big_int.hpp>
+#include <beman/big_int/basic_big_int.hpp>
 #include <beman/big_int/literals.hpp>
 
 #include <cstring>

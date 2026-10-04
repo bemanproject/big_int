@@ -4,7 +4,7 @@
 #ifndef BEMAN_BIG_INT_FORMAT_HPP
 #define BEMAN_BIG_INT_FORMAT_HPP
 
-#include <beman/big_int/big_int.hpp>
+#include <beman/big_int/basic_big_int.hpp>
 
 // Guarding this include is safe only because the .cppm supplies <version> in its
 // global module fragment before the purview #if below tests __cpp_lib_format.

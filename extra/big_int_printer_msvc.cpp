@@ -16,7 +16,7 @@
 // Everything below returns E_FAIL on any problem, which makes the debugger fall
 // back to the raw field view.
 //
-// Layout read from the debuggee (see include/beman/big_int/big_int.hpp):
+// Layout read from the debuggee (see include/beman/big_int/basic_big_int.hpp):
 //     offset 0: std::uint32_t m_capacity;      // 0 = in-place, >0 = heap capacity
 //     offset 4: std::uint32_t m_size_and_sign; // bit 31 = sign, bits 0-30 = limb count
 //     offset 8: union { pointer data; limb_type limbs[inplace_capacity]; }
@@ -28,7 +28,7 @@
 #define NOMINMAX
 #include <Windows.h>
 
-#include <beman/big_int/big_int.hpp>
+#include <beman/big_int/basic_big_int.hpp>
 #include <beman/big_int/string.hpp>
 
 #include <cstddef>

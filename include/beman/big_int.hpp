@@ -11,7 +11,7 @@
 // Individual public headers may be included on their own for finer-grained
 // dependencies.
 
-#include <beman/big_int/big_int.hpp>
+#include <beman/big_int/basic_big_int.hpp>
 #include <beman/big_int/charconv.hpp>
 #include <beman/big_int/string.hpp>
 #include <beman/big_int/limits.hpp>

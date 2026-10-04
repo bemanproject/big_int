@@ -107,7 +107,7 @@ TEST(CharconvString, ToCharsNegativeHex) {
     EXPECT_EQ(result, "-ff");
 }
 
-// big_int.hpp forward-declares `to_chars`/`from_chars` with a default `base = 10`
+// basic_big_int.hpp forward-declares `to_chars`/`from_chars` with a default `base = 10`
 // argument (the redeclaration in charconv.hpp omits it, as default arguments are
 // only spelled out once); this exercises that default.
 TEST(CharconvString, ToCharsDefaultBase) {

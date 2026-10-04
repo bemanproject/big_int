@@ -18,7 +18,7 @@ and only search the repo when information here is incomplete or has become incor
 
 ## High-Level Layout (Where To Look First)
 
-- `include/beman/big_int/big_int.hpp`: core public API and most implementation.
+- `include/beman/big_int/basic_big_int.hpp`: core public API and most implementation.
 - `include/beman/big_int/detail/`: low-level helpers and platform-specific code.
 - `tests/beman/big_int/*.test.cpp`: unit and regression tests.
 - `tests/beman/big_int/CMakeLists.txt`: test target generation and warning policy.
@@ -108,7 +108,7 @@ Referenced CI workflows:
 
 ## Project Architecture Notes For Faster Edits
 
-- Core implementation is concentrated in one large header (`big_int.hpp`) and helper headers under `detail/`.
+- Core implementation is concentrated in one large header (`basic_big_int.hpp`) and helper headers under `detail/`.
 - Tests are automatically globbed from `tests/beman/big_int/*.test.cpp`; adding a new `*.test.cpp` file generally auto-adds a new test executable through `tests/beman/big_int/CMakeLists.txt`.
 - Tests compile with strict warnings (`-Werror` and many extra warning flags on GCC/Clang). Warning-clean code is required.
 - Top-level options:

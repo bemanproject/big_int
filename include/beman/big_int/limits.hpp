@@ -10,7 +10,7 @@
     #include <type_traits>
 #endif
 
-#include <beman/big_int/big_int.hpp>
+#include <beman/big_int/basic_big_int.hpp>
 
 BEMAN_BIG_INT_BEGIN_NAMESPACE
 namespace detail {

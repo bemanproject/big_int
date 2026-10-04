@@ -12,7 +12,7 @@ target_sources(
     PUBLIC
         FILE_SET HEADERS
             FILES
-                big_int.hpp
+                basic_big_int.hpp
                 copy_to_runtime.hpp
                 charconv.hpp
                 string.hpp

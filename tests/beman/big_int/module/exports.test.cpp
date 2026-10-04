@@ -12,7 +12,7 @@
 // "no member named X" wall for whoever regresses this.
 //
 // Some free functions (to_chars, from_chars, abs, div_rem_to_zero) are forward-declared
-// with BEMAN_BIG_INT_EXPORT in big_int.hpp and only *defined* -- without repeating the
+// with BEMAN_BIG_INT_EXPORT in basic_big_int.hpp and only *defined* -- without repeating the
 // annotation -- in charconv.hpp/numeric.hpp; that forward declaration is what a
 // using-declaration below is really probing.
 
@@ -101,7 +101,7 @@ static_assert(requires(const big_int& c, big_int& m, const big_int::size_type n)
 });
 
 // The floating-point converting constructor is explicit; the integer one is not.
-// (Verified against big_int.hpp: is_implicit_constructible_from is true only for a
+// (Verified against basic_big_int.hpp: is_implicit_constructible_from is true only for a
 // builtin integer or the same basic_big_int specialization, never for a float.)
 static_assert(std::is_constructible_v<big_int, double> && !std::is_convertible_v<double, big_int>);
 static_assert(std::is_constructible_v<big_int, int> && std::is_convertible_v<int, big_int>);
