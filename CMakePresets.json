@@ -40,8 +40,7 @@
         "_module-base"
       ],
       "cacheVariables": {
-        "BEMAN_BIG_INT_USE_STD_MODULE": "ON",
-        "CMAKE_EXPERIMENTAL_CXX_IMPORT_STD": "f35a9ac6-8463-4d38-8eec-5d6008153e7d"
+        "BEMAN_BIG_INT_USE_STD_MODULE": "ON"
       }
     },
     {

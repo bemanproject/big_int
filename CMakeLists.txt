@@ -2,6 +2,10 @@
 
 cmake_minimum_required(VERSION 3.30...4.3)
 
+# Must precede project(): sets CMAKE_EXPERIMENTAL_CXX_IMPORT_STD to the UUID
+# matching the running CMake version, for BEMAN_BIG_INT_USE_STD_MODULE.
+include(infra/cmake/enable-experimental-import-std.cmake)
+
 project(
     beman.big_int
     DESCRIPTION "Reference implementation of std::big_int"

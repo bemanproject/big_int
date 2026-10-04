@@ -124,9 +124,8 @@ details.
 Build the module's interface unit against `import std;` instead of the
 standard library headers. Default: `OFF`. Values: `{ ON, OFF }`.
 
-Requires `BEMAN_BIG_INT_BUILD_MODULE=ON` plus
-`-DCMAKE_EXPERIMENTAL_CXX_IMPORT_STD=<uuid>` set before `project()`; most
-consumers do not need this option. See
+Requires `BEMAN_BIG_INT_BUILD_MODULE=ON`; most consumers do not need this
+option. See
 [the module documentation](docs/modules/ROOT/pages/modules.adoc#modules_import_std)
 for details.
 

@@ -71,9 +71,11 @@ option(
 
 if(BEMAN_BIG_INT_USE_STD_MODULE)
     # CMAKE_CXX_COMPILER_IMPORT_STD is only populated when
-    # CMAKE_EXPERIMENTAL_CXX_IMPORT_STD was set before the project() call, so a
-    # missing "23" entry usually means that variable was set too late (or the
-    # toolchain does not support import std yet) rather than a real failure.
+    # CMAKE_EXPERIMENTAL_CXX_IMPORT_STD was set before the project() call, which
+    # the top-level CMakeLists.txt does via infra's
+    # enable-experimental-import-std.cmake. A missing "23" entry therefore
+    # usually means this CMake version is newer than infra knows about, or the
+    # toolchain does not support import std yet, rather than a real failure.
     if("23" IN_LIST CMAKE_CXX_COMPILER_IMPORT_STD)
         set_target_properties(beman.big_int_module PROPERTIES CXX_MODULE_STD ON)
         target_compile_definitions(
@@ -86,10 +88,10 @@ if(BEMAN_BIG_INT_USE_STD_MODULE)
             WARNING
             "BEMAN_BIG_INT_USE_STD_MODULE is ON but 'import std' (C++23) is not "
             "available from this toolchain (CMAKE_CXX_COMPILER_IMPORT_STD="
-            "'${CMAKE_CXX_COMPILER_IMPORT_STD}'). Set "
-            "CMAKE_EXPERIMENTAL_CXX_IMPORT_STD to the CMake-documented UUID "
-            "before the project() call and use a scanning generator that "
-            "supports it. Falling back to textual standard headers."
+            "'${CMAKE_CXX_COMPILER_IMPORT_STD}'). Check that infra/cmake/"
+            "enable-experimental-import-std.cmake knows the UUID for this CMake "
+            "version (${CMAKE_VERSION}) and that the generator supports it. "
+            "Falling back to textual standard headers."
         )
     endif()
 endif()

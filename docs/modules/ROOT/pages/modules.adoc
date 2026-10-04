@@ -185,13 +185,14 @@ unit is compiled, not something an importer selects at the point of use:
 cmake --preset llvm-release \
   -DBEMAN_BIG_INT_BUILD_MODULE=ON \
   -DBEMAN_BIG_INT_USE_STD_MODULE=ON \
-  -DCMAKE_EXPERIMENTAL_CXX_IMPORT_STD=<uuid-for-your-cmake-version> \
   -DCMAKE_CXX_STDLIB_MODULES_JSON=/path/to/libc++.modules.json
 ----
 
-`CMAKE_EXPERIMENTAL_CXX_IMPORT_STD` must be set before the first `project()`
-call, so it belongs on the command line or in a preset, never in a later
-`set()` inside a `CMakeLists.txt`. `CMAKE_CXX_STDLIB_MODULES_JSON` is needed
+CMake gates `import std` behind `CMAKE_EXPERIMENTAL_CXX_IMPORT_STD`, whose
+required value changes between CMake releases. You do not need to set it: the
+top-level `CMakeLists.txt` sets it before `project()` from
+`infra/cmake/enable-experimental-import-std.cmake`, which tracks the value for
+each supported CMake version. `CMAKE_CXX_STDLIB_MODULES_JSON` is needed
 only on Clang, and points at the `libc++.modules.json` that ships with the
 libc++ you are building against.
 
