@@ -3,7 +3,7 @@
 
 #include "testing.hpp"
 #include <boost/multiprecision/cpp_int.hpp>
-#include <beman/big_int/big_int.hpp>
+#include <beman/big_int.hpp>
 #include <gtest/gtest.h>
 #include <array>
 #include <span>

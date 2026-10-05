@@ -7,7 +7,7 @@
 // divisor halves), the saturated 3-by-2 fast path (top window pairs equal
 // to the divisor's), exact multiples, and near-misses on both sides.
 
-#include <beman/big_int/big_int.hpp>
+#include <beman/big_int.hpp>
 #include <beman/big_int/detail/div_impl.hpp>
 
 #include <gtest/gtest.h>

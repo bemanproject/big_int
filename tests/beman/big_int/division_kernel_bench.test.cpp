@@ -11,7 +11,7 @@
 // Output is CSV on stdout: kernel,param,value (ns per limb, call, or digit;
 // the mulmod rows report the wrapped/full ratio in the value column).
 
-#include <beman/big_int/big_int.hpp>
+#include <beman/big_int.hpp>
 #include <beman/big_int/detail/div_impl.hpp>
 #include <beman/big_int/detail/mul_impl.hpp>
 #include <beman/big_int/detail/span_ops.hpp>

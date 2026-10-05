@@ -283,7 +283,7 @@ To use `beman.big_int` in your pass:[C++] project, include an appropriate
 
 [source,c++]
 ----
-#include <beman/big_int/big_int.hpp>
+#include <beman/big_int.hpp>
 ----
 
 [NOTE]
@@ -305,7 +305,7 @@ verifies the value of 100! in its full, pure-integral, non-truncated form:
 
 [source,c++]
 ----
-#include <beman/big_int/big_int.hpp>
+#include <beman/big_int.hpp>
 
 #include <iomanip>
 #include <iostream>

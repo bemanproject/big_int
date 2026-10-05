@@ -35,7 +35,7 @@ target_link_libraries(beman.big_int_module PUBLIC beman::big_int)
 target_compile_features(beman.big_int_module PUBLIC cxx_std_23)
 
 # big_int.cppm defines BEMAN_BIG_INT_BUILD_MODULE itself, but consumers need the
-# macro too so that including <beman/big_int/big_int.hpp> transitively (e.g. through
+# macro too so that including <beman/big_int.hpp> transitively (e.g. through
 # another header) resolves onto the module path instead of the header path.
 target_compile_definitions(
     beman.big_int_module

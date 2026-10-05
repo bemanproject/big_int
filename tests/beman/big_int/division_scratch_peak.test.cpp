@@ -10,7 +10,7 @@
 
 #define BEMAN_BIG_INT_INSTRUMENT
 
-#include <beman/big_int/big_int.hpp>
+#include <beman/big_int.hpp>
 #include <beman/big_int/detail/div_impl.hpp>
 
 #include <gtest/gtest.h>

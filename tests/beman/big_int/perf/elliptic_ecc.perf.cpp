@@ -25,7 +25,7 @@
 // #define ELLIPTIC_CPP_INT_USE_GMP_INT
 
 #if defined(ELLIPTIC_CPP_INT_USE_STD_BIG_INT)
-    #include <beman/big_int/big_int.hpp>
+    #include <beman/big_int.hpp>
 #elif defined(ELLIPTIC_CPP_INT_USE_GMP_INT)
     #include <boost/multiprecision/gmp.hpp>
 #else

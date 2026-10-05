@@ -21,7 +21,7 @@
 //   3. Extend `sweep_limbs[]` if the new algorithm is interesting at limb
 //      counts not already covered.
 
-#include <beman/big_int/big_int.hpp>
+#include <beman/big_int.hpp>
 #include <beman/big_int/detail/mul_impl.hpp>
 #include <beman/big_int/detail/multiply_long_runtime.hpp>
 #include <beman/big_int/detail/square_long_runtime.hpp>

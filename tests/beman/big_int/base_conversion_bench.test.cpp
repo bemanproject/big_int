@@ -31,7 +31,7 @@
 //
 // Output is CSV on stdout: kernel,base,digits,chunks,ns_per_op.
 
-#include <beman/big_int/big_int.hpp>
+#include <beman/big_int.hpp>
 #include <beman/big_int/detail/base_conversion.hpp>
 
 #include <gtest/gtest.h>
