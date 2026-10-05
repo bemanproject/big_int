@@ -220,7 +220,7 @@ TEST(Pmr, FromIteratorPairWithResource) {
     EXPECT_GE(cr.alloc_count(), 1U);
 }
 
-#if defined(__cpp_lib_containers_ranges) && __cpp_lib_containers_ranges >= 202202L
+#ifdef BEMAN_BIG_INT_HAS_CPP_LIB_CONTAINERS_RANGES
 TEST(Pmr, FromRangeWithResource) {
     counting_resource                                             cr;
     std::array<BEMAN_BIG_INT_NAMESPACE::uint_multiprecision_t, 2> limbs{0xDEADBEEFU, 0xCAFEBABEU};

@@ -387,7 +387,7 @@ constexpr void divide_unsigned_approx(const std::span<uint_multiprecision_t>    
     #if defined(BEMAN_BIG_INT_ARCH_AARCH64)
 inline constexpr std::size_t burnikel_ziegler_cutoff = 40;
 inline constexpr std::size_t burnikel_ziegler_offset = 10;
-    #elif defined(__x86_64__) || defined(_M_X64) || defined(__amd64__)
+    #elif defined(BEMAN_BIG_INT_TARGET_X86_64)
 inline constexpr std::size_t burnikel_ziegler_cutoff = 160;
 inline constexpr std::size_t burnikel_ziegler_offset = 64;
     #else
@@ -739,7 +739,7 @@ inline constexpr std::size_t barrett_quarter_cutoff = 49152;
 inline constexpr std::size_t barrett_quarter_cutoff = 24576;
     #endif
 inline constexpr std::size_t barrett_balanced_cutoff = 131072;
-#elif defined(__x86_64__) || defined(_M_X64) || defined(__amd64__)
+#elif defined(BEMAN_BIG_INT_TARGET_X86_64)
 inline constexpr std::size_t barrett_march_cutoff  = 512;
 inline constexpr std::size_t barrett_march8_cutoff = 4096;
     #if defined(BEMAN_BIG_INT_SIMD_MUL)
@@ -770,7 +770,7 @@ static_assert(barrett_march8_cutoff >= barrett_march_cutoff,
 // loses from n = 1024 up).
 #if defined(BEMAN_BIG_INT_ARCH_AARCH64)
 inline constexpr std::size_t reciprocal_span_cutoff = 64; // M4 Max, 2026-09-30: kept (ties)
-#elif defined(__x86_64__) || defined(_M_X64) || defined(__amd64__)
+#elif defined(BEMAN_BIG_INT_TARGET_X86_64)
 inline constexpr std::size_t reciprocal_span_cutoff = 512;
 #else
 inline constexpr std::size_t reciprocal_span_cutoff = 64;

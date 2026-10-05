@@ -6,13 +6,7 @@
 
 #include <beman/big_int/basic_big_int.hpp>
 
-// Guarding this include is safe only because the .cppm supplies <version> in its
-// global module fragment before the purview #if below tests __cpp_lib_format.
-#ifndef BEMAN_BIG_INT_BUILD_MODULE
-    #include <version>
-#endif
-
-#if __has_include(<format>) && defined(__cpp_lib_format) && __cpp_lib_format >= 201907L
+#ifdef BEMAN_BIG_INT_HAS_CPP_LIB_FORMAT
 
     #ifndef BEMAN_BIG_INT_BUILD_MODULE
         #include <algorithm>

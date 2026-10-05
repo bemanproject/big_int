@@ -20,11 +20,9 @@
 BEMAN_BIG_INT_DIAGNOSTIC_PUSH()
 BEMAN_BIG_INT_DIAGNOSTIC_IGNORED_GCC("-Wpadded")
 
-#ifndef BEMAN_BIG_INT_BUILD_MODULE
-    #if __has_include(<stdfloat>)
-        #include <stdfloat>
-    #endif
-#endif // BEMAN_BIG_INT_BUILD_MODULE
+#if !defined(BEMAN_BIG_INT_BUILD_MODULE) && defined(BEMAN_BIG_INT_HAS_STDFLOAT)
+    #include <stdfloat>
+#endif
 
 BEMAN_BIG_INT_BEGIN_NAMESPACE
 namespace detail {
@@ -68,7 +66,7 @@ struct ieee_traits<double> {
     static constexpr bool explicit_int_bit = false;
 };
 
-#ifdef __STDCPP_FLOAT16_T__
+#ifdef BEMAN_BIG_INT_HAS_STDCPP_FLOAT16_T
 template <>
 struct ieee_traits<std::float16_t> {
     using bits_type                        = std::uint16_t;
@@ -81,7 +79,7 @@ struct ieee_traits<std::float16_t> {
 };
 #endif
 
-#ifdef __STDCPP_BFLOAT16_T__
+#ifdef BEMAN_BIG_INT_HAS_STDCPP_BFLOAT16_T
 template <>
 struct ieee_traits<std::bfloat16_t> {
     using bits_type                        = std::uint16_t;
@@ -94,7 +92,7 @@ struct ieee_traits<std::bfloat16_t> {
 };
 #endif
 
-#ifdef __STDCPP_FLOAT128_T__
+#ifdef BEMAN_BIG_INT_HAS_STDCPP_FLOAT128_T
 template <>
 struct ieee_traits<std::float128_t> {
     using bits_type                        = uint128_t;
@@ -147,7 +145,7 @@ struct ieee_traits<long double> : ieee_traits<double> {};
 
 template <cv_unqualified_floating_point F>
 [[nodiscard]] constexpr bool constexpr_signbit(const F x) noexcept {
-#if defined(__cpp_lib_constexpr_cmath) && __cpp_lib_constexpr_cmath >= 202202L
+#ifdef BEMAN_BIG_INT_HAS_CPP_LIB_CONSTEXPR_CMATH
     return std::signbit(x);
 #elif BEMAN_BIG_INT_HAS_CONSTEXPR_BUILTIN_OR_BUILTIN(__builtin_signbit)
     return static_cast<bool>(__builtin_signbit(x));
@@ -169,7 +167,7 @@ template <cv_unqualified_floating_point F>
 
 template <cv_unqualified_floating_point F>
 [[nodiscard]] constexpr bool constexpr_isfinite(const F x) noexcept {
-#if defined(__cpp_lib_constexpr_cmath) && __cpp_lib_constexpr_cmath >= 202202L
+#ifdef BEMAN_BIG_INT_HAS_CPP_LIB_CONSTEXPR_CMATH
     return std::isfinite(x);
 #elif BEMAN_BIG_INT_HAS_CONSTEXPR_BUILTIN_OR_BUILTIN(__builtin_isfinite)
     return static_cast<bool>(__builtin_isfinite(x));
@@ -188,7 +186,7 @@ template <cv_unqualified_floating_point F>
 
 template <cv_unqualified_floating_point F>
 [[nodiscard]] constexpr F constexpr_copysign(const F x, const F s) noexcept {
-#if defined(__cpp_lib_constexpr_cmath) && __cpp_lib_constexpr_cmath >= 202202L
+#ifdef BEMAN_BIG_INT_HAS_CPP_LIB_CONSTEXPR_CMATH
     return std::copysign(x, s);
 #elif BEMAN_BIG_INT_HAS_CONSTEXPR_BUILTIN_OR_BUILTIN(__builtin_copysign)
     if constexpr (std::is_same_v<decltype(__builtin_copysign(x, s)), F>) {
@@ -239,7 +237,7 @@ template <cv_unqualified_floating_point F>
 
 template <cv_unqualified_floating_point F>
 [[nodiscard]] constexpr F constexpr_ldexp(const F x, const int exp) noexcept {
-#if defined(__cpp_lib_constexpr_cmath) && __cpp_lib_constexpr_cmath >= 202202L
+#ifdef BEMAN_BIG_INT_HAS_CPP_LIB_CONSTEXPR_CMATH
     return std::ldexp(x, exp);
 #elif BEMAN_BIG_INT_HAS_CONSTEXPR_BUILTIN_OR_BUILTIN(__builtin_ldexp)
     if constexpr (std::is_same_v<decltype(__builtin_ldexp(x, exp)), F>) {
@@ -273,7 +271,7 @@ template <cv_unqualified_floating_point F>
 
 template <cv_unqualified_floating_point F>
 [[nodiscard]] constexpr F constexpr_fabs(const F x) noexcept {
-#if defined(__cpp_lib_constexpr_cmath) && __cpp_lib_constexpr_cmath >= 202202L
+#ifdef BEMAN_BIG_INT_HAS_CPP_LIB_CONSTEXPR_CMATH
     return std::fabs(x);
 #elif BEMAN_BIG_INT_HAS_CONSTEXPR_BUILTIN_OR_BUILTIN(__builtin_fabs)
     if constexpr (std::is_same_v<decltype(__builtin_fabs(x)), F>) {

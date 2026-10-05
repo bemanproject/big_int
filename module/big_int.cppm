@@ -24,7 +24,7 @@ module;
 // because `import std` exports declarations but not macros, and the headers
 // branch on the macros/objects these six provide regardless of which mode is
 // active.
-#include <version> // every __cpp_lib_* feature test the headers branch on
+#include <version> // every __cpp_lib_* feature test detail/config.hpp branches on
 #include <cassert> // parity with the sibling Boost modules
 #include <cfloat>  // LDBL_MANT_DIG / LDBL_MAX_EXP (detail/floats.hpp has a hard #error without them)
 #include <climits> // BITINT_MAXWIDTH (selects whether _BitInt support exists), CHAR_BIT
@@ -64,6 +64,8 @@ module;
     #include <utility>
     #include <vector>
 
+    // detail/config.hpp is not included yet, so these two mirror its
+    // BEMAN_BIG_INT_HAS_CPP_LIB_FORMAT and BEMAN_BIG_INT_HAS_STDFLOAT tests.
     #if __has_include(<format>) && defined(__cpp_lib_format) && __cpp_lib_format >= 201907L
         #include <format>
     #endif

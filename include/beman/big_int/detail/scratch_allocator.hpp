@@ -165,7 +165,7 @@ struct scratch_allocator : scratch_allocator_base {
     // Heap-allocate at least `cap` limbs using the provided allocator.
     constexpr scratch_allocator(std::size_t cap, const Allocator& alloc) : m_alloc(alloc), m_owns(true) {
         install_heap_hooks();
-#if defined(__cpp_lib_allocate_at_least) && __cpp_lib_allocate_at_least >= 202302L
+#ifdef BEMAN_BIG_INT_HAS_CPP_LIB_ALLOCATE_AT_LEAST
         if constexpr (traits_has_allocate_at_least<alloc_traits, Allocator>) {
             auto result     = alloc_traits::allocate_at_least(m_alloc, cap);
             m_owned_pointer = result.ptr;

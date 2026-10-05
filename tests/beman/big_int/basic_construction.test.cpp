@@ -49,7 +49,7 @@ consteval bool test_integral_construction_with_allocator() {
 static_assert(test_integral_construction_with_allocator());
 
 consteval bool test_from_range_construction() {
-#if defined(__cpp_lib_containers_ranges) && __cpp_lib_containers_ranges >= 202202L
+#ifdef BEMAN_BIG_INT_HAS_CPP_LIB_CONTAINERS_RANGES
     std::array<BEMAN_BIG_INT_NAMESPACE::uint_multiprecision_t, 2> limbs{0xDEADBEEFU, 0xCAFEBABEU};
     BEMAN_BIG_INT_NAMESPACE::big_int                              x(std::from_range, limbs);
     return x.representation().size() == 2;
@@ -113,7 +113,7 @@ TEST(BasicConstruction, IntegralConstructionWithAllocator) {
 }
 
 TEST(BasicConstruction, FromRangeConstruction) {
-#if defined(__cpp_lib_containers_ranges) && __cpp_lib_containers_ranges >= 202202L
+#ifdef BEMAN_BIG_INT_HAS_CPP_LIB_CONTAINERS_RANGES
     std::array<BEMAN_BIG_INT_NAMESPACE::uint_multiprecision_t, 2> limbs{0xDEADBEEFU, 0xCAFEBABEU};
     BEMAN_BIG_INT_NAMESPACE::big_int                              x(std::from_range, limbs);
     EXPECT_EQ(x.representation().size(), 2U);
@@ -123,7 +123,7 @@ TEST(BasicConstruction, FromRangeConstruction) {
 }
 
 TEST(BasicConstruction, FromRangeConstructionTrimsLeadingZeros) {
-#if defined(__cpp_lib_containers_ranges) && __cpp_lib_containers_ranges >= 202202L
+#ifdef BEMAN_BIG_INT_HAS_CPP_LIB_CONTAINERS_RANGES
     std::array<BEMAN_BIG_INT_NAMESPACE::uint_multiprecision_t, 3> limbs{1U, 0U, 0U};
     BEMAN_BIG_INT_NAMESPACE::big_int                              x(std::from_range, limbs);
     EXPECT_EQ(x.representation().size(), 1U);

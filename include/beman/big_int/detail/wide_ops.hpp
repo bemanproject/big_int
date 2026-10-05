@@ -209,18 +209,6 @@ constexpr T high_mul(const T x, const T y) noexcept {
                 return __umulh(x, y);
             }
         }
-    #elif defined(_M_AMD64)
-        if BEMAN_BIG_INT_IS_NOT_CONSTEVAL {
-            if constexpr (std::is_signed_v<T>) {
-                __int64 result;
-                void(_mul128(x, y, &result));
-                return result;
-            } else {
-                unsigned __int64 result;
-                void(_umul128(x, y, &result));
-                return result;
-            }
-        }
     #endif
         if constexpr (width_v<T> == 64) {
             return high_mul_detail::high_mul_portable(x, y);
@@ -252,7 +240,7 @@ template <signed_or_unsigned T>
         const auto product = static_cast<wider_t<T>>(x) * static_cast<wider_t<T>>(y);
         return wide<T>::from_int(product);
     } else {
-    #if defined(_M_AMD64)
+    #if defined(BEMAN_BIG_INT_MSVC) && defined(BEMAN_BIG_INT_TARGET_X86_64)
         // MSVC intrinsics are not usable during constant evaluation, so fall through
         // to the portable path when we're in a consteval context.
         if BEMAN_BIG_INT_IS_NOT_CONSTEVAL {
@@ -423,7 +411,7 @@ template <unsigned_integer T>
     } else {
         return carrying_add_portable(x, y, carry);
     }
-#elif defined(BEMAN_BIG_INT_MSVC) && (defined(_M_AMD64) || defined(_M_IX86))
+#elif defined(BEMAN_BIG_INT_MSVC) && (defined(BEMAN_BIG_INT_TARGET_X86_64) || defined(BEMAN_BIG_INT_TARGET_X86_32))
     if BEMAN_BIG_INT_IS_NOT_CONSTEVAL {
         // Theoretically we could use the ADX intrinsic, but then the user always has to compile for it
         // This is more portable.
@@ -442,7 +430,7 @@ template <unsigned_integer T>
             const unsigned char carry_out = _addcarry_u32(static_cast<unsigned char>(carry), x, y, &value);
             return {.value = value, .carry = carry_out != 0};
         }
-    #ifdef _M_AMD64
+    #ifdef BEMAN_BIG_INT_TARGET_X86_64
         else if constexpr (width_v<T> == 64) {
             std::uint64_t       value;
             const unsigned char carry_out = _addcarry_u64(static_cast<unsigned char>(carry), x, y, &value);
@@ -503,7 +491,7 @@ template <unsigned_integer T>
     } else {
         return borrowing_sub_portable(x, y, borrow);
     }
-#elif defined(BEMAN_BIG_INT_MSVC) && (defined(_M_AMD64) || defined(_M_IX86))
+#elif defined(BEMAN_BIG_INT_MSVC) && (defined(BEMAN_BIG_INT_TARGET_X86_64) || defined(BEMAN_BIG_INT_TARGET_X86_32))
     if BEMAN_BIG_INT_IS_NOT_CONSTEVAL {
         // Mirror the `carrying_add` MSVC path using the matching `_subborrow_*` intrinsics.
         // Each branch returns directly, so we don't share uninitialized state across the
@@ -521,13 +509,13 @@ template <unsigned_integer T>
             const unsigned char borrow_out = _subborrow_u32(static_cast<unsigned char>(borrow), x, y, &value);
             return {.value = value, .borrow = borrow_out != 0};
         }
-    #ifdef _M_AMD64
+    #ifdef BEMAN_BIG_INT_TARGET_X86_64
         else if constexpr (width_v<T> == 64) {
             std::uint64_t       value;
             const unsigned char borrow_out = _subborrow_u64(static_cast<unsigned char>(borrow), x, y, &value);
             return {.value = value, .borrow = borrow_out != 0};
         }
-    #endif // _M_AMD64
+    #endif // BEMAN_BIG_INT_TARGET_X86_64
         else {
             return borrowing_sub_portable(x, y, borrow);
         }
@@ -595,7 +583,7 @@ template <unsigned_integer T>
     if constexpr (width_v<T> == 64) {
         if BEMAN_BIG_INT_IS_NOT_CONSTEVAL {
             if (!BEMAN_BIG_INT_IS_CONSTANT_PROPAGATED(y)) {
-    #if defined(BEMAN_BIG_INT_GNUC) && (defined(__x86_64__) || defined(__i386__))
+    #if defined(BEMAN_BIG_INT_GNUC) && (defined(BEMAN_BIG_INT_TARGET_X86_64) || defined(BEMAN_BIG_INT_TARGET_X86_32))
                 T q, r;
                 // volatile is load-bearing: a non-volatile asm counts as
                 // pure, and GCC at -O2 speculatively hoisted this above a
@@ -605,7 +593,7 @@ template <unsigned_integer T>
                 // This has happened with GCC-14 in release mode
                 __asm__ volatile("div %[d]" : "=a"(q), "=d"(r) : "a"(x.low_bits), "d"(x.high_bits), [d] "r"(y) : "cc");
                 return {.quotient = q, .remainder = r};
-    #elif defined(_WIN32) && defined(_M_X64)
+    #elif defined(BEMAN_BIG_INT_MSVC) && defined(BEMAN_BIG_INT_TARGET_X86_64)
                 T r;
                 T q = _udiv128(static_cast<T>(x.high_bits), static_cast<T>(x.low_bits), static_cast<T>(y), &r);
                 return {.quotient = static_cast<T>(q), .remainder = static_cast<T>(r)};

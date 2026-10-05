@@ -78,7 +78,7 @@ namespace detail {
 // only, also used for other AArch64 cores and MSVC ARM64): leaves of 16 chunks beat 32 by 5.5% on average.
 #if defined(BEMAN_BIG_INT_ARCH_AARCH64)
 inline constexpr std::size_t fast_input_basecase_chunks = 16;
-#elif defined(__x86_64__) || defined(_M_X64) || defined(__amd64__)
+#elif defined(BEMAN_BIG_INT_TARGET_X86_64)
 inline constexpr std::size_t fast_input_basecase_chunks = 512;
 #else
 inline constexpr std::size_t fast_input_basecase_chunks = 32;

@@ -28,12 +28,12 @@ namespace detail {
 // Architectures with a hand-written SIMD kernel.
 // NEON is mandatory baseline on AArch64 (no dispatch);
 // x86-64 selects AVX2 at runtime, else the scalar kernel.
-#if defined(__x86_64__) || defined(_M_X64) || defined(__amd64__)
+#ifdef BEMAN_BIG_INT_TARGET_X86_64
     #define BEMAN_BIG_INT_NTT_FP_X86 1
 #else
     #define BEMAN_BIG_INT_NTT_FP_X86 0
 #endif
-#if defined(__aarch64__) || defined(_M_ARM64)
+#ifdef BEMAN_BIG_INT_TARGET_AARCH64
     #define BEMAN_BIG_INT_NTT_FP_ARM64 1
 #else
     #define BEMAN_BIG_INT_NTT_FP_ARM64 0
