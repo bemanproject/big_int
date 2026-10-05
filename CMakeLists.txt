@@ -1,4 +1,5 @@
 # SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
+# SPDX-License-Identifier: BSL-1.0
 
 cmake_minimum_required(VERSION 3.30...4.3)
 
