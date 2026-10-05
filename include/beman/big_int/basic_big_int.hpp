@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 // SPDX-License-Identifier: BSL-1.0
 
-#ifndef BEMAN_BIG_INT_BIG_INT_HPP
-#define BEMAN_BIG_INT_BIG_INT_HPP
+#ifndef BEMAN_BIG_INT_BASIC_BIG_INT_HPP
+#define BEMAN_BIG_INT_BASIC_BIG_INT_HPP
 
 #ifndef BEMAN_BIG_INT_BUILD_MODULE
     #include <algorithm>
@@ -3669,4 +3669,4 @@ struct std::hash<BEMAN_BIG_INT_NAMESPACE::basic_big_int<b, L, A>> {
 
 BEMAN_BIG_INT_DIAGNOSTIC_POP() // For string and array bounds at the top of this file
 
-#endif // BEMAN_BIG_INT_BIG_INT_HPP
+#endif // BEMAN_BIG_INT_BASIC_BIG_INT_HPP

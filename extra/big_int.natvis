@@ -6,7 +6,7 @@
   and therefore also for the beman::big_int::big_int and beman::big_int::pmr::big_int
   aliases (Natvis matches the class template, not the alias).
 
-  Layout (see include/beman/big_int/big_int.hpp):
+  Layout (see include/beman/big_int/basic_big_int.hpp):
       class basic_big_int {
           std::uint32_t m_capacity;      // 0 = in-place storage, >0 = heap capacity
           std::uint32_t m_size_and_sign; // bit 31 = sign, bits 0-30 = limb count

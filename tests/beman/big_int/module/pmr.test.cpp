@@ -2,10 +2,10 @@
 // SPDX-License-Identifier: BSL-1.0
 
 // Exercises `beman::big_int::pmr::basic_big_int` / `pmr::big_int`
-// (the `namespace pmr` block in include/beman/big_int/big_int.hpp) through
+// (the `namespace pmr` block in include/beman/big_int/basic_big_int.hpp) through
 // `import beman.big_int;`.
 //
-// Allocator propagation here is not assumed; it is read out of big_int.hpp and
+// Allocator propagation here is not assumed; it is read out of basic_big_int.hpp and
 // confirmed by these tests:
 //   - the copy and move constructors copy/move `m_alloc` unconditionally
 //     (`basic_big_int(const basic_big_int&)` / `basic_big_int(basic_big_int&&)`),

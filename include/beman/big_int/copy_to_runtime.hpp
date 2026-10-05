@@ -5,7 +5,7 @@
 #define BEMAN_BIG_INT_COPY_TO_RUNTIME_HPP
 
 // Macros do not cross module boundaries, so BEMAN_BIG_INT_COPY_TO_RUNTIME lives in its
-// own self-contained header (no includes, no declarations) rather than in big_int.hpp.
+// own self-contained header (no includes, no declarations) rather than in basic_big_int.hpp.
 // A module consumer includes this header alongside `import beman.big_int;` to get it.
 
 // Mirrors the default in detail/config.hpp, which a module consumer never sees.

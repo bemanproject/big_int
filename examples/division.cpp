@@ -10,7 +10,7 @@ auto main() -> int {
     using beman::big_int::big_int;
     using beman::big_int::div_rem_to_zero;
 
-    // div_rem_to_zero (declared in <beman/big_int/big_int.hpp>) computes the
+    // div_rem_to_zero (declared in <beman/big_int/basic_big_int.hpp>) computes the
     // quotient and remainder together in a single division, which is cheaper
     // than evaluating operator/ and operator% separately.
 

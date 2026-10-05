@@ -3,7 +3,7 @@
 #
 # Pretty printer for beman::big_int::basic_big_int<min_inplace_bits, Limb, Allocator>.
 #
-# Layout (see include/beman/big_int/big_int.hpp):
+# Layout (see include/beman/big_int/basic_big_int.hpp):
 #   class basic_big_int {
 #       std::uint32_t m_capacity;      // 0 = static storage, >0 = heap capacity
 #       std::uint32_t m_size_and_sign; // bit 31 = sign, bits 0-30 = limb count
