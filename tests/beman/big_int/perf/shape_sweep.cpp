@@ -17,15 +17,15 @@
 // -DBEMAN_BIG_INT_SWEEP_GMP, 64-bit limbs and -lgmp; div and rem time only the named operator, so GMP's mpn_tdiv_qr
 // (quotient and remainder) is paired with divrem only.
 //
-// Build through CMake (target beman.big_int.benchmarks.shape_sweep, BEMAN_BIG_INT_BUILD_BENCHMARKS=ON), which passes
-// the library's PUBLIC definitions (BMI2_ADX, AVX512_IFMA, SIMD_MUL, FORCED_LIMB_WIDTH) and the compile flags. A
-// manual build must reproduce that full set: the same BEMAN_BIG_INT_X86_64_BMI2_ADX / _AVX512_IFMA values, SIMD_MUL,
-// BEMAN_BIG_INT_FORCED_LIMB_WIDTH, -march / -mavx2 style flags and NDEBUG as the library was built with (see the
-// library target's entries in the build directory's compile_commands.json), and must pass
+// Build through CMake (target beman.big_int.benchmarks.shape_sweep, BEMAN_BIG_INT_BUILD_BENCHMARKS=ON), which puts
+// the library's generated detail/config_generated.hpp (BMI2_ADX, AVX512_IFMA, SIMD_MUL) on the include path and passes
+// the compile flags. A manual build must reproduce that: the build directory's generated/include on the include path,
+// plus the same BEMAN_BIG_INT_FORCED_LIMB_WIDTH, -march / -mavx2 style flags and NDEBUG as the library was built with
+// (see the library target's entries in the build directory's compile_commands.json), and must pass
 // -DBEMAN_BIG_INT_SWEEP_MANUAL_OK. Otherwise the harness TU can disagree with the library and #const would lie.
-//   L=build/appleclang-release/libbeman.big_int.a
-//   c++ -std=c++23 -O2 -DNDEBUG -DBEMAN_BIG_INT_SWEEP_MANUAL_OK -Iinclude -o shape_sweep $L
-//       tests/beman/big_int/perf/shape_sweep.cpp    (one command; keep the source before or after $L as usual)
+//   B=build/appleclang-release
+//   c++ -std=c++23 -O2 -DNDEBUG -DBEMAN_BIG_INT_SWEEP_MANUAL_OK -I$B/generated/include -Iinclude -o shape_sweep
+//       $B/libbeman.big_int.a tests/beman/big_int/perf/shape_sweep.cpp    (one command; source before or after the .a)
 
 #if defined(BEMAN_BIG_INT_SWEEP_VIA_CMAKE)
     #include "shape_sweep_build_info.hpp"

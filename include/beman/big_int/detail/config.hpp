@@ -4,19 +4,6 @@
 #ifndef BEMAN_BIG_INT_CONFIG_HPP
 #define BEMAN_BIG_INT_CONFIG_HPP
 
-#if __has_include(<beman/big_int/detail/config_generated.hpp>)
-
-#include <beman/big_int/detail/config_generated.hpp>
-
-#else
-
-// Feature detection ===========================================================
-
-// Every feature-test, compiler-extension, and target-architecture macro the
-// library branches on is tested here and nowhere else; the rest of the library
-// checks only the BEMAN_BIG_INT_HAS_* and BEMAN_BIG_INT_TARGET_* spellings below.
-// Each is defined to 1 when the feature is available and left undefined otherwise.
-
 // Guarding these includes is safe only because the .cppm supplies them in its
 // global module fragment before the purview include of this header.
 #ifndef BEMAN_BIG_INT_BUILD_MODULE
@@ -25,133 +12,174 @@
     #include <version> // for __cpp_lib_*
 #endif
 
-// Language features
+// A CMake build generates config_generated.hpp at configure time
+#if __has_include(<beman/big_int/detail/config_generated.hpp>)
 
-#if defined(__cpp_if_consteval) && __cpp_if_consteval >= 202106L
-    #define BEMAN_BIG_INT_HAS_CPP_IF_CONSTEVAL 1
-#endif
+    #include <beman/big_int/detail/config_generated.hpp>
 
-// Library features
-
-#if defined(__cpp_lib_allocate_at_least) && __cpp_lib_allocate_at_least >= 202302L
-    #define BEMAN_BIG_INT_HAS_CPP_LIB_ALLOCATE_AT_LEAST 1
-#endif
-
-#if defined(__cpp_lib_constexpr_cmath) && __cpp_lib_constexpr_cmath >= 202202L
-    #define BEMAN_BIG_INT_HAS_CPP_LIB_CONSTEXPR_CMATH 1
-#endif
-
-#if defined(__cpp_lib_containers_ranges) && __cpp_lib_containers_ranges >= 202202L
-    #define BEMAN_BIG_INT_HAS_CPP_LIB_CONTAINERS_RANGES 1
-#endif
-
-#if __has_include(<format>) && defined(__cpp_lib_format) && __cpp_lib_format >= 201907L
-    #define BEMAN_BIG_INT_HAS_CPP_LIB_FORMAT 1
-#endif
-
-// 202411L is the revision that makes the uninitialized memory algorithms constexpr.
-#if defined(__cpp_lib_raw_memory_algorithms) && __cpp_lib_raw_memory_algorithms >= 202411L
-    #define BEMAN_BIG_INT_HAS_CPP_LIB_RAW_MEMORY_ALGORITHMS 1
-#endif
-
-#if defined(__cpp_lib_string_resize_and_overwrite) && __cpp_lib_string_resize_and_overwrite >= 202110L
-    #define BEMAN_BIG_INT_HAS_CPP_LIB_STRING_RESIZE_AND_OVERWRITE 1
-#endif
-
-// Extended floating-point types
-
-#if __has_include(<stdfloat>)
-    #define BEMAN_BIG_INT_HAS_STDFLOAT 1
-#endif
-
-#ifdef __STDCPP_FLOAT16_T__
-    #define BEMAN_BIG_INT_HAS_STDCPP_FLOAT16_T 1
-#endif
-
-#ifdef __STDCPP_BFLOAT16_T__
-    #define BEMAN_BIG_INT_HAS_STDCPP_BFLOAT16_T 1
-#endif
-
-#ifdef __STDCPP_FLOAT128_T__
-    #define BEMAN_BIG_INT_HAS_STDCPP_FLOAT128_T 1
-#endif
-
-// Bit-precise integers (_BitInt)
-
-#ifdef BITINT_MAXWIDTH
-    // Once _BitInt is a standard feature and available on all compilers,
-    // this case should be selected for all compilers.
-    #define BEMAN_BIG_INT_HAS_BITINT 1
-    #define BEMAN_BIG_INT_BITINT_MAXWIDTH BITINT_MAXWIDTH
-#elif defined(__BITINT_MAXWIDTH__)
-    // This case is for Clang when it provides _BitInt as an extension.
-    #define BEMAN_BIG_INT_HAS_BITINT 1
-    #define BEMAN_BIG_INT_HAS_BITINT_EXTENSION 1
-    #define BEMAN_BIG_INT_BITINT_MAXWIDTH __BITINT_MAXWIDTH__
 #else
-    // Prevent warnings for use of undefined macros.
-    #define BEMAN_BIG_INT_BITINT_MAXWIDTH 0
-#endif // BITINT_MAXWIDTH
 
-// Workaround for Clang-19 ICE past 128 bits, even though it reports far more than that
-// Crashes in EmitAutoVarInit; fixed in Clang 20 by https://github.com/llvm/llvm-project/pull/112218
-#if defined(__clang__) && __clang_major__ == 19 && BEMAN_BIG_INT_BITINT_MAXWIDTH > 128
-    #undef BEMAN_BIG_INT_BITINT_MAXWIDTH
-    #define BEMAN_BIG_INT_BITINT_MAXWIDTH 128
-#endif
+    // Feature detection ===========================================================
 
-// GNU __int128
+    // Every feature-test, compiler-extension, and target-architecture macro the
+    // library branches on is tested here and nowhere else; the rest of the library
+    // checks only the BEMAN_BIG_INT_HAS_* and BEMAN_BIG_INT_TARGET_* spellings below.
+    // Each is defined to 1 when the feature is available and left undefined otherwise.
 
-#ifdef __SIZEOF_INT128__
-    #define BEMAN_BIG_INT_HAS_INT128_EXTENSION 1
-#endif
+    // Language features
 
-// Exceptions
+    #if defined(__cpp_if_consteval) && __cpp_if_consteval >= 202106L
+        #define BEMAN_BIG_INT_HAS_CPP_IF_CONSTEVAL 1
+    #endif
 
-#if (defined(_MSC_VER) && defined(_CPPUNWIND)) || defined(__EXCEPTIONS)
-    #define BEMAN_BIG_INT_ALLOW_EXCEPTIONS
-#else
-    #define BEMAN_BIG_INT_NO_EXCEPTIONS
-#endif
+    // Library features
 
-// Target architecture
+    #if defined(__cpp_lib_allocate_at_least) && __cpp_lib_allocate_at_least >= 202302L
+        #define BEMAN_BIG_INT_HAS_CPP_LIB_ALLOCATE_AT_LEAST 1
+    #endif
 
-#if defined(__x86_64__) || defined(_M_X64) || defined(__amd64__)
-    #define BEMAN_BIG_INT_TARGET_X86_64 1
-#endif
+    #if defined(__cpp_lib_constexpr_cmath) && __cpp_lib_constexpr_cmath >= 202202L
+        #define BEMAN_BIG_INT_HAS_CPP_LIB_CONSTEXPR_CMATH 1
+    #endif
 
-#if defined(__i386__) || defined(_M_IX86)
-    #define BEMAN_BIG_INT_TARGET_X86_32 1
-#endif
+    #if defined(__cpp_lib_containers_ranges) && __cpp_lib_containers_ranges >= 202202L
+        #define BEMAN_BIG_INT_HAS_CPP_LIB_CONTAINERS_RANGES 1
+    #endif
 
-#if defined(__aarch64__) || defined(_M_ARM64)
-    #define BEMAN_BIG_INT_TARGET_AARCH64 1
-#endif
+    #if __has_include(<format>) && defined(__cpp_lib_format) && __cpp_lib_format >= 201907L
+        #define BEMAN_BIG_INT_HAS_CPP_LIB_FORMAT 1
+    #endif
 
-#if defined(__wasm__) || defined(__EMSCRIPTEN__)
-    #define BEMAN_BIG_INT_TARGET_WASM 1
-#endif
+    // 202411L is the revision that makes the uninitialized memory algorithms constexpr.
+    #if defined(__cpp_lib_raw_memory_algorithms) && __cpp_lib_raw_memory_algorithms >= 202411L
+        #define BEMAN_BIG_INT_HAS_CPP_LIB_RAW_MEMORY_ALGORITHMS 1
+    #endif
 
-// x86 instruction set extensions enabled at compile time (e.g. -mbmi2 -madx).
-// BEMAN_BIG_INT_HAS_AVX512_IFMA is the full AVX-512 set the IFMA kernels need.
+    #if defined(__cpp_lib_string_resize_and_overwrite) && __cpp_lib_string_resize_and_overwrite >= 202110L
+        #define BEMAN_BIG_INT_HAS_CPP_LIB_STRING_RESIZE_AND_OVERWRITE 1
+    #endif
 
-#if defined(__BMI2__) && defined(__ADX__)
-    #define BEMAN_BIG_INT_HAS_BMI2_ADX 1
-#endif
+    // Extended floating-point types
 
-#if defined(__AVX512IFMA__) && defined(__AVX512VL__) && defined(__AVX512BW__) && defined(__AVX512VBMI__)
-    #define BEMAN_BIG_INT_HAS_AVX512_IFMA 1
-#endif
+    #if __has_include(<stdfloat>)
+        #define BEMAN_BIG_INT_HAS_STDFLOAT 1
+    #endif
 
-// Word size
+    #ifdef __STDCPP_FLOAT16_T__
+        #define BEMAN_BIG_INT_HAS_STDCPP_FLOAT16_T 1
+    #endif
 
-#if INTPTR_MAX == INT64_MAX || defined(BEMAN_BIG_INT_TARGET_WASM)
-    #define BEMAN_BIG_INT_WORD_BITS 64
-#elif INTPTR_MAX == INT32_MAX
-    #define BEMAN_BIG_INT_WORD_BITS 32
-#else
-    #error Unknown pointer size or missing size macros!
-#endif
+    #ifdef __STDCPP_BFLOAT16_T__
+        #define BEMAN_BIG_INT_HAS_STDCPP_BFLOAT16_T 1
+    #endif
+
+    #ifdef __STDCPP_FLOAT128_T__
+        #define BEMAN_BIG_INT_HAS_STDCPP_FLOAT128_T 1
+    #endif
+
+    // Bit-precise integers (_BitInt)
+
+    #ifdef BITINT_MAXWIDTH
+        // Once _BitInt is a standard feature and available on all compilers,
+        // this case should be selected for all compilers.
+        #define BEMAN_BIG_INT_HAS_BITINT 1
+        #define BEMAN_BIG_INT_BITINT_MAXWIDTH BITINT_MAXWIDTH
+    #elif defined(__BITINT_MAXWIDTH__)
+        // This case is for Clang when it provides _BitInt as an extension.
+        #define BEMAN_BIG_INT_HAS_BITINT 1
+        #define BEMAN_BIG_INT_HAS_BITINT_EXTENSION 1
+        #define BEMAN_BIG_INT_BITINT_MAXWIDTH __BITINT_MAXWIDTH__
+    #else
+        // Prevent warnings for use of undefined macros.
+        #define BEMAN_BIG_INT_BITINT_MAXWIDTH 0
+    #endif // BITINT_MAXWIDTH
+
+    // Workaround for Clang-19 ICE past 128 bits, even though it reports far more than that
+    // Crashes in EmitAutoVarInit; fixed in Clang 20 by https://github.com/llvm/llvm-project/pull/112218
+    #if defined(__clang__) && __clang_major__ == 19 && BEMAN_BIG_INT_BITINT_MAXWIDTH > 128
+        #undef BEMAN_BIG_INT_BITINT_MAXWIDTH
+        #define BEMAN_BIG_INT_BITINT_MAXWIDTH 128
+    #endif
+
+    // GNU __int128
+
+    #ifdef __SIZEOF_INT128__
+        #define BEMAN_BIG_INT_HAS_INT128_EXTENSION 1
+    #endif
+
+    // Exceptions
+
+    #if (defined(_MSC_VER) && defined(_CPPUNWIND)) || defined(__EXCEPTIONS)
+        #define BEMAN_BIG_INT_ALLOW_EXCEPTIONS
+    #else
+        #define BEMAN_BIG_INT_NO_EXCEPTIONS
+    #endif
+
+    // Target architecture
+
+    #if defined(__x86_64__) || defined(_M_X64) || defined(__amd64__)
+        #define BEMAN_BIG_INT_TARGET_X86_64 1
+    #endif
+
+    #if defined(__i386__) || defined(_M_IX86)
+        #define BEMAN_BIG_INT_TARGET_X86_32 1
+    #endif
+
+    #if defined(__aarch64__) || defined(_M_ARM64)
+        #define BEMAN_BIG_INT_TARGET_AARCH64 1
+    #endif
+
+    #if defined(__wasm__) || defined(__EMSCRIPTEN__)
+        #define BEMAN_BIG_INT_TARGET_WASM 1
+    #endif
+
+    // x86 instruction set extensions enabled at compile time (e.g. -mbmi2 -madx).
+    // BEMAN_BIG_INT_HAS_AVX512_IFMA is the full AVX-512 set the IFMA kernels need.
+
+    #if defined(__BMI2__) && defined(__ADX__)
+        #define BEMAN_BIG_INT_HAS_BMI2_ADX 1
+    #endif
+
+    #if defined(__AVX512IFMA__) && defined(__AVX512VL__) && defined(__AVX512BW__) && defined(__AVX512VBMI__)
+        #define BEMAN_BIG_INT_HAS_AVX512_IFMA 1
+    #endif
+
+    // Word size
+
+    #if INTPTR_MAX == INT64_MAX || defined(BEMAN_BIG_INT_TARGET_WASM)
+        #define BEMAN_BIG_INT_WORD_BITS 64
+    #elif INTPTR_MAX == INT32_MAX
+        #define BEMAN_BIG_INT_WORD_BITS 32
+    #else
+        #error Unknown pointer size or missing size macros!
+    #endif
+
+    // Build configuration defaults ================================================
+
+    // CMake sets these from its options. Without it they follow the compiler's own
+    // feature macros, and each can still be set explicitly with -D. The FP SIMD
+    // multiplication (BEMAN_BIG_INT_SIMD_MUL) is never turned on here: it is exact
+    // only under floating-point flags that cannot be queried, so it must be
+    // defined explicitly.
+
+    // As in CMake, forcing the IFMA kernels on also forces their small-operand
+    // fallback, the BMI2/ADX kernels, unless that is set explicitly.
+    #ifndef BEMAN_BIG_INT_X86_64_BMI2_ADX
+        #if defined(BEMAN_BIG_INT_HAS_BMI2_ADX) || \
+            (defined(BEMAN_BIG_INT_X86_64_AVX512_IFMA) && BEMAN_BIG_INT_X86_64_AVX512_IFMA)
+            #define BEMAN_BIG_INT_X86_64_BMI2_ADX 1
+        #else
+            #define BEMAN_BIG_INT_X86_64_BMI2_ADX 0
+        #endif
+    #endif
+
+    #ifndef BEMAN_BIG_INT_X86_64_AVX512_IFMA
+        #if defined(BEMAN_BIG_INT_HAS_AVX512_IFMA) && defined(BEMAN_BIG_INT_HAS_BMI2_ADX)
+            #define BEMAN_BIG_INT_X86_64_AVX512_IFMA 1
+        #else
+            #define BEMAN_BIG_INT_X86_64_AVX512_IFMA 0
+        #endif
+    #endif
 
 #endif // Config Generated
 
@@ -418,29 +446,14 @@ BEMAN_BIG_INT_END_NAMESPACE
     #define BEMAN_BIG_INT_ARCH_X86_64
 #endif
 
-// Compile-time choice between the generic and BMI2+ADX x86-64 kernels
-#if !defined(BEMAN_BIG_INT_ARCH_X86_64)
+// The BMI2/ADX and AVX-512 IFMA kernel choices (see Build configuration) only
+// apply where the x86-64 kernels are called at all. IFMA covers large operands
+// only; small ones still go through the BMI2/ADX-or-generic choice.
+#ifndef BEMAN_BIG_INT_ARCH_X86_64
     #undef BEMAN_BIG_INT_X86_64_BMI2_ADX
     #define BEMAN_BIG_INT_X86_64_BMI2_ADX 0
-#elif !defined(BEMAN_BIG_INT_X86_64_BMI2_ADX)
-    #ifdef BEMAN_BIG_INT_HAS_BMI2_ADX
-        #define BEMAN_BIG_INT_X86_64_BMI2_ADX 1
-    #else
-        #define BEMAN_BIG_INT_X86_64_BMI2_ADX 0
-    #endif
-#endif
-
-// Compile-time choice of the AVX-512 IFMA x86-64 kernels (large operands
-// only; small ones still go through the BMI2/ADX-or-generic choice above).
-#if !defined(BEMAN_BIG_INT_ARCH_X86_64)
     #undef BEMAN_BIG_INT_X86_64_AVX512_IFMA
     #define BEMAN_BIG_INT_X86_64_AVX512_IFMA 0
-#elif !defined(BEMAN_BIG_INT_X86_64_AVX512_IFMA)
-    #if defined(BEMAN_BIG_INT_HAS_AVX512_IFMA) && defined(BEMAN_BIG_INT_HAS_BMI2_ADX)
-        #define BEMAN_BIG_INT_X86_64_AVX512_IFMA 1
-    #else
-        #define BEMAN_BIG_INT_X86_64_AVX512_IFMA 0
-    #endif
 #endif
 
 #if defined(BEMAN_BIG_INT_TARGET_AARCH64) && BEMAN_BIG_INT_LIMB_WIDTH == 64

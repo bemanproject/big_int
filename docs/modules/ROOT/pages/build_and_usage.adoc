@@ -101,6 +101,8 @@ Which one the library calls is chosen at compile time, with no runtime
 dispatch. When you compile with flags that define both `__BMI2__` and
 `__ADX__` (for example `-march=native`, or `-march=broadwell` or newer, or
 `-march=znver1` or newer), the BMI2/ADX kernels are selected automatically.
+With CMake, that check runs once at configure time against the flags the library
+is compiled with (see xref:#build_and_usage_config[Build configuration]).
 
 You can also select explicitly with the CMake option
 `BEMAN_BIG_INT_X86_64_BMI2_ADX` (default `AUTO`, also accepting `ON`/`OFF`):
@@ -147,7 +149,8 @@ When you compile with flags that define `__AVX512IFMA__`, `__AVX512VL__`,
 `__AVX512BW__`, `__AVX512VBMI__`, `__BMI2__`, and `__ADX__` (for example
 `-march=native`, or `-march=icelake-client`, `-march=rocketlake`,
 `-march=sapphirerapids`, `-march=znver4`, or newer), the IFMA kernels are
-selected automatically for operands at or above the size gate.
+selected automatically for operands at or above the size gate. As with BMI2/ADX,
+CMake makes that check once at configure time.
 
 You can also select explicitly with the CMake option
 `BEMAN_BIG_INT_X86_64_AVX512_IFMA` (default `AUTO`, also accepting `ON`/`OFF`):
@@ -200,8 +203,8 @@ cmake --preset gcc-release -DBEMAN_BIG_INT_NAMESPACE=mylib::big_int
 ----
 
 The library is partly compiled, so its sources and every consumer must agree on
-the namespace. CMake propagates a non-default value to consumers of the
-`beman::big_int` target. Without CMake, define the `BEMAN_BIG_INT_NAMESPACE`
+the namespace. CMake records it in the generated configuration header (see
+xref:#build_and_usage_config[Build configuration]). Without CMake, define the `BEMAN_BIG_INT_NAMESPACE`
 macro to the same value everywhere, both for the sources under `src/` and for
 every translation unit that includes the headers. The `*-release-namespace`
 presets build and run the whole test suite with
@@ -216,6 +219,39 @@ chosen namespace, so pick one that another library does not already populate.
 both define `detail::make_signed` and `detail::make_unsigned`, and Boost's
 `literals` namespace is not `inline` while this library's is.
 ====
+
+[#build_and_usage_config]
+=== Build configuration
+
+CMake writes a generated header, `beman/big_int/detail/config_generated.hpp`,
+under the build directory's `generated/include` and installs it with the other
+headers. It holds the options above together with the result of the library's
+feature detection (standard library features, `_BitInt` and `__int128`
+support, exceptions, the target architecture and its instruction set
+extensions), which CMake runs once at configure time with the compiler, language
+standard and `CMAKE_CXX_FLAGS` of the build. `detail/config.hpp` includes it
+instead of detecting anything itself whenever it is on the include path, so the
+compiled library and every translation unit that uses it agree on all of these.
+In particular, `AUTO` for the x86-64 kernel options is resolved there, and
+compiling a consumer with different flags than the library (another `-march=`,
+`-fno-exceptions`, or an older `-std=`) does not change what the headers see.
+
+A build that does not use CMake has no generated header: `detail/config.hpp`
+then detects features in every translation unit and falls back on the defaults
+below. Each can be overridden by defining the macro, identically for the
+sources under `src/` and for every translation unit that includes the headers.
+
+* `BEMAN_BIG_INT_X86_64_BMI2_ADX` is `1` when the compiler defines both
+  `__BMI2__` and `__ADX__`, or when `BEMAN_BIG_INT_X86_64_AVX512_IFMA` is defined
+  to `1`, and `0` otherwise.
+* `BEMAN_BIG_INT_X86_64_AVX512_IFMA` is `1` when the compiler defines
+  `__AVX512IFMA__`, `__AVX512VL__`, `__AVX512BW__`, `__AVX512VBMI__`, `__BMI2__`,
+  and `__ADX__`, and `0` otherwise.
+* `BEMAN_BIG_INT_SIMD_MUL` is never defined automatically, whatever the target
+  supports: the SIMD path is exact only under floating-point flags the headers
+  cannot query (see xref:#build_and_usage_simd[SIMD-accelerated multiplication]).
+  Define it yourself only once those flags are guaranteed.
+* `BEMAN_BIG_INT_NAMESPACE` is `beman::big_int`.
 
 [#build_and_usage_install]
 == Installation
