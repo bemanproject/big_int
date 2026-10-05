@@ -19,7 +19,7 @@
 // runtime checks in abi_compat.test.cpp additionally confirm that values (not
 // just declarations) survive the crossing intact.
 
-#include <beman/big_int.hpp>
+#include <beman/big_int/big_int.hpp>
 
 #include <cstddef>
 #include <functional>

@@ -375,7 +375,8 @@ target_sources(
     PUBLIC
         FILE_SET HEADERS
             BASE_DIRS "${CMAKE_CURRENT_SOURCE_DIR}/include"
-            FILES "${CMAKE_CURRENT_SOURCE_DIR}/include/beman/big_int.hpp"
+            FILES
+                "${CMAKE_CURRENT_SOURCE_DIR}/include/beman/big_int/big_int.hpp"
 )
 
 set_target_properties(

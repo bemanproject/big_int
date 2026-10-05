@@ -9,7 +9,7 @@
 `basic_big_int` values. They live in the `beman::big_int` namespace and are
 found by argument-dependent lookup, so an unqualified `abs(x)` resolves to them
 when `x` is a `basic_big_int`. Include them with `<beman/big_int/numeric.hpp>`,
-or transitively through the umbrella `<beman/big_int.hpp>`.
+or transitively through the umbrella `<beman/big_int/big_int.hpp>`.
 
 [#numeric_synopsis]
 == Synopsis

@@ -15,7 +15,7 @@ that formats an `int` formats a `basic_big_int` the same way, only without a
 fixed-width ceiling on the value.
 
 Include the formatter with `<beman/big_int/format.hpp>`, or transitively
-through the umbrella `<beman/big_int.hpp>`. The header is self-guarding: its
+through the umbrella `<beman/big_int/big_int.hpp>`. The header is self-guarding: its
 entire contents are conditioned on
 
 [source,c++]

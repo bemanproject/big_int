@@ -8,7 +8,7 @@
 #include <ostream>
 #include <span>
 
-#include <beman/big_int.hpp>
+#include <beman/big_int/big_int.hpp>
 
 BEMAN_BIG_INT_BEGIN_NAMESPACE
 
