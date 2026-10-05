@@ -8,7 +8,7 @@
 
 #include <gtest/gtest.h>
 
-#include <beman/big_int/big_int.hpp>
+#include <beman/big_int.hpp>
 
 BEMAN_BIG_INT_DIAGNOSTIC_PUSH()
 BEMAN_BIG_INT_DIAGNOSTIC_IGNORED_GCC("-Warray-bounds") // This causes way too many problems.

@@ -7,7 +7,7 @@
 // Helpers for driving one Toom-Cook kernel directly with cutoff_override = 1, so it runs (or falls back on its
 // own ratio gate) at any size, and comparing against the portable schoolbook multiply_long.
 
-#include <beman/big_int/big_int.hpp>
+#include <beman/big_int.hpp>
 #include <beman/big_int/detail/mul_impl.hpp>
 
 #include <gtest/gtest.h>

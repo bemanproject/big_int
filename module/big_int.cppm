@@ -103,7 +103,7 @@ extern "C++" {
     #pragma clang diagnostic ignored "-Winclude-angled-in-module-purview"
 #endif
 
-#include <beman/big_int/big_int.hpp>
+#include <beman/big_int.hpp>
 
 #ifdef _MSC_VER
     #pragma warning(pop)

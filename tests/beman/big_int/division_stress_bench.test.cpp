@@ -17,7 +17,7 @@
 //
 // Output is CSV on stdout: algorithm,dividend_limbs,divisor_limbs,iters,ns_per_div.
 
-#include <beman/big_int/big_int.hpp>
+#include <beman/big_int.hpp>
 #include <beman/big_int/detail/div_impl.hpp>
 
 #include <gtest/gtest.h>

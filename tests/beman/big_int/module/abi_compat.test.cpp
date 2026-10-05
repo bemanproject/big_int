@@ -4,7 +4,7 @@
 // Module side of the ABI-compatibility proof.
 //
 // module/big_int.cppm wraps the entire public header graph in an
-// `extern "C++" { #include <beman/big_int/big_int.hpp> ... }` block specifically so
+// `extern "C++" { #include <beman/big_int.hpp> ... }` block specifically so
 // that every declaration it reaches -- beman::big_int::big_int,
 // beman::big_int::pmr::big_int, the std::hash specialization, and so on --
 // attaches to the GLOBAL module (classic Itanium/MSVC mangling) rather than
@@ -17,7 +17,7 @@
 // This pair of files is the actual proof, not a runtime assertion. Neither
 // file may see the other's declarations through a shared header:
 //   - abi_compat_header_tu.cpp reaches beman::big_int::big_int and
-//     beman::big_int::pmr::big_int by #including <beman/big_int/big_int.hpp>, and
+//     beman::big_int::pmr::big_int by #including <beman/big_int.hpp>, and
 //     defines five ordinary functions naming those types.
 //   - This file reaches the same two types only through `import beman.big_int;`,
 //     and DECLARES the same five signatures again, by hand, with no

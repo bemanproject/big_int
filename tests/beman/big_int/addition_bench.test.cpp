@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: BSL-1.0
 
 #include <boost/multiprecision/cpp_int.hpp>
-#include <beman/big_int/big_int.hpp>
+#include <beman/big_int.hpp>
 #include <gtest/gtest.h>
 #include <span>
 

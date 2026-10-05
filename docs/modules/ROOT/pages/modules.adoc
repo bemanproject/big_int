@@ -21,7 +21,7 @@ xref:modules.adoc#modules_limitations[Limitations].
 [#modules_exports]
 == What the module exports
 
-The module covers the entire public interface that `<beman/big_int/big_int.hpp>`
+The module covers the entire public interface that `<beman/big_int.hpp>`
 provides. Importing it brings the following into scope, from the
 `beman::big_int` namespace unless noted otherwise:
 
@@ -288,7 +288,7 @@ merely a style preference: linking the module target defines
 under that macro the library's public declarations are marked `export`. An
 `export` declaration outside a module's purview is ill-formed, so a
 translation unit that both imports the module and textually includes, say,
-`<beman/big_int/big_int.hpp>`, fails to compile -- on every conforming compiler, not
+`<beman/big_int.hpp>`, fails to compile -- on every conforming compiler, not
 as a quality-of-implementation difference some toolchains happen to tolerate.
 
 What *is* supported, and is the more useful fact here, is mixing the two

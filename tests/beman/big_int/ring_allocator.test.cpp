@@ -14,7 +14,7 @@
 
 #include "util/util_ring_allocator.hpp"
 
-#include <beman/big_int/big_int.hpp>
+#include <beman/big_int.hpp>
 
 #include <gtest/gtest.h>
 
