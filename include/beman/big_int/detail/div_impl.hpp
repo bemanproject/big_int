@@ -52,7 +52,10 @@ constexpr std::size_t divide_unsigned_storage_size(const std::size_t dividend_li
 // Preconditions: trimmed operands, divisor.size() >= 2, dividend.size() >=
 // divisor.size(), quotient.size() >= dividend.size() - divisor.size() + 1,
 // remainder.size() >= dividend.size() + 1, no aliasing, and `scratch`
-// provides at least divide_unsigned_storage_size(...) limbs.
+// provides at least divide_unsigned_storage_size(...) limbs. The one
+// exception to no aliasing: `quotient` may start at the dividend's first limb
+// (same data()), because the dividend is copied whole into scratch before the
+// first quotient limb is written and never read again.
 // ---------------------------------------------------------------------------
 constexpr void divide_unsigned(const std::span<uint_multiprecision_t>       quotient,
                                const std::span<uint_multiprecision_t>       remainder,
@@ -66,7 +69,6 @@ constexpr void divide_unsigned(const std::span<uint_multiprecision_t>       quot
     BEMAN_BIG_INT_DEBUG_ASSERT(dividend.size() >= divisor.size());
     BEMAN_BIG_INT_DEBUG_ASSERT(quotient.size() >= dividend.size() - divisor.size() + 1);
     BEMAN_BIG_INT_DEBUG_ASSERT(remainder.size() >= dividend.size() + 1);
-    BEMAN_BIG_INT_DEBUG_ASSERT(quotient.data() != dividend.data());
     BEMAN_BIG_INT_DEBUG_ASSERT(quotient.data() != divisor.data());
     BEMAN_BIG_INT_DEBUG_ASSERT(remainder.data() != dividend.data());
     BEMAN_BIG_INT_DEBUG_ASSERT(remainder.data() != divisor.data());
@@ -908,6 +910,37 @@ void divide_barrett_preinv(std::span<uint_multiprecision_t>       quotient,
                            std::span<const uint_multiprecision_t> inv,
                            scratch_allocator_base&                scratch);
 
+// True when the runtime dispatchers send an m-limb by s-limb division to the
+// Barrett tier (see the gate rules above).
+[[nodiscard]] constexpr bool divide_takes_barrett(const std::size_t m, const std::size_t s) noexcept {
+    const bool barrett_march    = s >= barrett_march_cutoff && m / 16 >= s;
+    const bool barrett_march8   = s >= barrett_march8_cutoff && m / 8 >= s;
+    const bool barrett_quarter  = m >= barrett_quarter_cutoff && m / 4 >= s;
+    const bool barrett_balanced = m >= barrett_balanced_cutoff && m - s >= s;
+    return barrett_march || barrett_march8 || barrett_quarter || barrett_balanced;
+}
+
+// True when the runtime dispatchers take the schoolbook kernel (divide_unsigned)
+// for an m-limb by s-limb division: neither the Barrett nor the
+// divide-and-conquer gate fires. Constant evaluation always takes it.
+[[nodiscard]] constexpr bool divide_takes_schoolbook(const std::size_t m, const std::size_t s) noexcept {
+    if (divide_takes_barrett(m, s)) {
+        return false;
+    }
+    return !(s >= burnikel_ziegler_cutoff && m - s >= burnikel_ziegler_offset);
+}
+
+// Scratch limbs the schoolbook path of divide_dispatch (remainder_in_scratch =
+// false) or divide_dispatch_q (true: the discarded remainder also lives in
+// scratch) needs for an m-limb by s-limb division.
+[[nodiscard]] constexpr std::size_t
+divide_schoolbook_storage_size(const std::size_t m, const std::size_t s, const bool remainder_in_scratch) noexcept {
+    return divide_unsigned_storage_size(m, s) + (remainder_in_scratch ? m + 1 : 0);
+}
+
+// Scratch limbs up to which a caller may keep division workspace on the stack.
+inline constexpr std::size_t small_division_stack_limbs = 128;
+
 // ---------------------------------------------------------------------------
 // Top-level division dispatcher (counterpart of multiply_dispatch): the Barrett
 // gates above are checked first, then the divide-and-conquer path, which needs
@@ -930,16 +963,12 @@ constexpr void divide_dispatch(const std::span<uint_multiprecision_t>       quot
         const std::size_t m = dividend.size();
         const std::size_t s = divisor.size();
 
-        const bool barrett_march    = s >= barrett_march_cutoff && m / 16 >= s;
-        const bool barrett_march8   = s >= barrett_march8_cutoff && m / 8 >= s;
-        const bool barrett_quarter  = m >= barrett_quarter_cutoff && m / 4 >= s;
-        const bool barrett_balanced = m >= barrett_balanced_cutoff && m - s >= s;
-        if (barrett_march || barrett_march8 || barrett_quarter || barrett_balanced) {
-            divide_barrett(quotient, remainder, dividend, divisor, alloc);
-            return;
-        }
-        if (s >= burnikel_ziegler_cutoff && m - s >= burnikel_ziegler_offset) {
-            divide_burnikel_ziegler(quotient, remainder, dividend, divisor, alloc);
+        if (!divide_takes_schoolbook(m, s)) {
+            if (divide_takes_barrett(m, s)) {
+                divide_barrett(quotient, remainder, dividend, divisor, alloc);
+            } else {
+                divide_burnikel_ziegler(quotient, remainder, dividend, divisor, alloc);
+            }
             return;
         }
     }
@@ -967,17 +996,13 @@ constexpr void divide_dispatch_q(const std::span<uint_multiprecision_t>       qu
     const std::size_t s = divisor.size();
 
     if BEMAN_BIG_INT_IS_NOT_CONSTEVAL {
-        const bool barrett_march    = s >= barrett_march_cutoff && m / 16 >= s;
-        const bool barrett_march8   = s >= barrett_march8_cutoff && m / 8 >= s;
-        const bool barrett_quarter  = m >= barrett_quarter_cutoff && m / 4 >= s;
-        const bool barrett_balanced = m >= barrett_balanced_cutoff && m - s >= s;
-        if (barrett_march || barrett_march8 || barrett_quarter || barrett_balanced) {
+        if (divide_takes_barrett(m, s)) {
             const std::span<uint_multiprecision_t> r = scratch.allocate(m + 1);
             divide_barrett(quotient, r, dividend, divisor, alloc);
             scratch.deallocate(m + 1);
             return;
         }
-        if (s >= burnikel_ziegler_cutoff && m - s >= burnikel_ziegler_offset) {
+        if (!divide_takes_schoolbook(m, s)) {
             divide_quotient(quotient, dividend, divisor, alloc);
             return;
         }
