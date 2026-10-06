@@ -19,7 +19,7 @@ in-place static buffer or on the heap.
 
 The full write-up, including every way to load the Natvis file and what it
 displays, is on the
-[Debugger Visualizers](https://eisenwave.github.io/std-big-int/debugging.html)
+[Debugger Visualizers](https://bemanproject.github.io/big_int/debugging.html)
 documentation page.
 
 ## Loading the visualizers

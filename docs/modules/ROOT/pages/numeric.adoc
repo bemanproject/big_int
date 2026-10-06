@@ -253,7 +253,7 @@ linear passes per limb of progress. Where the leading limbs determine nothing --
 operands that differ widely in size -- a division or a binary step carries the
 reduction instead.
 
-https://github.com/eisenwave/std-big-int/blob/main/tests/beman/big_int/gcd_bench.test.cpp[gcd_bench.test.cpp]
+https://github.com/bemanproject/big_int/blob/main/tests/beman/big_int/gcd_bench.test.cpp[gcd_bench.test.cpp]
 measures the result against `boost::multiprecision::cpp_int`, which reduces
 wide operands with the same algorithm. It is built with the tests and runs when
 `BEMAN_BIG_INT_RUN_BENCHMARKS` is defined. On an Apple M4 Max (AppleClang,
@@ -338,7 +338,7 @@ Where both magnitudes fit a single limb the whole computation is scalar -- a
 single-limb binary gcd, one division, and one widening multiplication -- and a
 result that fits a limb as well stays in the small-object buffer.
 
-https://github.com/eisenwave/std-big-int/blob/main/tests/beman/big_int/lcm_bench.test.cpp[lcm_bench.test.cpp]
+https://github.com/bemanproject/big_int/blob/main/tests/beman/big_int/lcm_bench.test.cpp[lcm_bench.test.cpp]
 measures the result against `boost::multiprecision::cpp_int`, which composes its
 own `lcm` the same way. It is built with the tests and runs when
 `BEMAN_BIG_INT_RUN_BENCHMARKS` is defined. On an Apple M4 Max (AppleClang,

@@ -14,7 +14,7 @@ We will first start with the basics and then move on to more advanced examples.
 [#examples_construction]
 === Construction
 
-.This https://github.com/eisenwave/std-big-int/blob/main/examples/construction.cpp[example] demonstrates the many ways to create a `beman::big_int`: from built-in integers, from floating-point values, from a user-defined literal, by copy and move, and from a range of limbs
+.This https://github.com/bemanproject/big_int/blob/main/examples/construction.cpp[example] demonstrates the many ways to create a `beman::big_int`: from built-in integers, from floating-point values, from a user-defined literal, by copy and move, and from a range of limbs
 ====
 [source, c++]
 ----
@@ -38,7 +38,7 @@ result_is_ok: true
 [#examples_operators]
 === Fundamental operators
 
-.This https://github.com/eisenwave/std-big-int/blob/main/examples/operators.cpp[example] demonstrates the fundamental arithmetic, comparison, bitwise, shift, increment, and compound-assignment operators of `beman::big_int`
+.This https://github.com/bemanproject/big_int/blob/main/examples/operators.cpp[example] demonstrates the fundamental arithmetic, comparison, bitwise, shift, increment, and compound-assignment operators of `beman::big_int`
 ====
 [source, c++]
 ----
@@ -62,7 +62,7 @@ result_is_ok: true
 [#examples_factorial]
 === Factorial
 
-.This https://github.com/eisenwave/std-big-int/blob/main/examples/factorial.cpp[example] demonstrates computing the 100th factorial with `beman::big_int` using ordinary arithmetic operators in a recursive function
+.This https://github.com/bemanproject/big_int/blob/main/examples/factorial.cpp[example] demonstrates computing the 100th factorial with `beman::big_int` using ordinary arithmetic operators in a recursive function
 ====
 [source, c++]
 ----
@@ -82,7 +82,7 @@ result_is_ok: true
 [#examples_literals]
 === User-defined literals
 
-.This https://github.com/eisenwave/std-big-int/blob/main/examples/literals.cpp[example] demonstrates writing `beman::big_int` constants directly in source code with the `_n` and `_N` literal suffixes, including non-decimal bases, digit separators, and negative values
+.This https://github.com/bemanproject/big_int/blob/main/examples/literals.cpp[example] demonstrates writing `beman::big_int` constants directly in source code with the `_n` and `_N` literal suffixes, including non-decimal bases, digit separators, and negative values
 ====
 [source, c++]
 ----
@@ -103,7 +103,7 @@ result_is_ok: true
 [#examples_charconv]
 === Numeric conversions
 
-.This https://github.com/eisenwave/std-big-int/blob/main/examples/charconv.cpp[example] demonstrates parsing a `beman::big_int` from text with `from_chars` and rendering it back with `to_chars`, including the `to_chars` overload that takes the value over
+.This https://github.com/bemanproject/big_int/blob/main/examples/charconv.cpp[example] demonstrates parsing a `beman::big_int` from text with `from_chars` and rendering it back with `to_chars`, including the `to_chars` overload that takes the value over
 ====
 [source, c++]
 ----
@@ -123,7 +123,7 @@ result_is_ok: true
 [#examples_string]
 === String conversions
 
-.This https://github.com/eisenwave/std-big-int/blob/main/examples/string.cpp[example] demonstrates rendering a `beman::big_int` to a `std::string` with `to_string` and to a `std::wstring` with `to_wstring`, including the overloads that take the value over
+.This https://github.com/bemanproject/big_int/blob/main/examples/string.cpp[example] demonstrates rendering a `beman::big_int` to a `std::string` with `to_string` and to a `std::wstring` with `to_wstring`, including the overloads that take the value over
 ====
 [source, c++]
 ----
@@ -144,7 +144,7 @@ result_is_ok: true
 [#examples_numeric]
 === Numeric functions
 
-.This https://github.com/eisenwave/std-big-int/blob/main/examples/numeric.cpp[example] demonstrates the free numeric helpers in `<beman/big_int/numeric.hpp>`: `abs` for the magnitude of a value, `saturating_cast` for range-clamped narrowing to a built-in integer, `in_range` for range checking, `gcd` and `lcm` for the greatest common divisor and least common multiple, and `midpoint` for half the sum of any mix of `big_int` and built-in integer arguments
+.This https://github.com/bemanproject/big_int/blob/main/examples/numeric.cpp[example] demonstrates the free numeric helpers in `<beman/big_int/numeric.hpp>`: `abs` for the magnitude of a value, `saturating_cast` for range-clamped narrowing to a built-in integer, `in_range` for range checking, `gcd` and `lcm` for the greatest common divisor and least common multiple, and `midpoint` for half the sum of any mix of `big_int` and built-in integer arguments
 ====
 [source, c++]
 ----
@@ -178,7 +178,7 @@ result_is_ok: true
 [#examples_limits]
 === Numeric limits
 
-.This https://github.com/eisenwave/std-big-int/blob/main/examples/limits.cpp[example] demonstrates the `std::numeric_limits` specialization in `<beman/big_int/limits.hpp>`: what it reports for an unbounded type, why `is_bounded` rather than `max()` is the member to test, and how a single template can serve `big_int` and a built-in integer alike
+.This https://github.com/bemanproject/big_int/blob/main/examples/limits.cpp[example] demonstrates the `std::numeric_limits` specialization in `<beman/big_int/limits.hpp>`: what it reports for an unbounded type, why `is_bounded` rather than `max()` is the member to test, and how a single template can serve `big_int` and a built-in integer alike
 ====
 [source, c++]
 ----
@@ -202,7 +202,7 @@ result_is_ok: true
 [#examples_division]
 === Integer division
 
-.This https://github.com/eisenwave/std-big-int/blob/main/examples/division.cpp[example] demonstrates the `div_rem_to_zero` free function, which computes the quotient and remainder together in a single division
+.This https://github.com/bemanproject/big_int/blob/main/examples/division.cpp[example] demonstrates the `div_rem_to_zero` free function, which computes the quotient and remainder together in a single division
 ====
 [source, c++]
 ----
@@ -224,7 +224,7 @@ result_is_ok: true
 [#examples_io]
 === Formatting and output
 
-.This https://github.com/eisenwave/std-big-int/blob/main/examples/io.cpp[example] demonstrates displaying a `beman::big_int` by converting it to text with `to_string` and by formatting it with `std::format`
+.This https://github.com/bemanproject/big_int/blob/main/examples/io.cpp[example] demonstrates displaying a `beman::big_int` by converting it to text with `to_string` and by formatting it with `std::format`
 ====
 [source, c++]
 ----
@@ -251,7 +251,7 @@ result_is_ok: true
 [#examples_fibonacci]
 === Fibonacci
 
-.This https://github.com/eisenwave/std-big-int/blob/main/examples/fibonacci.cpp[example] demonstrates computing the 10,000th Fibonacci number with `beman::big_int` using fast matrix exponentiation by squaring
+.This https://github.com/bemanproject/big_int/blob/main/examples/fibonacci.cpp[example] demonstrates computing the 10,000th Fibonacci number with `beman::big_int` using fast matrix exponentiation by squaring
 ====
 [source, c++]
 ----
@@ -271,7 +271,7 @@ result_is_ok: true
 [#examples_roots]
 === Roots
 
-.This https://github.com/eisenwave/std-big-int/blob/main/examples/roots.cpp[example] demonstrates computing the exact integer square root and cube root of a 1,001-digit integer with `beman::big_int`
+.This https://github.com/bemanproject/big_int/blob/main/examples/roots.cpp[example] demonstrates computing the exact integer square root and cube root of a 1,001-digit integer with `beman::big_int`
 ====
 [source, c++]
 ----
@@ -294,7 +294,7 @@ result_is_ok: true
 [#examples_primes]
 === Primes
 
-.This https://github.com/eisenwave/std-big-int/blob/main/examples/primes.cpp[example] demonstrates generating pseudo-random 512-bit prime numbers with `beman::big_int` using the Miller-Rabin primality test
+.This https://github.com/bemanproject/big_int/blob/main/examples/primes.cpp[example] demonstrates generating pseudo-random 512-bit prime numbers with `beman::big_int` using the Miller-Rabin primality test
 ====
 [source, c++]
 ----
@@ -343,7 +343,7 @@ prime density: 1/324.1
 [#examples_rsa]
 === RSA
 
-.This https://github.com/eisenwave/std-big-int/blob/main/examples/rsa.cpp[example] demonstrates the usage of `beman::big_int` in the RSA algorithm
+.This https://github.com/bemanproject/big_int/blob/main/examples/rsa.cpp[example] demonstrates the usage of `beman::big_int` in the RSA algorithm
 ====
 [source, c++]
 ----
