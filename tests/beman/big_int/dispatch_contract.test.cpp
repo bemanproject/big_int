@@ -35,8 +35,8 @@ using limbs_t = std::vector<uint_t>;
 using cspan_t = std::span<const uint_t>;
 using span_t  = std::span<uint_t>;
 
-constexpr uint_t      poison       = static_cast<uint_t>(0xA5A5A5A5A5A5A5A5ULL);
-constexpr uint_t      guard_value  = static_cast<uint_t>(0x5A5A5A5A5A5A5A5AULL);
+constexpr uint_t      poison       = ~uint_t{0} / 255 * 0xA5;
+constexpr uint_t      guard_value  = ~uint_t{0} / 255 * 0x5A;
 constexpr std::size_t guard_limbs  = 3;
 constexpr std::size_t limb_bits    = std::numeric_limits<uint_t>::digits;
 constexpr std::size_t max_ref_work = 4'000'000;
@@ -213,7 +213,9 @@ TEST(DispatchContract, SingleLimbOperands) {
         const limbs_t small(1, uint_t{3});
         const limbs_t carry(1, ~uint_t{0});
         limbs_t       low_top = a;
-        low_top.back()        = 1;
+        if (!low_top.empty()) {
+            low_top.back() = 1;
+        }
         check_all_entry_points(low_top, small, false);
         check_all_entry_points(small, low_top, false);
         check_all_entry_points(a, carry, false);
