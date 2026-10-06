@@ -412,7 +412,7 @@ divide-and-conquer there), nor mul 16384 (1.64-1.81x left), nor anything FFT-bou
 
 ## 5. Probe: linear kernel cycles/limb
 
-A standalone scratch probe (`noinline` wrappers, L1-resident, 64 limbs, -O2; the probe source is not in the repo)
+A standalone probe (`tools/probe/probe.cpp`; `noinline` wrappers, L1-resident, 64 limbs, -O2)
 times each library kernel against GMP's. x64 values are `perf stat` cycles per limb, M4 values are ns/limb x 4.47 GHz
 (approximate). "x GMP" = ratio to GMP's kernel on the same machine.
 
@@ -499,7 +499,7 @@ Inline-asm 4x (what GMP-class code does: four `adc` back to back, one carry mate
 mov (%rbx,%rsi,8),%r8 ; mov 8(..),%r9 ; mov 16(..),%r10 ; mov 24(..),%r11
 adc (%rdx,%rsi,8),%r8 ; adc 8(..),%r9 ; adc 16(..),%r10 ; adc 24(..),%r11 ; mov %r8,(%rdi,%rsi,8) ; ...
 ```
-Complete listings for every compiler and variant are in the scratch probe output (not committed).
+`tools/probe/run_x64.sh` writes the complete listings for every compiler and variant.
 
 ## 6. Ranked optimization list
 
@@ -549,10 +549,9 @@ GMP by 1.1-1.8x).
 
 ## 8. Appendix: reproducing
 
-The scratch tooling lives under `build/` (not committed): `build/gmpgap/bin/{gap_sweep.sh,summarize.py,compare.py,
-probe_tables.py,bucket_tables.py}`, `build/gmpgap/probe/probe.cpp`, `build/gmpgap/results/x64/profiles/{prof.sh,classify.py}`.
-They can be added to the repo (e.g. under `tests/beman/big_int/perf/tools/`) on request; today the descriptions below are
-what reproduces the data.
+The tools live in [`tools/`](tools/README.md): `gap_sweep.sh`, `selftest.sh`, `summarize.py`, `compare.py`,
+`probe_tables.py`, `bucket_tables.py`, `prof.sh`, `classify.py` and the standalone `tools/probe/` (see its README for inputs and
+outputs).
 
 Configure and build (any machine; `-DBEMAN_BIG_INT_SIMD_MUL=ON` for the numbers here; the harness is
 `beman.big_int.benchmarks.shape_sweep`):
@@ -561,37 +560,41 @@ Configure and build (any machine; `-DBEMAN_BIG_INT_SIMD_MUL=ON` for the numbers 
 cmake --preset appleclang-release -B build/gmpgap/mac-release -DBEMAN_BIG_INT_BUILD_BENCHMARKS=ON \
   -DBEMAN_BIG_INT_SHAPE_SWEEP_ONLY=ON -DBEMAN_BIG_INT_SWEEP_GMP=ON -DBEMAN_BIG_INT_SIMD_MUL=ON
 cmake --build build/gmpgap/mac-release --target beman.big_int.benchmarks.shape_sweep
-# x64 (built through variant.sh with EXPECT checks of the #const keys; GMP 6.3.0 found in ~/tools/gmp; the shim dir
-# ~/gmpgap/shim14 puts g++-14 first on PATH because infra/cmake/gnu-toolchain.cmake hard-codes `g++`, which is 13 on the box)
+# x64, one build directory per configuration. infra/cmake/gnu-toolchain.cmake hard-codes `g++`, so for g++-14 put a
+# directory whose `g++` and `gcc` point at GCC 14 first on PATH. GMP 6.3.0 is found by the usual library search
+# (CMAKE_PREFIX_PATH=<gmp prefix> for a private build).
 C="-DBEMAN_BIG_INT_BUILD_BENCHMARKS=ON -DBEMAN_BIG_INT_SHAPE_SWEEP_ONLY=ON -DBEMAN_BIG_INT_SWEEP_GMP=ON -DBEMAN_BIG_INT_SIMD_MUL=ON"
-export VARIANT_BASE_CACHE=~/gmpgap/builds/.variant-base
-PATH=$HOME/gmpgap/shim14:$PATH EXPECT="BMI2_ADX=1 AVX512_IFMA=1 SIMD_MUL=1" bin/variant.sh builds/gcc14-native src gcc-release "-DCMAKE_CXX_FLAGS=-march=native $C"
-EXPECT="BMI2_ADX=1 AVX512_IFMA=1 SIMD_MUL=1" bin/variant.sh builds/clang23-native src llvm-release "-DCMAKE_CXX_FLAGS=-march=native $C"
-EXPECT="BMI2_ADX=1 AVX512_IFMA=1 SIMD_MUL=1" bin/variant.sh builds/gcc13-native src gcc-release "-DCMAKE_CXX_FLAGS=-march=native $C"   # no shim
-PATH=$HOME/gmpgap/shim14:$PATH EXPECT="BMI2_ADX=1 AVX512_IFMA=0 SIMD_MUL=1" bin/variant.sh builds/gcc14-noifma src gcc-release \
-  "-DCMAKE_CXX_FLAGS=-march=native -DBEMAN_BIG_INT_X86_64_AVX512_IFMA=OFF $C"
-# variant.sh <out_dir> <src_tree> <preset> "<one quoted string of cmake args>" copies the tree, configures with
-# --preset <preset> in <out_dir> (binary dir <out_dir>/build/<preset>), builds beman.big_int.benchmarks.shape_sweep and
-# leaves <out_dir>/shape_sweep. The equivalent plain commands, with an explicit binary dir:
-PATH=$HOME/gmpgap/shim14:$PATH cmake --preset gcc-release -B build/gmpgap/x64-gcc14 "-DCMAKE_CXX_FLAGS=-march=native" $C
-cmake --build build/gmpgap/x64-gcc14 --target beman.big_int.benchmarks.shape_sweep
+PATH=<gcc14-shim-dir>:$PATH cmake --preset gcc-release -B build/gmpgap/x64-gcc14 "-DCMAKE_CXX_FLAGS=-march=native" $C
+cmake --preset gcc-release -B build/gmpgap/x64-gcc13 "-DCMAKE_CXX_FLAGS=-march=native" $C          # system g++-13
+cmake --preset llvm-release -B build/gmpgap/x64-clang "-DCMAKE_CXX_FLAGS=-march=native" $C         # clang-23
+PATH=<gcc14-shim-dir>:$PATH cmake --preset gcc-release -B build/gmpgap/x64-noifma "-DCMAKE_CXX_FLAGS=-march=native" \
+  -DBEMAN_BIG_INT_X86_64_AVX512_IFMA=OFF $C
+for d in x64-gcc14 x64-gcc13 x64-clang x64-noifma; do cmake --build build/gmpgap/$d --target beman.big_int.benchmarks.shape_sweep; done
+```
+The numbers here were produced with an out-of-tree copy-and-build driver (`variant.sh`, not in the repo) that also checked
+the `#const` keys (`EXPECT="BMI2_ADX=1 AVX512_IFMA=1 SIMD_MUL=1"`, `AVX512_IFMA=0` for noIFMA); the equivalent check is
+reading the first `#const` line of each binary.
+
 Check the first `#const` line of each binary (`compiler=`, `BMI2_ADX=`, `AVX512_IFMA=`, `SIMD_MUL=`, `ndebug=1`).
 
-Run (the sweep driver encodes the size grid, rows per op, 9 rounds / 3 for the large band / 1 for gcd 65536):
+Run (paths relative to `tests/beman/big_int/perf`; the sweep driver encodes the size grid, rows per op, 9 rounds / 3 for the large band / 1 for gcd 65536):
 ```
-build/gmpgap/bin/gap_sweep.sh <shape_sweep> out.csv --seed 1 [--ops add,sub,...] [--bands small,medium,large] [--pin "taskset -c 2"]
-build/gmpgap/bin/summarize.py a.csv [b.csv] [probe.csv] > summary.md          # python3 -I; two CSVs => seed spread
+tools/gap_sweep.sh <shape_sweep> out.csv --seed 1 [--ops add,sub,...] [--bands small,medium,large] [--pin "taskset -c 2"]
+tools/summarize.py a.csv [b.csv] [probe.csv] > summary.md          # python3 -I; two CSVs => seed spread
 ```
+The probe: `tools/probe/build_x64.sh` then `run_x64.sh` (x64), `build_mac.sh` then `run_mac.sh` (M4); `probe --check` is the
+correctness run.
 Single shapes by hand: `shape_sweep <op> --rows auto,inplace,kernel,gmp,gmpz [--rounds N] [--round-ms X] [--seed S] SHAPE...`.
 Primary sweep: ~4.5 min per full run on either machine (gcc14 x64 268 s, M4 281 s); g++-13 linear ops 52 s; noIFMA 55 s.
 
-Profiles (x64, `kernel.perf_event_paranoid=1`; `prof.sh`, per op/shape/row, binary `builds/gcc14-native/shape_sweep`):
+Profiles (x64 Linux, `kernel.perf_event_paranoid=1`, FlameGraph cloned to `$FLAMEGRAPH_DIR`):
 ```
-perf record -q -e cycles:u -F 2000 --call-graph lbr -o X.data -- taskset -c 2 shape_sweep OP --rows ROW --rounds 1 --round-ms 4000 --seed 1 SHAPE
-perf script --inline -i X.data | ~/tools/FlameGraph/stackcollapse-perf.pl > X.raw.folded
-# strip template arguments and parameter lists from every frame (python3 -I filter in prof.sh), giving X.folded
-~/tools/FlameGraph/flamegraph.pl --minwidth 0.5 --width 1200 --title "OP SHAPE WHO (x64 gcc14)" X.folded > X.svg
+tools/prof.sh <shape_sweep> profiles/                       # all 25 shape/row pairs; add a substring to run a subset
+tools/classify.py profiles/ gap_x64_gcc14_seed1.csv > profiles/buckets.md
+tools/bucket_tables.py profiles/buckets.md
 ```
-ROW is `auto`, `gmpz` (and `inplace` for add 1000). `--minwidth 0.5` is flamegraph.pl's pixel threshold (`MINW` env
-override in `prof.sh`, default 0.5, not overridden for any of the 25 SVGs; largest SVG 464 KB). `classify.py` buckets the
-folded stacks by the frame nearest the leaf and scales by the median.
+`prof.sh` records `perf record -q -e cycles:u -F 2000 --call-graph lbr` under `taskset -c 2` with
+`--rows ROW --rounds 1 --round-ms 4000 --seed 1`, folds with `perf script --inline | stackcollapse-perf.pl`, strips template
+arguments and parameter lists, and renders with `flamegraph.pl --minwidth 0.5 --width 1200`. ROW is `auto` and `gmpz` (and
+`inplace` for add 1000). `MINW` overrides the minwidth (not overridden for any of the 25 SVGs; largest SVG 464 KB).
+`classify.py` buckets the folded stacks by the frame nearest the leaf and scales by the median.
