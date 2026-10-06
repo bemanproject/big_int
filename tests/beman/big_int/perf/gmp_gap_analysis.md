@@ -528,9 +528,9 @@ Decision criteria applied (from the plan):
 | 10 | Conversions: after #2 and #4, recheck; power-chain reuse looks minor at 10000 limbs (4.5-7%) but is untested above 100k limbs | tochars/fromchars 262144/131072 2.8x | speculative | M | both |
 
 Status of item 1: implemented on branch `opt_1`; results, targets met and not met, and the inline-capacity study are in
-[`item1_frontend_results.md`](item1_frontend_results.md) (small `auto` is now 2-5 ns above the allocation floor for mul/sqr,
-0-5 ns for shifts and 2-6 ns for add/sub; x64 add 1000 840 -> 800 ns, below the 650 ns goal; x64 `+=`/`-=` at >= 64 limbs and decimal
-`fromchars` regress).
+[`item1_frontend_results.md`](item1_frontend_results.md) (small `auto` is now 2-5 ns above the allocation floor for
+mul/sqr, 0-6 ns for shifts and 3-6 ns for add/sub; x64 add 1000 840 -> 600 ns, meeting the 650 ns goal; open item: the
+in-place shift path is 6-9% slower than the baseline on x64 at >= 256 limbs and 22-24% on M4).
 
 Not recommended: asm for cmp (already faster than GMP on x64, parity on M4); asm for mul 32-512 limbs on x64 (IFMA beats
 GMP by 1.1-1.8x).

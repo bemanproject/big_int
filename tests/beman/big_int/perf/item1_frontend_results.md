@@ -8,7 +8,7 @@ SPDX-License-Identifier: BSL-1.0
 Item 1 of [`gmp_gap_analysis.md`](gmp_gap_analysis.md) section 6 targeted the 13-18 ns that `+ - << >>` add on top of the
 span kernel at <= 16 limbs, the ~21 ns for small `*`, and the 37-66 ns for small divrem. This document records what changed,
 how it was measured, and where the targets were and were not met. Numbers are nanoseconds per operation unless noted;
-"before" is the library at cf1cf54 and "after" is `opt_1` at 9145b4e, both measured with the same harness (`shape_sweep.cpp`,
+"before" is the library at cf1cf54 and "after" is `opt_1` at d689f75, both measured with the same harness (`shape_sweep.cpp`,
 with the `floor` row added). The inline-capacity decision is left to the reader: the study in section 7 reports costs and
 benefits without recommending a default.
 
@@ -22,12 +22,13 @@ benefits without recommending a default.
   value-initialisation at run time (a debug build poison-fills new blocks, a constant evaluation value-initialises). The
   multiply and divide dispatchers no longer require a pre-zeroed result; the zero-fill moved into the tiers that need it, so
   the basecase no longer pays two fills. `clear_inline_tail` keeps the "inline limbs above the count are zero" invariant.
-- **add and sub.** `add_in_place` and `add_into` use the tail-aware `add_n_tail`/`sub_n_tail` (4-way unrolled, stops once the
+- **add and sub.** `add_in_place` and `add_into` use the tail-aware `add_n_tail`/`sub_n_tail` (a plain loop under GCC, 4-way unrolled under clang and MSVC; both stop once the
   carry or borrow dies), grow only for the carry limb, set sign and size once, and write the result with direct stores into
-  `storage_for_overwrite` storage: no zero re-scan, no one-step trim.
+  `storage_for_overwrite` storage: no zero re-scan, no one-step trim. Single-limb operands take a fast path.
 - **Shifts.** `c = a << s` and `c = a >> s` build the result from the source in one pass (`lshift_copy`/`rshift_copy`) into an
   exactly sized buffer; `<<=` and `>>=` shift in one in-place pass without reserving a spare limb the value does not need
-  (so `1 << 127` stays inline in a 128-bit `basic_big_int`). Negative right shifts keep floor rounding by detecting
+  (so `1 << 127` stays inline in a 128-bit `basic_big_int`). A later change routes in-place pure bit shifts to the older
+  `shift_left_n`/`shift_right_n`; its effect is discussed in sections 3.6 and 3.8. Negative right shifts keep floor rounding by detecting
   discarded bits during the pass.
 - **Multiply.** `multiply_into` writes into `storage_for_overwrite` storage and drops the fill and the zero re-scan. `*=`
   keeps the allocator and capacity (one-limb rhs in place, small products through a stack buffer, larger ones into a fresh
@@ -67,147 +68,160 @@ benefits without recommending a default.
 
 ## 3. Before and after
 
-Cells read `before -> after`. `auto/gmpz` is the user-visible gap to GMP (above 1 means `big_int` is slower).
+Cells read `before -> after`. `auto/gmpz` is the user-visible gap to GMP (above 1 means `big_int` is slower). The tables are
+the re-measurement on `opt_1` at d689f75 (the add/sub, shift and single-limb follow-ups and the mul-add fix included);
+an earlier measurement of 9145b4e is described in section 3.6. Rows are the median of four runs per binary
+(`macr3_*`, `x64r3_*` CSVs).
 
 ### 3.1 x64 (g++-14, -march=native), small band
 
 | op | shape | auto ns | inplace ns | auto - floor ns | auto/gmpz | auto - kernel ns |
 |---|---|---:|---:|---:|---:|---:|
-| add | 1x1 | 8.2 -> 6.7 | 4.1 -> 4.9 | -1.6 -> -3.1 | 1.98 -> 1.61 | 6.3 -> 4.8 |
-| add | 2x2 | 17.8 -> 15.9 | 5.9 -> 6.1 | 7.6 -> 5.6 | 4.28 -> 3.80 | 15.5 -> 13.5 |
-| add | 4x4 | 18.1 -> 15.4 | 5.6 -> 5.7 | 7.2 -> 4.3 | 4.11 -> 3.50 | 15.1 -> 12.3 |
-| add | 8x8 | 19.4 -> 16.8 | 7.4 -> 7.1 | 6.9 -> 4.2 | 4.12 -> 3.57 | 14.8 -> 12.2 |
-| add | 16x16 | 25.4 -> 20.9 | 11.8 -> 11.9 | 9.8 -> 5.3 | 3.86 -> 3.21 | 17.8 -> 13.4 |
-| sub | 1x1 | 9.1 -> 7.8 | 4.0 -> 4.7 | 7.2 -> 5.9 | 2.09 -> 1.79 | 7.6 -> 6.3 |
-| sub | 2x2 | 19.1 -> 15.8 | 4.6 -> 5.1 | 9.1 -> 5.8 | 4.40 -> 3.63 | 17.0 -> 13.7 |
-| sub | 4x4 | 18.9 -> 16.6 | 5.5 -> 5.6 | 8.2 -> 5.8 | 4.08 -> 3.61 | 16.1 -> 13.7 |
-| sub | 8x8 | 20.6 -> 18.0 | 7.2 -> 7.0 | 8.2 -> 5.6 | 4.11 -> 3.51 | 16.2 -> 13.6 |
-| sub | 16x16 | 25.8 -> 21.1 | 10.7 -> 11.2 | 10.4 -> 5.7 | 3.76 -> 3.09 | 17.7 -> 13.0 |
-| shl | 1x13 | 16.8 -> 12.6 | 4.1 -> 3.7 | 7.0 -> 2.8 | 4.83 -> 3.87 | 14.7 -> 10.6 |
-| shl | 4x13 | 18.7 -> 13.5 | 5.2 -> 4.6 | 7.5 -> 2.3 | 4.63 -> 3.34 | 15.2 -> 10.0 |
-| shl | 16x13 | 24.5 -> 17.1 | 9.3 -> 9.1 | 9.3 -> 1.9 | 4.21 -> 2.94 | 17.0 -> 9.6 |
-| shr | 1x13 | 10.2 -> 8.2 | 3.7 -> 3.3 | 7.9 -> 5.9 | 3.12 -> 2.36 | 8.5 -> 6.5 |
-| shr | 4x13 | 21.1 -> 16.1 | 4.7 -> 4.6 | 9.0 -> 5.0 | 5.31 -> 3.82 | 17.6 -> 12.6 |
-| shr | 16x13 | 26.1 -> 20.0 | 8.8 -> 8.7 | 9.0 -> 4.4 | 4.18 -> 3.16 | 17.9 -> 11.1 |
-| mul | 2x2 | 27.9 -> 18.9 | - | 12.6 -> 3.9 | 4.54 -> 3.08 | 20.3 -> 11.3 |
-| mul | 3x3 | 29.6 -> 20.2 | - | 12.9 -> 3.8 | 2.96 -> 2.03 | 20.6 -> 11.3 |
-| mul | 4x4 | 32.0 -> 22.3 | - | 13.3 -> 4.1 | 2.62 -> 1.83 | 20.9 -> 11.4 |
-| mul | 6x6 | 41.9 -> 28.0 | - | 17.0 -> 3.6 | 2.30 -> 1.54 | 24.4 -> 10.9 |
-| mul | 8x8 | 47.2 -> 35.9 | - | 14.3 -> 3.5 | 1.63 -> 1.24 | 21.6 -> 10.5 |
-| mul | 12x12 | 70.2 -> 57.9 | - | 14.4 -> 3.1 | 1.38 -> 1.14 | 22.4 -> 10.1 |
-| mul | 16x16 | 101.8 -> 88.5 | - | 14.8 -> 2.2 | 1.21 -> 1.05 | 22.1 -> 9.4 |
-| sqr | 4x4 | 33.4 -> 22.2 | - | 16.5 -> 5.4 | 3.78 -> 2.51 | 24.3 -> 12.2 |
-| sqr | 16x16 | 79.7 -> 66.4 | - | 15.9 -> 3.7 | 1.51 -> 1.26 | 23.4 -> 9.1 |
-| divrem | 2x1 | 41.6 -> 35.4 | - | 28.8 -> 22.6 | 3.33 -> 2.84 | 36.1 -> 29.7 |
-| divrem | 8x4 | 112.8 -> 94.7 | - | 53.0 -> 27.1 | 2.53 -> 2.07 | 67.7 -> 43.8 |
-| divrem | 32x16 | 372.0 -> 340.2 | - | 67.6 -> 34.2 | 1.92 -> 1.73 | 82.6 -> 49.7 |
-| fromchars | 4x10 | 195.2 -> 116.1 | - | - | 2.86 -> 1.68 | 154.2 -> 77.3 |
-| fromchars | 16x10 | 420.1 -> 433.5 | - | - | 1.63 -> 1.68 | 209.5 -> 217.6 |
+| add | 1x1 | 8.2 -> 5.4 | 4.1 -> 2.6 | -1.6 -> -4.4 | 1.98 -> 1.29 | 6.3 -> 3.4 |
+| add | 2x2 | 17.9 -> 15.9 | 5.9 -> 6.2 | 7.6 -> 5.7 | 4.29 -> 3.82 | 15.5 -> 13.5 |
+| add | 4x4 | 18.0 -> 15.4 | 5.6 -> 5.7 | 7.1 -> 4.5 | 4.12 -> 3.53 | 15.0 -> 12.4 |
+| add | 8x8 | 19.3 -> 16.9 | 7.3 -> 7.3 | 6.8 -> 4.4 | 4.12 -> 3.62 | 14.7 -> 12.4 |
+| add | 16x16 | 25.3 -> 21.1 | 11.8 -> 11.2 | 9.8 -> 5.6 | 3.87 -> 3.23 | 17.7 -> 13.5 |
+| sub | 1x1 | 9.0 -> 5.5 | 4.0 -> 2.5 | 7.1 -> 3.4 | 2.08 -> 1.26 | 7.5 -> 4.0 |
+| sub | 2x2 | 19.1 -> 15.7 | 4.6 -> 4.8 | 9.1 -> 5.8 | 4.39 -> 3.61 | 17.0 -> 13.5 |
+| sub | 4x4 | 19.0 -> 16.5 | 5.5 -> 5.6 | 8.3 -> 5.9 | 4.12 -> 3.60 | 16.2 -> 13.7 |
+| sub | 8x8 | 20.6 -> 18.1 | 7.2 -> 7.3 | 8.2 -> 5.9 | 4.14 -> 3.64 | 16.2 -> 13.7 |
+| sub | 16x16 | 25.7 -> 21.0 | 10.6 -> 10.0 | 10.3 -> 5.7 | 3.78 -> 3.09 | 17.7 -> 13.6 |
+| shl | 1x13 | 16.8 -> 12.5 | 4.1 -> 4.2 | 6.9 -> 2.7 | 4.83 -> 3.83 | 14.7 -> 10.4 |
+| shl | 4x13 | 18.7 -> 13.5 | 5.2 -> 5.3 | 7.4 -> 2.3 | 4.63 -> 3.34 | 15.2 -> 10.0 |
+| shl | 16x13 | 24.6 -> 17.1 | 9.2 -> 9.3 | 9.3 -> 1.9 | 4.17 -> 2.94 | 17.0 -> 9.6 |
+| shr | 1x13 | 10.2 -> 8.2 | 3.6 -> 3.9 | 7.9 -> 5.9 | 3.11 -> 2.36 | 8.5 -> 6.5 |
+| shr | 4x13 | 21.0 -> 16.0 | 4.7 -> 5.0 | 9.0 -> 4.1 | 5.29 -> 4.04 | 17.5 -> 12.6 |
+| shr | 16x13 | 25.8 -> 20.0 | 8.8 -> 9.0 | 8.8 -> 2.9 | 4.12 -> 3.18 | 17.6 -> 11.3 |
+| mul | 2x2 | 28.2 -> 18.9 | - | 13.1 -> 3.9 | 4.61 -> 3.08 | 20.7 -> 11.3 |
+| mul | 3x3 | 29.7 -> 20.3 | - | 13.1 -> 3.9 | 2.97 -> 2.03 | 20.7 -> 11.4 |
+| mul | 4x4 | 32.0 -> 22.4 | - | 13.4 -> 4.2 | 2.63 -> 1.84 | 20.9 -> 11.5 |
+| mul | 6x6 | 42.1 -> 28.0 | - | 17.4 -> 3.5 | 2.31 -> 1.54 | 24.6 -> 10.8 |
+| mul | 8x8 | 47.5 -> 36.0 | - | 14.9 -> 3.4 | 1.65 -> 1.24 | 22.0 -> 10.5 |
+| mul | 12x12 | 70.2 -> 57.4 | - | 15.3 -> 2.5 | 1.38 -> 1.12 | 22.4 -> 9.5 |
+| mul | 16x16 | 101.8 -> 88.6 | - | 15.4 -> 1.8 | 1.21 -> 1.05 | 22.5 -> 9.4 |
+| sqr | 4x4 | 33.3 -> 22.2 | - | 16.4 -> 5.5 | 3.77 -> 2.51 | 24.2 -> 12.3 |
+| sqr | 16x16 | 80.1 -> 67.3 | - | 17.5 -> 4.2 | 1.52 -> 1.29 | 23.9 -> 9.5 |
+| divrem | 2x1 | 41.7 -> 36.2 | - | 28.9 -> 23.4 | 3.34 -> 2.92 | 36.2 -> 30.5 |
+| divrem | 8x4 | 112.7 -> 94.1 | - | 52.9 -> 26.3 | 2.57 -> 2.13 | 67.0 -> 43.8 |
+| divrem | 32x16 | 370.9 -> 342.2 | - | 67.4 -> 36.1 | 1.91 -> 1.77 | 82.4 -> 53.9 |
+| fromchars | 4x10 | 194.1 -> 115.6 | - | - | 2.85 -> 1.70 | 155.9 -> 77.6 |
+| fromchars | 16x10 | 421.8 -> 425.2 | - | - | 1.63 -> 1.66 | 204.4 -> 225.2 |
+| tochars | 4x10 | 134.1 -> 132.0 | - | - | 1.38 -> 1.35 | -46.9 -> -48.9 |
+| tochars | 16x10 | 1171.4 -> 1168.1 | - | - | 1.99 -> 1.98 | 132.4 -> 135.3 |
 
 ### 3.2 M4 (appleclang), small band
 
 | op | shape | auto ns | inplace ns | auto - floor ns | auto/gmpz | auto - kernel ns |
 |---|---|---:|---:|---:|---:|---:|
-| add | 1x1 | 6.8 -> 7.7 | 3.2 -> 3.5 | -2.7 -> -1.7 | 2.07 -> 2.58 | 5.7 -> 6.5 |
-| add | 2x2 | 14.6 -> 15.2 | 3.8 -> 3.9 | 5.0 -> 5.6 | 2.84 -> 4.58 | 13.2 -> 13.8 |
-| add | 4x4 | 15.2 -> 14.3 | 3.7 -> 3.5 | 4.8 -> 4.1 | 3.20 -> 2.82 | 13.3 -> 12.4 |
-| add | 8x8 | 15.6 -> 15.1 | 5.0 -> 4.0 | 3.6 -> 3.1 | 3.02 -> 3.39 | 12.1 -> 11.7 |
-| add | 16x16 | 16.3 -> 16.9 | 9.6 -> 5.6 | 2.7 -> 3.2 | 3.63 -> 3.96 | 8.8 -> 9.3 |
-| sub | 1x1 | 7.6 -> 8.0 | 3.4 -> 3.5 | 5.8 -> 6.3 | 2.57 -> 3.23 | 6.5 -> 7.0 |
-| sub | 2x2 | 15.0 -> 14.7 | 3.3 -> 3.5 | 5.6 -> 5.3 | 4.63 -> 5.14 | 13.6 -> 13.3 |
-| sub | 4x4 | 15.9 -> 14.7 | 3.7 -> 3.6 | 5.8 -> 4.3 | 5.33 -> 5.38 | 14.0 -> 12.8 |
-| sub | 8x8 | 16.2 -> 15.6 | 5.2 -> 4.1 | 4.8 -> 3.8 | 4.66 -> 4.83 | 12.7 -> 12.1 |
-| sub | 16x16 | 18.1 -> 17.5 | 11.0 -> 5.2 | 3.1 -> 2.4 | 4.24 -> 4.07 | 10.4 -> 9.8 |
-| shl | 1x13 | 16.8 -> 12.4 | 2.3 -> 2.5 | 5.5 -> 1.4 | 8.46 -> 6.24 | 14.5 -> 10.2 |
-| shl | 4x13 | 19.2 -> 13.0 | 3.6 -> 3.8 | 6.3 -> -0.1 | 7.02 -> 4.77 | 15.4 -> 9.3 |
-| shl | 16x13 | 21.4 -> 16.2 | 5.8 -> 5.3 | 9.4 -> 3.9 | 4.29 -> 3.15 | 17.3 -> 12.0 |
-| shr | 1x13 | 9.4 -> 6.6 | 2.3 -> 3.3 | 6.9 -> 4.1 | 4.74 -> 3.32 | 7.2 -> 4.4 |
-| shr | 4x13 | 18.2 -> 14.0 | 3.2 -> 3.7 | 6.3 -> 2.0 | 6.67 -> 5.13 | 14.5 -> 10.3 |
-| shr | 16x13 | 21.0 -> 18.4 | 5.1 -> 5.2 | 7.9 -> 5.4 | 4.97 -> 4.34 | 16.9 -> 14.2 |
-| mul | 2x2 | 30.5 -> 18.6 | - | 15.8 -> 4.0 | 4.59 -> 2.74 | 24.0 -> 12.2 |
-| mul | 3x3 | 30.4 -> 19.5 | - | 13.2 -> 2.8 | 3.69 -> 2.27 | 21.9 -> 11.3 |
-| mul | 4x4 | 29.5 -> 21.6 | - | 12.5 -> 4.8 | 2.70 -> 2.04 | 18.3 -> 10.5 |
-| mul | 6x6 | 33.0 -> 27.3 | - | 9.2 -> 3.6 | 1.77 -> 1.47 | 13.9 -> 8.4 |
-| mul | 8x8 | 41.5 -> 34.8 | - | 11.1 -> 4.3 | 1.56 -> 1.29 | 18.6 -> 11.9 |
-| mul | 12x12 | 61.8 -> 54.0 | - | 12.7 -> 4.5 | 1.33 -> 1.16 | 20.8 -> 12.9 |
-| mul | 16x16 | 94.9 -> 82.7 | - | 16.3 -> 4.2 | 1.20 -> 1.05 | 25.2 -> 13.2 |
-| sqr | 4x4 | 29.7 -> 21.6 | - | 13.4 -> 5.2 | 3.14 -> 2.27 | 18.1 -> 10.4 |
-| sqr | 16x16 | 89.8 -> 75.3 | - | 18.0 -> 2.9 | 1.36 -> 1.14 | 27.6 -> 11.5 |
-| divrem | 2x1 | 31.7 -> 24.8 | - | 17.8 -> 11.3 | 3.60 -> 2.86 | 25.7 -> 18.8 |
-| divrem | 8x4 | 96.4 -> 75.8 | - | 35.5 -> 14.9 | 2.21 -> 1.73 | 50.1 -> 29.0 |
-| divrem | 32x16 | 479.3 -> 432.2 | - | 69.3 -> 21.1 | 2.29 -> 2.06 | 87.6 -> 37.8 |
-| fromchars | 4x10 | 92.8 -> 91.6 | - | - | 1.22 -> 1.18 | 60.0 -> 58.9 |
-| fromchars | 16x10 | 397.2 -> 397.8 | - | - | 1.25 -> 1.25 | 203.7 -> 205.8 |
+| add | 1x1 | 6.9 -> 5.9 | 3.2 -> 1.9 | -2.5 -> -3.7 | 2.26 -> 1.97 | 5.8 -> 4.7 |
+| add | 2x2 | 14.8 -> 15.9 | 3.8 -> 4.1 | 4.9 -> 6.3 | 2.52 -> 4.90 | 13.4 -> 14.5 |
+| add | 4x4 | 15.4 -> 14.6 | 3.7 -> 3.8 | 4.5 -> 4.2 | 3.19 -> 3.57 | 13.4 -> 12.6 |
+| add | 8x8 | 15.8 -> 15.6 | 5.1 -> 4.3 | 3.9 -> 3.6 | 3.02 -> 3.56 | 12.3 -> 12.1 |
+| add | 16x16 | 16.4 -> 17.7 | 9.8 -> 5.7 | 2.2 -> 3.7 | 3.62 -> 3.95 | 8.8 -> 10.1 |
+| sub | 1x1 | 7.6 -> 5.7 | 3.4 -> 2.0 | 5.8 -> 4.0 | 2.76 -> 2.30 | 6.5 -> 4.7 |
+| sub | 2x2 | 15.0 -> 14.7 | 3.3 -> 3.8 | 5.5 -> 5.4 | 4.64 -> 5.14 | 13.6 -> 13.3 |
+| sub | 4x4 | 15.8 -> 15.1 | 3.9 -> 4.0 | 5.8 -> 5.2 | 5.31 -> 5.52 | 13.9 -> 13.2 |
+| sub | 8x8 | 16.3 -> 15.7 | 5.0 -> 4.4 | 4.6 -> 4.3 | 4.65 -> 4.86 | 12.7 -> 12.2 |
+| sub | 16x16 | 18.4 -> 18.1 | 10.9 -> 5.4 | 3.0 -> 3.0 | 4.22 -> 4.13 | 10.7 -> 10.3 |
+| shl | 1x13 | 16.9 -> 12.3 | 2.3 -> 3.4 | 5.9 -> 1.4 | 8.50 -> 6.17 | 14.7 -> 9.8 |
+| shl | 4x13 | 19.1 -> 13.1 | 3.6 -> 5.5 | 6.1 -> 0.0 | 6.95 -> 4.79 | 15.4 -> 9.4 |
+| shl | 16x13 | 21.7 -> 15.5 | 5.8 -> 6.9 | 9.6 -> 3.3 | 4.31 -> 2.99 | 17.6 -> 11.4 |
+| shr | 1x13 | 9.1 -> 6.6 | 2.3 -> 3.1 | 6.6 -> 4.1 | 4.58 -> 3.32 | 6.9 -> 4.4 |
+| shr | 4x13 | 18.4 -> 14.1 | 3.3 -> 4.7 | 6.2 -> 1.8 | 6.70 -> 5.15 | 14.6 -> 10.4 |
+| shr | 16x13 | 21.3 -> 18.0 | 5.1 -> 6.1 | 8.2 -> 4.8 | 5.02 -> 4.24 | 17.1 -> 13.9 |
+| mul | 2x2 | 28.1 -> 18.2 | - | 13.4 -> 3.7 | 4.29 -> 2.81 | 21.5 -> 11.9 |
+| mul | 3x3 | 30.1 -> 20.0 | - | 13.2 -> 3.0 | 3.57 -> 1.91 | 21.8 -> 11.9 |
+| mul | 4x4 | 29.7 -> 21.6 | - | 12.6 -> 4.8 | 2.87 -> 1.97 | 18.5 -> 10.6 |
+| mul | 6x6 | 33.0 -> 27.2 | - | 9.2 -> 2.9 | 1.76 -> 1.46 | 13.9 -> 7.9 |
+| mul | 8x8 | 41.9 -> 35.1 | - | 11.0 -> 4.7 | 1.56 -> 1.41 | 18.7 -> 12.1 |
+| mul | 12x12 | 61.8 -> 53.8 | - | 12.0 -> 4.3 | 1.33 -> 1.15 | 20.3 -> 12.4 |
+| mul | 16x16 | 94.8 -> 82.4 | - | 15.7 -> 4.0 | 1.20 -> 1.05 | 24.9 -> 12.8 |
+| sqr | 4x4 | 29.6 -> 21.6 | - | 13.2 -> 5.3 | 3.14 -> 2.22 | 18.2 -> 10.3 |
+| sqr | 16x16 | 88.9 -> 75.8 | - | 18.3 -> 4.0 | 1.35 -> 1.15 | 26.7 -> 13.9 |
+| divrem | 2x1 | 31.1 -> 25.2 | - | 17.3 -> 11.5 | 3.53 -> 2.89 | 25.1 -> 19.2 |
+| divrem | 8x4 | 96.0 -> 75.4 | - | 34.8 -> 14.6 | 2.20 -> 1.72 | 49.8 -> 28.8 |
+| divrem | 32x16 | 481.3 -> 432.0 | - | 63.6 -> 21.3 | 2.28 -> 2.05 | 79.1 -> 39.6 |
+| fromchars | 4x10 | 91.2 -> 91.9 | - | - | 1.19 -> 1.20 | 58.6 -> 58.9 |
+| fromchars | 16x10 | 399.5 -> 394.3 | - | - | 1.26 -> 1.25 | 206.1 -> 201.8 |
+| tochars | 4x10 | 84.0 -> 84.4 | - | - | 0.86 -> 0.88 | -19.0 -> -17.8 |
+| tochars | 16x10 | 828.8 -> 841.7 | - | - | 1.37 -> 1.40 | 88.0 -> 103.1 |
 
 ### 3.3 x64, medium band
 
 | op | shape | auto ns | inplace ns | auto - floor ns | auto/gmpz | auto - kernel ns |
 |---|---|---:|---:|---:|---:|---:|
-| add | 64x64 | 63.6 -> 57.6 | 39.1 -> 48.1 | 22.3 -> 15.8 | 3.86 -> 3.49 | 30.4 -> 24.7 |
-| add | 256x256 | 223.8 -> 213.5 | 145.9 -> 196.1 | 65.0 -> 54.3 | 2.81 -> 2.69 | 81.3 -> 71.1 |
-| add | 1024x1024 | 841.5 -> 800.1 | 583.0 -> 790.1 | 247.3 -> 205.5 | 2.15 -> 2.04 | 263.0 -> 222.4 |
-| add | 2000x2000 | 1721.2 -> 1535.4 | 1134.9 -> 1520.5 | 571.6 -> 384.7 | 3.59 -> 3.19 | 588.5 -> 403.3 |
-| sub | 64x64 | 66.5 -> 58.8 | 37.9 -> 47.1 | 24.4 -> 16.5 | 3.97 -> 3.51 | 33.6 -> 26.1 |
-| sub | 1024x1024 | 841.5 -> 808.6 | 581.7 -> 791.5 | 247.4 -> 214.7 | 2.15 -> 2.07 | 263.4 -> 230.8 |
-| shl | 256x13 | 135.5 -> 122.0 | 93.1 -> 102.2 | 19.0 -> 5.5 | 2.69 -> 2.45 | 41.1 -> 28.2 |
-| shl | 2000x13 | 916.5 -> 772.8 | 657.2 -> 740.9 | 176.7 -> 33.6 | 2.71 -> 2.29 | 196.5 -> 53.1 |
-| shl | 2000x77 | 1065.3 -> 774.8 | 764.5 -> 741.5 | 193.2 -> -97.1 | 3.13 -> 2.29 | 215.4 -> -75.6 |
-| shr | 256x13 | 138.6 -> 125.5 | 93.8 -> 101.7 | 7.3 -> -4.9 | 2.73 -> 2.47 | 28.4 -> 15.0 |
-| shr | 2000x13 | 949.4 -> 750.3 | 657.2 -> 738.7 | 117.2 -> -81.7 | 2.80 -> 2.21 | 137.6 -> -61.8 |
-| shr | 2000x77 | 1084.2 -> 750.6 | 764.9 -> 740.1 | 232.6 -> -102.0 | 3.20 -> 2.21 | 254.9 -> -79.6 |
-| mul | 32x32 | 212.8 -> 200.5 | - | 12.8 -> 0.2 | 0.77 -> 0.74 | 24.1 -> 6.2 |
-| mul | 64x64 | 517.4 -> 498.3 | - | 24.8 -> 3.6 | 0.60 -> 0.57 | 30.8 -> 12.8 |
-| mul | 256x256 | 6254.4 -> 6185.1 | - | 18.2 -> 4.9 | 0.80 -> 0.79 | 81.2 -> 15.4 |
-| mul | 1000x1000 | 59840.1 -> 59737.0 | - | 418.4 -> 167.6 | 1.11 -> 1.11 | 378.1 -> 250.3 |
-| mul | 2000x2000 | 177078.2 -> 176669.1 | - | 698.5 -> 219.4 | 1.23 -> 1.23 | 778.0 -> 253.8 |
-| mul | 2000x100 | 17857.2 -> 17640.0 | - | 23.0 -> -55.9 | 0.50 -> 0.49 | 192.1 -> -20.1 |
-| sqr | 64x64 | 302.6 -> 276.1 | - | 22.7 -> -9.7 | 0.54 -> 0.50 | 32.9 -> -4.1 |
-| sqr | 512x512 | 10629.4 -> 10582.1 | - | 63.0 -> -13.5 | 0.71 -> 0.70 | 89.1 -> 22.9 |
-| sqr | 2000x2000 | 100001.6 -> 98205.6 | - | 1537.8 -> 79.5 | 0.99 -> 0.98 | 801.6 -> 16.8 |
-| divrem | 128x64 | 3364.7 -> 3311.6 | - | 125.0 -> 47.5 | 1.94 -> 1.92 | 120.4 -> 84.6 |
-| divrem | 512x256 | 29529.0 -> 29508.4 | - | 289.9 -> 287.0 | 1.81 -> 1.82 | 225.1 -> 342.1 |
-| divrem | 2000x1000 | 185683.5 -> 185240.7 | - | 1297.0 -> -229.8 | 1.35 -> 1.34 | 1096.5 -> 20.4 |
-| divrem | 4000x2000 | 478299.8 -> 474978.9 | - | 3602.0 -> -216.3 | 1.42 -> 1.41 | 4662.0 -> -563.2 |
-| divrem | 2000x100 | 145266.8 -> 144972.4 | - | 870.1 -> 2397.5 | 2.00 -> 2.01 | 747.3 -> 845.4 |
-| divrem | 65536x1 | 193782.3 -> 174417.1 | - | 19066.6 -> 6342.3 | 1.31 -> 1.18 | 26686.7 -> 7091.7 |
-| fromchars | 64x10 | 2777.3 -> 3094.7 | - | - | 2.00 -> 2.22 | 644.3 -> 660.9 |
-| fromchars | 256x10 | 28412.5 -> 30825.9 | - | - | 2.84 -> 3.10 | 2681.4 -> 1265.8 |
-| fromchars | 2000x10 | 429598.0 -> 427566.8 | - | - | 2.17 -> 2.16 | 20495.5 -> 21856.1 |
+| add | 64x64 | 63.7 -> 46.2 | 38.9 -> 35.8 | 22.4 -> 5.1 | 3.86 -> 2.80 | 30.4 -> 13.4 |
+| add | 256x256 | 223.9 -> 162.9 | 145.8 -> 144.7 | 65.1 -> 4.4 | 2.82 -> 2.05 | 81.3 -> 20.6 |
+| add | 1024x1024 | 841.9 -> 599.1 | 583.0 -> 581.0 | 247.6 -> 5.1 | 2.15 -> 1.53 | 263.4 -> 21.3 |
+| add | 2000x2000 | 1721.6 -> 1153.3 | 1134.8 -> 1132.4 | 571.1 -> 3.9 | 3.56 -> 2.40 | 588.6 -> 21.7 |
+| sub | 64x64 | 65.9 -> 45.3 | 37.7 -> 34.6 | 23.8 -> 3.1 | 3.94 -> 2.70 | 33.0 -> 12.6 |
+| sub | 1024x1024 | 842.3 -> 598.3 | 581.5 -> 579.9 | 247.9 -> 4.1 | 2.15 -> 1.53 | 264.0 -> 20.5 |
+| shl | 256x13 | 135.4 -> 122.0 | 93.0 -> 99.3 | 18.8 -> 7.4 | 2.69 -> 2.43 | 42.0 -> 28.1 |
+| shl | 2000x13 | 917.2 -> 772.7 | 657.3 -> 716.9 | 177.7 -> 33.4 | 2.71 -> 2.29 | 196.9 -> 53.0 |
+| shl | 2000x77 | 1065.8 -> 774.6 | 764.9 -> 741.6 | 193.2 -> -98.0 | 3.14 -> 2.29 | 216.0 -> -77.6 |
+| shr | 256x13 | 137.9 -> 125.0 | 93.8 -> 99.1 | 6.7 -> -6.0 | 2.72 -> 2.46 | 27.8 -> 15.0 |
+| shr | 2000x13 | 949.9 -> 749.4 | 656.8 -> 716.5 | 117.3 -> -83.4 | 2.80 -> 2.21 | 138.1 -> -62.9 |
+| shr | 2000x77 | 1083.7 -> 749.4 | 764.9 -> 740.2 | 232.9 -> -102.6 | 3.19 -> 2.21 | 255.4 -> -80.7 |
+| mul | 32x32 | 212.3 -> 205.8 | - | 12.1 -> 9.3 | 0.78 -> 0.76 | 24.7 -> 18.9 |
+| mul | 64x64 | 524.5 -> 496.2 | - | 31.0 -> 3.7 | 0.60 -> 0.58 | 41.5 -> 9.5 |
+| mul | 256x256 | 6231.5 -> 6176.4 | - | 28.3 -> 2.4 | 0.80 -> 0.79 | 62.6 -> -2.4 |
+| mul | 1000x1000 | 59904.3 -> 59861.8 | - | 343.6 -> 312.4 | 1.12 -> 1.12 | 389.1 -> 230.9 |
+| mul | 2000x2000 | 177072.6 -> 176923.7 | - | 722.9 -> 199.2 | 1.23 -> 1.23 | 692.2 -> -137.4 |
+| mul | 2000x100 | 17852.9 -> 17643.6 | - | 154.6 -> -43.6 | 0.50 -> 0.49 | 193.6 -> -52.9 |
+| sqr | 64x64 | 301.5 -> 284.4 | - | 20.2 -> 3.8 | 0.54 -> 0.51 | 30.8 -> 9.1 |
+| sqr | 512x512 | 10627.6 -> 10594.1 | - | 56.8 -> -15.5 | 0.70 -> 0.70 | 64.8 -> 27.0 |
+| sqr | 2000x2000 | 99937.6 -> 99323.2 | - | 651.3 -> 1067.7 | 0.99 -> 0.99 | 646.3 -> 794.2 |
+| divrem | 128x64 | 3342.1 -> 3446.3 | - | 67.0 -> 82.1 | 1.94 -> 2.00 | 141.1 -> 103.2 |
+| divrem | 512x256 | 29558.6 -> 29817.4 | - | 292.6 -> 178.0 | 1.81 -> 1.83 | 164.7 -> 226.5 |
+| divrem | 2000x1000 | 185318.8 -> 186774.1 | - | 1166.1 -> 819.0 | 1.34 -> 1.35 | 1065.1 -> 1041.0 |
+| divrem | 4000x2000 | 478481.8 -> 477627.1 | - | 3873.1 -> -100.7 | 1.43 -> 1.43 | 3326.4 -> -564.6 |
+| divrem | 2000x100 | 144654.0 -> 144971.4 | - | 1928.4 -> 1154.1 | 2.00 -> 2.00 | 812.6 -> 886.6 |
+| divrem | 65536x1 | 193721.3 -> 168835.7 | - | 18973.6 -> 1400.2 | 1.31 -> 1.14 | 26598.0 -> 1889.2 |
+| fromchars | 64x10 | 2790.5 -> 2852.3 | - | - | 2.04 -> 2.08 | 667.6 -> 1045.0 |
+| fromchars | 256x10 | 28563.9 -> 27920.0 | - | - | 2.87 -> 2.80 | 2874.6 -> 3489.4 |
+| fromchars | 2000x10 | 429183.1 -> 385669.1 | - | - | 2.17 -> 1.95 | 20511.4 -> 23105.6 |
+| tochars | 64x10 | 5622.5 -> 5695.4 | - | - | 1.90 -> 1.93 | 377.4 -> 362.4 |
+| tochars | 256x10 | 35873.4 -> 36990.2 | - | - | 1.82 -> 1.88 | 1283.7 -> 1461.4 |
+| tochars | 2000x10 | 608668.2 -> 620642.7 | - | - | 1.49 -> 1.52 | 24355.7 -> 23098.2 |
 
 ### 3.4 M4, medium band
 
 | op | shape | auto ns | inplace ns | auto - floor ns | auto/gmpz | auto - kernel ns |
 |---|---|---:|---:|---:|---:|---:|
-| add | 64x64 | 54.5 -> 38.2 | 51.3 -> 20.0 | -7.4 -> -22.6 | 4.22 -> 2.90 | 5.3 -> -11.0 |
-| add | 256x256 | 147.1 -> 109.9 | 239.5 -> 100.9 | -98.2 -> -136.3 | 2.54 -> 1.90 | -88.3 -> -124.8 |
-| add | 1024x1024 | 551.5 -> 450.1 | 985.4 -> 433.6 | -433.4 -> -539.9 | 2.18 -> 1.78 | -416.4 -> -520.8 |
-| add | 2000x2000 | 1126.7 -> 886.7 | 1935.7 -> 854.2 | -809.8 -> -1046.7 | 2.27 -> 1.78 | -788.3 -> -1030.2 |
-| sub | 64x64 | 40.9 -> 35.9 | 50.9 -> 19.9 | -19.5 -> -24.3 | 2.96 -> 2.59 | -8.5 -> -13.6 |
-| sub | 1024x1024 | 547.5 -> 453.1 | 985.9 -> 434.5 | -428.7 -> -524.8 | 2.16 -> 1.79 | -422.4 -> -522.7 |
-| shl | 256x13 | 85.9 -> 41.3 | 36.4 -> 29.8 | 28.2 -> -16.1 | 2.27 -> 1.09 | 36.7 -> -7.8 |
-| shl | 2000x13 | 638.6 -> 262.4 | 283.2 -> 196.5 | 238.0 -> -138.1 | 0.29 -> 0.13 | 255.1 -> -121.1 |
-| shl | 2000x77 | 790.7 -> 458.6 | 424.8 -> 228.8 | 248.5 -> -81.0 | 2.73 -> 1.59 | 262.7 -> -70.9 |
-| shr | 256x13 | 87.3 -> 42.6 | 36.0 -> 30.4 | 11.6 -> -32.7 | 2.29 -> 1.12 | 20.9 -> -23.9 |
-| shr | 2000x13 | 706.8 -> 255.1 | 283.0 -> 196.3 | 182.0 -> -270.0 | 2.36 -> 0.86 | 194.1 -> -258.7 |
-| shr | 2000x77 | 1057.9 -> 276.4 | 420.0 -> 195.8 | 532.0 -> -249.9 | 3.65 -> 0.95 | 540.9 -> -240.3 |
-| mul | 32x32 | 298.2 -> 281.8 | - | 18.6 -> 3.1 | 1.12 -> 1.06 | 39.5 -> 23.4 |
-| mul | 64x64 | 1037.9 -> 1008.6 | - | 24.8 -> -0.7 | 1.33 -> 1.29 | 55.2 -> 24.5 |
-| mul | 256x256 | 11853.3 -> 11814.0 | - | 94.2 -> 26.0 | 1.51 -> 1.50 | 98.6 -> 27.0 |
-| mul | 1000x1000 | 107142.3 -> 106691.9 | - | 289.0 -> -192.8 | 1.94 -> 1.93 | 374.3 -> -156.5 |
-| mul | 2000x2000 | 302134.9 -> 301592.0 | - | 128.7 -> -681.6 | 2.04 -> 2.03 | 759.9 -> -99.5 |
-| mul | 2000x100 | 46964.9 -> 46319.6 | - | 189.0 -> -476.9 | 1.35 -> 1.33 | 170.0 -> -377.5 |
-| sqr | 64x64 | 626.4 -> 600.0 | - | 26.4 -> 1.6 | 0.93 -> 0.89 | 43.0 -> 19.3 |
-| sqr | 512x512 | 24592.6 -> 24374.4 | - | 257.1 -> 26.4 | 1.25 -> 1.24 | 206.7 -> 17.9 |
-| sqr | 2000x2000 | 224138.1 -> 223342.4 | - | 1273.4 -> 81.0 | 1.86 -> 1.85 | 1332.5 -> -404.5 |
-| divrem | 128x64 | 3731.8 -> 3691.2 | - | 111.5 -> 47.5 | 2.10 -> 2.08 | 121.0 -> 89.4 |
-| divrem | 512x256 | 28589.6 -> 28613.1 | - | 241.5 -> 234.6 | 1.74 -> 1.74 | 262.6 -> 236.7 |
-| divrem | 2000x1000 | 232543.6 -> 232354.6 | - | 820.3 -> 397.1 | 1.73 -> 1.73 | 1102.5 -> 5.9 |
-| divrem | 4000x2000 | 687816.7 -> 688042.4 | - | 1309.8 -> 565.7 | 2.00 -> 2.00 | -317.3 -> 1268.1 |
-| divrem | 2000x100 | 95254.0 -> 94399.0 | - | 1331.8 -> 434.9 | 1.38 -> 1.37 | 1083.7 -> 362.2 |
-| divrem | 65536x1 | 241855.9 -> 229283.2 | - | 12147.0 -> -1278.5 | 1.43 -> 1.34 | 15073.8 -> -605.0 |
-| fromchars | 64x10 | 2195.2 -> 2182.2 | - | - | 1.37 -> 1.36 | 339.6 -> 326.3 |
-| fromchars | 256x10 | 13831.3 -> 13791.9 | - | - | 1.31 -> 1.28 | 2271.7 -> 2254.6 |
-| fromchars | 2000x10 | 300314.1 -> 300086.8 | - | - | 1.47 -> 1.48 | 17698.1 -> 17469.0 |
+| add | 64x64 | 54.7 -> 37.9 | 51.6 -> 20.0 | -6.4 -> -23.0 | 4.21 -> 2.84 | 5.8 -> -11.2 |
+| add | 256x256 | 148.8 -> 109.8 | 240.0 -> 101.2 | -99.1 -> -136.9 | 2.57 -> 1.89 | -85.2 -> -126.7 |
+| add | 1024x1024 | 564.9 -> 450.3 | 989.7 -> 437.1 | -423.8 -> -537.8 | 2.23 -> 1.78 | -418.7 -> -527.5 |
+| add | 2000x2000 | 1132.3 -> 877.0 | 1948.4 -> 858.2 | -812.1 -> -1054.3 | 2.27 -> 1.76 | -797.7 -> -1050.8 |
+| sub | 64x64 | 41.2 -> 36.1 | 51.2 -> 19.8 | -19.0 -> -25.1 | 2.97 -> 2.68 | -8.6 -> -17.3 |
+| sub | 1024x1024 | 562.3 -> 454.6 | 988.4 -> 435.0 | -424.5 -> -532.1 | 2.21 -> 1.80 | -416.2 -> -524.8 |
+| shl | 256x13 | 86.1 -> 41.2 | 36.6 -> 45.1 | 28.4 -> -15.9 | 2.27 -> 1.09 | 36.8 -> -8.0 |
+| shl | 2000x13 | 653.2 -> 261.0 | 284.3 -> 347.8 | 250.6 -> -141.2 | 0.32 -> 0.12 | 268.9 -> -125.3 |
+| shl | 2000x77 | 818.5 -> 450.3 | 426.3 -> 233.4 | 277.3 -> -96.6 | 2.81 -> 1.56 | 287.6 -> -79.8 |
+| shr | 256x13 | 87.8 -> 42.6 | 36.0 -> 44.8 | 11.6 -> -32.8 | 2.30 -> 1.12 | 21.3 -> -24.2 |
+| shr | 2000x13 | 698.0 -> 271.2 | 283.2 -> 347.5 | 171.3 -> -255.8 | 2.33 -> 0.90 | 179.5 -> -241.6 |
+| shr | 2000x77 | 1040.9 -> 280.7 | 421.2 -> 195.9 | 506.5 -> -247.6 | 3.59 -> 0.98 | 522.6 -> -236.7 |
+| mul | 32x32 | 298.7 -> 281.4 | - | 17.5 -> 2.3 | 1.12 -> 1.07 | 39.3 -> 23.1 |
+| mul | 64x64 | 1039.3 -> 1007.8 | - | 23.9 -> -2.6 | 1.34 -> 1.30 | 53.3 -> 22.9 |
+| mul | 256x256 | 11896.3 -> 12025.0 | - | 102.9 -> 238.8 | 1.51 -> 1.53 | 138.2 -> 229.3 |
+| mul | 1000x1000 | 107250.2 -> 106887.8 | - | 178.5 -> -283.6 | 1.94 -> 1.94 | 80.4 -> 117.0 |
+| mul | 2000x2000 | 302932.5 -> 301689.0 | - | -292.8 -> -722.3 | 2.03 -> 2.03 | 668.5 -> -700.3 |
+| mul | 2000x100 | 47136.3 -> 46406.5 | - | 294.5 -> -291.4 | 1.35 -> 1.34 | 280.3 -> -261.8 |
+| sqr | 64x64 | 626.4 -> 600.5 | - | 24.4 -> 0.7 | 0.93 -> 0.89 | 41.3 -> 18.3 |
+| sqr | 512x512 | 24695.3 -> 24317.0 | - | 276.0 -> -72.0 | 1.25 -> 1.18 | 327.2 -> -27.6 |
+| sqr | 2000x2000 | 224588.0 -> 223255.6 | - | 967.2 -> -545.5 | 1.85 -> 1.84 | 895.4 -> 31.3 |
+| divrem | 128x64 | 3762.2 -> 3733.0 | - | 93.6 -> 75.2 | 2.12 -> 2.10 | 141.9 -> 143.5 |
+| divrem | 512x256 | 28815.2 -> 28675.6 | - | 417.8 -> 72.8 | 1.75 -> 1.74 | 466.0 -> 215.7 |
+| divrem | 2000x1000 | 234126.7 -> 232426.2 | - | 1975.2 -> 102.0 | 1.73 -> 1.73 | 1606.5 -> 322.1 |
+| divrem | 4000x2000 | 695982.0 -> 691382.2 | - | 3426.0 -> 4024.5 | 2.00 -> 2.01 | 3967.5 -> 4357.2 |
+| divrem | 2000x100 | 95716.3 -> 94547.3 | - | 1235.2 -> 259.8 | 1.38 -> 1.36 | 1567.7 -> 5.9 |
+| divrem | 65536x1 | 246390.5 -> 231899.7 | - | 17772.4 -> -655.0 | 1.44 -> 1.35 | 16128.0 -> 1720.2 |
+| fromchars | 64x10 | 2198.3 -> 2187.2 | - | - | 1.37 -> 1.36 | 338.6 -> 330.9 |
+| fromchars | 256x10 | 13836.4 -> 13804.5 | - | - | 1.28 -> 1.29 | 2272.2 -> 2257.5 |
+| fromchars | 2000x10 | 300171.0 -> 300852.0 | - | - | 1.47 -> 1.48 | 17382.0 -> 17573.8 |
+| tochars | 64x10 | 4746.0 -> 4744.5 | - | - | 1.50 -> 1.50 | 250.2 -> 220.3 |
+| tochars | 256x10 | 33794.6 -> 33818.9 | - | - | 1.66 -> 1.66 | 858.7 -> 1075.2 |
+| tochars | 2000x10 | 679612.5 -> 676793.1 | - | - | 1.63 -> 1.63 | 11123.6 -> 7941.4 |
 
 ### 3.5 Large-band spot checks
 
@@ -215,60 +229,200 @@ x64:
 
 | op | shape | auto ns | kernel ns | gmpz ns | auto/gmpz | change in auto |
 |---|---|---:|---:|---:|---:|---:|
-| add | 16384x16384 | 14883 -> 12435 | 9301 -> 9298 | 7410 | 2.01 -> 1.68 | -16.4% |
-| divrem | 4096x2048 | 498654 -> 498767 | 497775 -> 498832 | 367635 | 1.36 -> 1.36 | +0.0% |
-| fromchars | 10000x10 | 3670138 -> 3651386 | 3586031 -> 3567768 | 2006859 | 1.83 -> 1.82 | -0.5% |
-| mul | 2000x2000 | 177038 -> 177290 | 176452 -> 176534 | 144170 | 1.23 -> 1.23 | +0.1% |
-| mul | 16384x16384 | 3784524 -> 3774169 | 3790346 -> 3781385 | 1783926 | 2.12 -> 2.12 | -0.3% |
-| tochars | 10000x10 | 5890002 -> 5879016 | 5823308 -> 5846315 | 4221163 | 1.40 -> 1.39 | -0.2% |
+| add | 16384x16384 | 14810 -> 9330 | 9304 -> 9294 | 6898 | 2.15 -> 1.35 | -37.0% |
+| divrem | 4096x2048 | 499034 -> 498477 | 497946 -> 495569 | 368707 | 1.35 -> 1.35 | -0.1% |
+| fromchars | 10000x10 | 3670159 -> 3475893 | 3588344 -> 3362265 | 2005997 | 1.83 -> 1.73 | -5.3% |
+| mul | 2000x2000 | 177314 -> 177858 | 176337 -> 176741 | 144537 | 1.23 -> 1.23 | +0.3% |
+| mul | 16384x16384 | 3778231 -> 3779466 | 3778094 -> 3788186 | 1789186 | 2.11 -> 2.11 | +0.0% |
+| tochars | 10000x10 | 5864746 -> 5960832 | 5844018 -> 5920813 | 4223943 | 1.39 -> 1.41 | +1.6% |
 
 M4:
 
 | op | shape | auto ns | kernel ns | gmpz ns | auto/gmpz | change in auto |
 |---|---|---:|---:|---:|---:|---:|
-| add | 16384x16384 | 9473 -> 7267 | 15838 -> 15813 | 4102 | 2.31 -> 1.77 | -23.3% |
-| divrem | 4096x2048 | 703037 -> 708499 | 702306 -> 702139 | 358229 | 1.96 -> 1.98 | +0.8% |
-| fromchars | 10000x10 | 4331417 -> 4171163 | 4095996 -> 4088150 | 1857816 | 2.33 -> 2.25 | -3.7% |
-| mul | 2000x2000 | 302942 -> 301376 | 301403 -> 303536 | 148256 | 2.04 -> 2.03 | -0.5% |
-| mul | 16384x16384 | 5400760 -> 5353474 | 5359177 -> 5393000 | 1567599 | 3.45 -> 3.42 | -0.9% |
-| tochars | 10000x10 | 8247452 -> 8240938 | 8206028 -> 8216750 | 4180900 | 1.97 -> 1.97 | -0.1% |
+| add | 16384x16384 | 9474 -> 7305 | 16179 -> 16418 | 4161 | 2.28 -> 1.76 | -22.9% |
+| divrem | 4096x2048 | 706592 -> 707065 | 704150 -> 706127 | 358386 | 1.97 -> 1.97 | +0.1% |
+| fromchars | 10000x10 | 4198921 -> 4189262 | 4137033 -> 4117279 | 1872966 | 2.24 -> 2.24 | -0.2% |
+| mul | 2000x2000 | 303919 -> 311426 | 304464 -> 305902 | 150382 | 2.02 -> 2.07 | +2.5% |
+| mul | 16384x16384 | 5443656 -> 5522911 | 5447302 -> 5449136 | 1599088 | 3.40 -> 3.45 | +1.5% |
+| tochars | 10000x10 | 8278333 -> 8342500 | 8238222 -> 8247500 | 4195346 | 1.97 -> 1.99 | +0.8% |
 
-Observations that matter for reading the tables:
+### 3.6 Reading the tables, regressions, and the history of the two measurements
 
-- Small `auto` on x64 improved by 1.5-4.5 ns for add and sub, 2-7 ns for shifts, 9-14 ns for mul/sqr and 6-32 ns for divrem
-  (2x1 to 32x16). On M4 the add/sub rows at 1-16 limbs are within noise of the baseline, apart from a small consistent
-  loss at the smallest shapes (add 1x1 6.8 -> 7.7 ns, 2x2 14.6 -> 15.2; its allocator pair is cheap, a floor only 3-6 ns above
-  the kernel, so there was little to remove); M4 shifts improved by 3-6 ns, mul/sqr by 6-15 ns and divrem by 7-47 ns.
-- Medium and large `auto` rows move by their copy and zero-fill savings only: add 16384 -16% (x64) and -23% (M4), shifts at
-  2000 limbs -16..-31% (x64) and -42..-74% (M4), mul and divrem above ~256 limbs within +-1.5% (divrem 65536x1 -10% on x64).
-- **Regressions, all reproducible (4 of 4 runs):**
-  - x64 `inplace` (`c += b; c -= b`) at >= 64 limbs is slower: add 64x64 39.1 -> 48.1 ns, 256x256 145.9 -> 196.1,
-    1024x1024 583.0 -> 790.1 (+35%), 2000x2000 1134.9 -> 1520.5; sub the same; the 256x13 and 2000x13 shift pairs 93 -> 102 (+10%) and 657 -> 741 (+13%); the smallest `inplace` rows are 0.5-0.8 ns
-    slower too (add 1x1 4.1 -> 4.9, sub 1x1 4.0 -> 4.7).
-    `auto` improved but `inplace` did not: `add_n_tail` on x64 does not reach the ADX-assisted speed of
-    `add_unsigned_spans` (the unchanged `kernel` row is 578 ns at 1024x1024, the new in-place pair is 790). On M4 the same
-    rows improved by 2.3x (985 -> 434 ns at 1024x1024).
-  - x64 `fromchars` (decimal) at 64 and 256 limbs-worth of digits: 64x10 2777 -> 3095 ns (+11%), 256x10 28412 -> 30826
-    (+8.5%), 16x10 420 -> 434 (+3%); 4x10 improved 195 -> 116. The `kernel` row moves the same way (256x10 25.7k ->
-    29.6k), 2000x10 and the M4 are unchanged. With `mul_header_basecase_enabled = false` the x64 rows return to the
-    baseline (64x10 2800 / 2870 ns base / shortcut-off, 3050 with the shortcut), while direct mul shapes (40x2 .. 133x31)
-    show no slowdown. `digits_to_limbs` is a header template compiled into the harness TU (a perf profile is 99.9% in that
-    one function), so this looks like an inlining/code-generation interaction in GCC 14 rather than an algorithmic change; it
-    was not isolated further.
+- Small `auto` on x64 improved by 2-4.5 ns for add/sub at 2-16 limbs (1x1: 8.2 -> 5.4 add, 9.0 -> 5.5 sub with the 1x1 fast
+  path), 2-7 ns for shifts, 9-14 ns for mul/sqr and 5-35 ns for divrem. On M4, add/sub at 2-16 limbs are within about
+  +-1.3 ns of the baseline (add 2x2 14.8 -> 15.9, 16x16 16.4 -> 17.7; its allocator pair is cheap, a floor only 3-6 ns above
+  the kernel, so there was little to remove; add/sub 1x1 improved 6.9 -> 5.9 / 7.6 -> 5.7); M4 shifts improved by 3-6 ns,
+  mul/sqr by 6-15 ns and divrem by 7-47 ns.
+- Medium and large `auto`: x64 add/sub went from -5% at 64 limbs to -29% at 1024-2000 (add 1024x1024 842 -> 599 ns, 2000x2000
+  1722 -> 1153), with `auto - floor` down to 4-5 ns; add 16384 is -37% (x64) and -23% (M4). Shifts at 2000 limbs -16..-31%
+  (x64) and -42..-74% (M4); mul and divrem above ~256 limbs within +-1.5% except M4 mul 2000x2000 +2.5% and divrem 65536x1
+  -10% (x64).
+- **x64 `+=`/`-=` regression from the first measurement is fixed.** At 9145b4e add `inplace` 1024x1024 was 583 -> 790 ns
+  (+35%) because `add_n_tail` did not reach the speed of `add_unsigned_spans` on x64; the follow-up loop shape (a plain loop
+  under GCC, the 4-way one under clang) brings it to 581 ns, the baseline.
+- **Decimal `fromchars` regression is fixed** (it was +8-11% at 64-256 limbs-worth of digits at 9145b4e); see section 3.7
+  for the cause. Now x64 `auto` 64x10 2791 -> 2852 ns (+2%), 256x10 28564 -> 27920 (-2%), 2000x10 429k -> 386k (-10%),
+  16x10 +0.8%; 10000x10 is -5.3%. M4 is unchanged (<= +-1%).
+- **Still open: in-place shifts (`c <<= s; c >>= s`, per op).** After the follow-up that routes whole-limb-free in-place
+  shifts to `shift_left_n`/`shift_right_n` they are slower than the baseline on both machines and, on M4, much slower than
+  in the 9145b4e build:
+
+  | `inplace` ns | x64 base | x64 9145b4e | x64 now | M4 base | M4 9145b4e | M4 now |
+  |---|---:|---:|---:|---:|---:|---:|
+  | shl 4x13 | 5.2 | 4.6 | 5.3 | 3.6 | 3.8 | 5.5 |
+  | shl 16x13 | 9.2 | 9.1 | 9.3 | 5.8 | 5.3 | 6.9 |
+  | shl 256x13 | 93.0 | 102.2 | 99.3 | 36.6 | 29.9 | 45.1 |
+  | shl 2000x13 | 657.3 | 740.9 | 716.9 | 284.3 | 196.0 | 347.8 |
+  | shr 2000x13 | 656.8 | 738.7 | 716.5 | 283.2 | 196.8 | 347.5 |
+
+  so x64 +9% (2000x13) and +6-7% (256x13), M4 +22% (2000x13) and +23% (256x13) against the baseline. M4 `auto` shifts did
+  not move (shl 2000x13 `auto` 261 ns).
+- **Rows more than 3% slower than the baseline** (`item1_regress.py`, `auto` and `inplace`, four-run medians):
+  - x64: 11 of 107 rows, all the shift in-place rows above plus add 2x2 `inplace` +0.4 ns (+5.9%), sub 2x2/4x4 `inplace`
+    +0.2 ns, shr 1x13/4x13 `inplace` +0.2-0.3 ns, tochars 256x10 `auto` +3.1% and divrem 128x64 `auto` +3.1%. Kernel rows
+    (library code, not the front end): divrem 8x4 45.7 -> 50.3 ns (+10%), divrem 128x64 +4.4%, sqr 4x4 9.1 -> 9.9 ns
+    (+9%), within the 1-2 ns kernel noise at the smallest sizes.
+  - M4: 15 of 107 rows: the in-place shift rows above (1x13 and 4x13 `inplace` +1-2 ns, +34..+53%), add 2x2 `auto` +1.1 ns
+    (+7%), add 16x16 `auto` +1.3 ns (+7.7%), add/sub 2x2 `inplace` +0.3-0.6 ns, sub 4x4 `inplace` +0.1 ns.
+  - No medium or large `auto` row on either machine is more than 3% slower, and no large spot check moves by more than
+    +2.5% (M4 mul 2000x2000).
+- **History.** The first measurement (opt_1 at 9145b4e, CSVs `x64_*`/`mac_*`) showed x64 add/sub `inplace` +23..+35% at
+  >= 64 limbs, decimal `fromchars` +8-11%, and in-place shifts +10-13% on x64 but -30..-35% on M4. The follow-ups fixed the
+  first two and the add/sub `auto` rows improved a further 20-26%, but the in-place shift change traded the x64 result for
+  an M4 loss.
+
+### 3.7 Cause of the x64 `fromchars` regression (diagnosis and fix)
+
+The regression showed with the header basecase shortcut compiled in and disappeared with it off, but the shortcut was only
+the trigger. Facts:
+
+- Instructions per call are equal (+-2%) in the baseline, shortcut-on and shortcut-off builds, so it is not extra work;
+  IPC is lower with the shortcut (3.93 against 4.17-4.20 in `perf stat`, with 92% of uops from the decoded-uop cache
+  against 99%). It is a stable +8-10%, independent of ASLR, stack offset and heap layout (checked with `setarch -R`,
+  environment padding, `GLIBC_TUNABLES`).
+- `digits_to_limbs` is byte-identical between the two builds apart from nop padding, with the hot loops at the same
+  alignment, and 99.96% of the samples are in the out-of-line `digits_to_limbs<std::allocator<ull>> [clone .isra.0]`.
+  Called standalone (inlined into a micro driver), the same function takes 20.9 us at 256 limbs in both builds, against
+  25.4 us for the baseline in the harness: the harness copy is slower even without the shortcut.
+- The cause is the hot loop of `mul_add_single_limb_in_place`: `widening_mul` returns the product through
+  `wide<T>::from_int`, a `std::bit_cast` of the 128-bit value, and GCC 14 in that out-of-line copy stores the product to the
+  stack and reloads both halves every iteration (`mulx; mov %r8,(%rsp); mov %r9,0x8(%rsp); mov (%rsp),%r8; mov 0x8(%rsp),%r9;
+  add ...`). That store-forward round trip is the baseline's ~20% penalty; the shortcut changes inlining and register
+  allocation in the harness translation unit enough to make the spilled loop a further ~8-10% slower.
+- Fix (`d689f75`): under `BEMAN_BIG_INT_HAS_INT128_FUNDAMENTAL` compute `wide(s[i]) * mul + carry` and split it directly,
+  keeping the `widening_mul` loop in the `#else`. The loop becomes `mulx; add; adc; mov; inc; cmp; jb`. Measured in a
+  scratch copy (decimal `fromchars` kernel row, base / shortcut-on / shortcut-off / fixed): 64x10 2116 / 2400 / 2110-2160 /
+  1680-1800 ns, 256x10 25.7k / 29.8k / 25.4k / 21.4-22.0k, 2000x10 401k / 398k / 401k / 361k. Changing `from_int` or
+  `widening_mul` globally instead helps `fromchars` but regresses divrem 512x256 by +17% and tochars by +10%, so the fix
+  has to stay local to this loop.
+
+### 3.8 In-place shift A/B (variants of the whole-limb-free path)
+
+Three variants built from scratch copies of d689f75 (outside the repository) and measured against `new64` (d689f75) and
+`base64`, three interleaved runs per binary on both machines (rows `auto`, `inplace`, `kernel`; the unchanged `kernel`
+rows are omitted; x64 pinned):
+
+- V1: revert 2f9150b, so `<<=`/`>>=` go back to `lshift_copy`/`rshift_copy` (the earlier A2 behaviour);
+- V2: V1 plus register-carried loops in `lshift_copy`/`rshift_copy` (one load per limb);
+- V3: V2 with the combine written as `funnel_shl`/`funnel_shr` (identical to V2 under GCC, which has no builtin).
+
+x64 (g++-14):
+
+| op | shape | row | base64 | new64 | v1 | v2 | v3 |
+|---|---|---|---:|---:|---:|---:|---:|
+| shl | 1x13 | auto | 16.7 | 12.5 (-25%) | 12.6 (-25%) | 12.6 (-25%) | 12.6 (-25%) |
+| shl | 1x13 | inplace | 4.1 | 4.2 (+3%) | 3.6 (-11%) | 3.4 (-15%) | 3.4 (-15%) |
+| shl | 4x13 | auto | 18.6 | 13.4 (-28%) | 13.4 (-28%) | 13.4 (-28%) | 13.4 (-28%) |
+| shl | 4x13 | inplace | 5.2 | 5.2 (+2%) | 4.5 (-12%) | 4.3 (-16%) | 4.3 (-16%) |
+| shl | 16x13 | auto | 24.5 | 17.1 (-30%) | 17.0 (-31%) | 16.7 (-32%) | 16.8 (-32%) |
+| shl | 16x13 | inplace | 9.2 | 9.2 (+1%) | 9.1 (-1%) | 8.4 (-8%) | 8.4 (-8%) |
+| shl | 256x13 | auto | 133.9 | 122.0 (-9%) | 122.2 (-9%) | 122.0 (-9%) | 121.9 (-9%) |
+| shl | 256x13 | inplace | 93.0 | 99.3 (+7%) | 102.2 (+10%) | 98.7 (+6%) | 98.7 (+6%) |
+| shl | 2000x13 | auto | 917.5 | 772.8 (-16%) | 773.4 (-16%) | 773.6 (-16%) | 773.5 (-16%) |
+| shl | 2000x77 | auto | 1063.4 | 774.6 (-27%) | 775.0 (-27%) | 774.5 (-27%) | 774.5 (-27%) |
+| shl | 2000x13 | inplace | 656.7 | 716.9 (+9%) | 739.0 (+13%) | 712.5 (+9%) | 712.6 (+9%) |
+| shl | 2000x77 | inplace | 765.7 | 741.7 (-3%) | 739.0 (-3%) | 712.5 (-7%) | 712.5 (-7%) |
+| shl | 131072x13 | auto | 97977.3 | 49725.2 (-49%) | 49751.9 (-49%) | 49864.2 (-49%) | 49877.8 (-49%) |
+| shl | 131072x13 | inplace | 43553.8 | 46689.0 (+7%) | 48260.2 (+11%) | 46565.6 (+7%) | 46554.9 (+7%) |
+| shr | 1x13 | auto | 10.1 | 8.2 (-19%) | 8.2 (-19%) | 8.3 (-17%) | 8.3 (-17%) |
+| shr | 1x13 | inplace | 3.6 | 3.9 (+7%) | 3.3 (-10%) | 3.0 (-17%) | 3.0 (-17%) |
+| shr | 4x13 | auto | 20.9 | 16.1 (-23%) | 16.0 (-23%) | 15.8 (-24%) | 15.8 (-24%) |
+| shr | 4x13 | inplace | 4.7 | 4.9 (+5%) | 4.3 (-8%) | 4.1 (-13%) | 4.1 (-13%) |
+| shr | 16x13 | auto | 25.8 | 20.0 (-22%) | 20.0 (-22%) | 20.2 (-21%) | 20.2 (-21%) |
+| shr | 16x13 | inplace | 8.7 | 8.9 (+2%) | 8.7 (-1%) | 8.0 (-8%) | 8.0 (-8%) |
+| shr | 256x13 | auto | 136.6 | 125.0 (-9%) | 125.2 (-8%) | 133.6 (-2%) | 133.7 (-2%) |
+| shr | 256x13 | inplace | 93.7 | 99.1 (+6%) | 101.7 (+8%) | 98.3 (+5%) | 98.3 (+5%) |
+| shr | 2000x13 | auto | 949.9 | 749.0 (-21%) | 749.6 (-21%) | 788.0 (-17%) | 788.0 (-17%) |
+| shr | 2000x77 | auto | 1086.8 | 749.5 (-31%) | 750.0 (-31%) | 790.0 (-27%) | 790.0 (-27%) |
+| shr | 2000x13 | inplace | 657.1 | 716.5 (+9%) | 737.4 (+12%) | 711.5 (+8%) | 711.7 (+8%) |
+| shr | 2000x77 | inplace | 765.5 | 740.8 (-3%) | 739.3 (-3%) | 712.1 (-7%) | 712.1 (-7%) |
+| shr | 131072x13 | auto | 98933.2 | 48304.4 (-51%) | 48328.0 (-51%) | 50322.4 (-49%) | 50313.5 (-49%) |
+| shr | 131072x13 | inplace | 43515.1 | 46701.2 (+7%) | 48481.1 (+11%) | 46567.5 (+7%) | 46580.6 (+7%) |
+
+- new64: 8 of 28 auto/inplace rows more than 3% slower than base64: shl 2000x13 inplace +9%, shr 2000x13 inplace +9%, shr 131072x13 inplace +7%, shl 131072x13 inplace +7%, shl 256x13 inplace +7%, shr 1x13 inplace +7%, shr 256x13 inplace +6%, shr 4x13 inplace +5%
+- v1: 6 of 28 auto/inplace rows more than 3% slower than base64: shl 2000x13 inplace +13%, shr 2000x13 inplace +12%, shr 131072x13 inplace +11%, shl 131072x13 inplace +11%, shl 256x13 inplace +10%, shr 256x13 inplace +8%
+- v2: 6 of 28 auto/inplace rows more than 3% slower than base64: shl 2000x13 inplace +9%, shr 2000x13 inplace +8%, shr 131072x13 inplace +7%, shl 131072x13 inplace +7%, shl 256x13 inplace +6%, shr 256x13 inplace +5%
+- v3: 6 of 28 auto/inplace rows more than 3% slower than base64: shl 2000x13 inplace +9%, shr 2000x13 inplace +8%, shr 131072x13 inplace +7%, shl 131072x13 inplace +7%, shl 256x13 inplace +6%, shr 256x13 inplace +5%
+
+M4 (appleclang):
+
+| op | shape | row | base64 | new64 | v1 | v2 | v3 |
+|---|---|---|---:|---:|---:|---:|---:|
+| shl | 1x13 | auto | 18.5 | 12.2 (-34%) | 12.5 (-32%) | 12.3 (-34%) | 12.1 (-35%) |
+| shl | 1x13 | inplace | 2.3 | 3.4 (+48%) | 2.5 (+8%) | 2.5 (+8%) | 2.5 (+8%) |
+| shl | 4x13 | auto | 19.9 | 12.7 (-36%) | 13.0 (-35%) | 13.2 (-33%) | 13.1 (-34%) |
+| shl | 4x13 | inplace | 3.6 | 5.2 (+46%) | 3.8 (+5%) | 3.7 (+4%) | 3.8 (+7%) |
+| shl | 16x13 | auto | 21.4 | 15.7 (-27%) | 15.5 (-28%) | 15.5 (-28%) | 16.3 (-24%) |
+| shl | 16x13 | inplace | 5.8 | 6.8 (+18%) | 5.3 (-9%) | 6.3 (+9%) | 6.5 (+12%) |
+| shl | 256x13 | auto | 85.6 | 41.3 (-52%) | 41.9 (-51%) | 56.3 (-34%) | 63.0 (-26%) |
+| shl | 256x13 | inplace | 36.2 | 44.9 (+24%) | 29.7 (-18%) | 40.1 (+11%) | 48.0 (+32%) |
+| shl | 2000x13 | auto | 639.0 | 264.0 (-59%) | 267.0 (-58%) | 395.3 (-38%) | 453.0 (-29%) |
+| shl | 2000x77 | auto | 806.2 | 342.5 (-58%) | 478.0 (-41%) | 394.8 (-51%) | 452.9 (-44%) |
+| shl | 2000x13 | inplace | 282.3 | 345.7 (+22%) | 196.1 (-31%) | 315.7 (+12%) | 375.2 (+33%) |
+| shl | 2000x77 | inplace | 424.7 | 228.6 (-46%) | 230.9 (-46%) | 315.6 (-26%) | 377.1 (-11%) |
+| shl | 131072x13 | auto | 48761.7 | 18032.3 (-63%) | 18150.9 (-63%) | 25035.9 (-49%) | 28931.4 (-41%) |
+| shl | 131072x13 | inplace | 19766.8 | 22825.0 (+15%) | 18524.2 (-6%) | 20843.9 (+5%) | 24609.1 (+24%) |
+| shr | 1x13 | auto | 9.2 | 6.7 (-27%) | 6.9 (-25%) | 6.8 (-26%) | 6.7 (-27%) |
+| shr | 1x13 | inplace | 2.4 | 3.1 (+30%) | 3.3 (+40%) | 2.8 (+17%) | 2.8 (+18%) |
+| shr | 4x13 | auto | 18.4 | 14.3 (-22%) | 15.1 (-18%) | 14.0 (-24%) | 14.3 (-22%) |
+| shr | 4x13 | inplace | 3.3 | 4.5 (+37%) | 3.7 (+13%) | 3.3 (+1%) | 3.5 (+8%) |
+| shr | 16x13 | auto | 21.5 | 18.1 (-16%) | 18.7 (-13%) | 18.1 (-16%) | 18.2 (-15%) |
+| shr | 16x13 | inplace | 5.1 | 6.1 (+19%) | 5.2 (+1%) | 5.5 (+8%) | 5.7 (+11%) |
+| shr | 256x13 | auto | 87.1 | 42.5 (-51%) | 43.1 (-50%) | 43.6 (-50%) | 48.3 (-45%) |
+| shr | 256x13 | inplace | 35.8 | 44.6 (+25%) | 30.4 (-15%) | 39.7 (+11%) | 47.3 (+32%) |
+| shr | 2000x13 | auto | 657.7 | 262.0 (-60%) | 258.7 (-61%) | 289.1 (-56%) | 340.8 (-48%) |
+| shr | 2000x77 | auto | 1015.8 | 251.8 (-75%) | 266.6 (-74%) | 299.9 (-70%) | 339.2 (-67%) |
+| shr | 2000x13 | inplace | 282.0 | 345.0 (+22%) | 197.8 (-30%) | 313.6 (+11%) | 374.1 (+33%) |
+| shr | 2000x77 | inplace | 420.1 | 195.8 (-53%) | 195.7 (-53%) | 314.8 (-25%) | 377.9 (-10%) |
+| shr | 131072x13 | auto | 50334.1 | 18098.3 (-64%) | 18178.1 (-64%) | 18015.5 (-64%) | 20633.5 (-59%) |
+| shr | 131072x13 | inplace | 19886.4 | 22564.1 (+13%) | 18551.6 (-7%) | 20782.3 (+5%) | 24608.1 (+24%) |
+
+- new64: 12 of 28 auto/inplace rows more than 3% slower than base64: shl 1x13 inplace +48%, shl 4x13 inplace +46%, shr 4x13 inplace +37%, shr 1x13 inplace +30%, shr 256x13 inplace +25%, shl 256x13 inplace +24%, shl 2000x13 inplace +22%, shr 2000x13 inplace +22%, shr 16x13 inplace +19%, shl 16x13 inplace +18%, shl 131072x13 inplace +15%, shr 131072x13 inplace +13%
+- v1: 4 of 28 auto/inplace rows more than 3% slower than base64: shr 1x13 inplace +40%, shr 4x13 inplace +13%, shl 1x13 inplace +8%, shl 4x13 inplace +5%
+- v2: 11 of 28 auto/inplace rows more than 3% slower than base64: shr 1x13 inplace +17%, shl 2000x13 inplace +12%, shr 2000x13 inplace +11%, shr 256x13 inplace +11%, shl 256x13 inplace +11%, shl 16x13 inplace +9%, shl 1x13 inplace +8%, shr 16x13 inplace +8%, shl 131072x13 inplace +5%, shr 131072x13 inplace +5%, shl 4x13 inplace +4%
+- v3: 12 of 28 auto/inplace rows more than 3% slower than base64: shl 2000x13 inplace +33%, shr 2000x13 inplace +33%, shl 256x13 inplace +32%, shr 256x13 inplace +32%, shl 131072x13 inplace +24%, shr 131072x13 inplace +24%, shr 1x13 inplace +18%, shl 16x13 inplace +12%, shr 16x13 inplace +11%, shl 1x13 inplace +8%, shr 4x13 inplace +8%, shl 4x13 inplace +7%
+
+Reading: no variant keeps every `auto`/`inplace` row within 3% of the baseline on both machines. On M4 (clang) V1 is the
+best: it keeps the `auto` gains (-51..-64% at >= 256 limbs), makes every medium and large in-place row faster than the
+baseline (-6..-31%), and leaves four small-shape in-place rows more than 3% slower, all by under 1 ns; the register-carried
+loops (V2, V3) are slower than the original two-load form under clang. On x64 (GCC) V2/V3 improve the small in-place rows
+by 8-17% against the baseline and equal `new64` at >= 256 limbs (+6-9%), at the price of 4-7 points on shr `auto`; the
+baseline in-place path is still 6-9% faster there than any variant.
 
 ## 4. Plan targets
 
-Targets from the plan, with the achieved values (median of the four runs). Kernel-row noise at <= 16 limbs is 1-2 ns
+Targets from the plan, with the achieved values (median of four runs, d689f75). Kernel-row noise at <= 16 limbs is 1-2 ns
 (section 8), so a miss of less than ~1.5 ns on an `inplace - kernel` target is within noise.
 
 | target | x64 | M4 |
 |---|---|---|
-| `inplace - kernel` <= 3 ns for add/sub/shl/shr at 2-16 limbs | **partly met**: add 3.7/2.6/2.5/4.3 (2/4/8/16 limbs, before 3.5/2.5/2.8/4.2), sub 3.0/2.8/2.6/3.2, shl 1.1/1.7, shr 1.1/-0.2. The in-place path was already near the kernel at these sizes; essentially unchanged | **met**: add 2.5/1.6/0.6/-2.0, sub 2.1/1.7/0.6/-2.5, shifts 0.0..1.2 |
-| `auto - floor` <= 3 ns at <= 16 limbs, add/sub/shl/shr | **not met except shl**: add 5.6/4.3/4.2/5.3 (before 7.6/7.2/6.9/9.8), sub 5.8/5.8/5.6/5.7, shl 2.3/1.9 (met), shr 5.0/4.4 | **mostly not met**: add 5.6/4.1/3.1/3.2, sub 5.3/4.3/3.8/2.4, shl -0.1/3.9, shr 2.0/5.4 |
-| `auto - floor` <= 5 ns at <= 16 limbs, mul/sqr | **met** for mul 2.2-4.1 (before 12.6-17.0); sqr 5.4 (4x4, marginal) and 3.7 (16x16) | **met** for mul 2.8-4.8 (before 9.2-16.3); sqr 5.2 (4x4, marginal) and 2.9 |
-| x64 add 1000 `auto`: 840 -> <= 650 ns | **not met**: add 1024x1024 841 -> 800 ns (2000x2000 1721 -> 1535) | n/a (M4: 552 -> 450 ns) |
-| divrem 8x4 `auto - kernel`: 66 -> <= 2 floors + 5 ns (i.e. `auto - floor` <= 5) | **not met**: `auto - kernel` 67.7 -> 43.8, `auto - floor` 53.0 -> 27.1 | **not met**: `auto - kernel` 50.1 -> 29.0, `auto - floor` 35.5 -> 14.9 |
-| medium and large rows: no regression > 3% | **not met**: `inplace` add/sub +23..+35% at >= 64 limbs, shifts +13%, decimal `fromchars` +8..+11% at 64-256 limbs-worth of digits (section 3); `auto` rows and the large spot checks are within 3% | **met for medium and large rows**: none regresses; in the small band add 1x1 and 2x2 `auto` are 0.4-0.9 ns slower (+4%, +13%) |
+| `inplace - kernel` <= 3 ns for add/sub/shl/shr at 2-16 limbs | **mostly met**: add 3.9/2.7/2.8/3.6 (2/4/8/16 limbs, before 3.5/2.5/2.7/4.3), sub 2.7/2.8/3.0/2.6, shl 1.8/1.7, shr 1.5/0.3 (add 2x2 and 16x16 are within kernel noise of the line) | **met**: add 2.7/1.9/0.8/-1.8, sub 2.4/2.1/0.9/-2.3, shl 1.7/2.8, shr 1.0/2.0 |
+| `auto - floor` <= 3 ns at <= 16 limbs, add/sub/shl/shr | **not met except shifts**: add 5.7/4.5/4.4/5.6 (before 7.6/7.1/6.8/9.8; 1x1 -4.4), sub 5.8/5.9/5.9/5.7, shl 2.3/1.9 (met), shr 4.1/2.9 | **mostly not met**: add 6.3/4.2/3.6/3.7, sub 5.4/5.2/4.3/3.0, shl 0.0/3.3, shr 1.8/4.8 |
+| `auto - floor` <= 5 ns at <= 16 limbs, mul/sqr | **met**: mul 1.8-4.2 (before 13.1-17.4); sqr 5.5 (4x4, marginal) and 4.2 | **met**: mul 2.9-4.8 (before 9.2-15.7); sqr 5.3 (4x4, marginal) and 4.0 |
+| x64 add 1000 `auto`: 840 -> <= 650 ns | **met**: add 1024x1024 842 -> 599 ns (2000x2000 1722 -> 1153; `auto - floor` 4-5 ns at 64-2000 limbs) | n/a (M4: 565 -> 450 ns) |
+| divrem 8x4 `auto - kernel`: 66 -> <= 2 floors + 5 ns (i.e. `auto - floor` <= 5) | **not met**: `auto - kernel` 67.0 -> 43.8, `auto - floor` 52.9 -> 26.3 | **not met**: `auto - kernel` 49.8 -> 28.8, `auto - floor` 34.8 -> 14.6 |
+| medium and large rows: no regression > 3% | **not met only for in-place shifts**: 256x13 +6-7%, 2000x13 +9%; every other medium and large `auto` and `inplace` row, and every large spot check, is within 3% | **not met only for in-place shifts**: 256x13 +23%, 2000x13 +22%; the other medium and large rows and spot checks are within 3% (largest M4 mul 2000x2000 +2.5%) |
 
 The allocation targets in `alloc_count.test.cpp` all hold (section 5).
 
@@ -342,8 +496,8 @@ and products have the full limb count; `a / d` is n limbs over n/2):
 
 ## 6. Header basecase shortcut (`mul_header_basecase_enabled`)
 
-`new64` (shortcut on) against a build of the same tree with `mul_header_basecase_enabled = false` (edited in a scratch copy,
-not committed), interleaved, three runs each, `auto` row:
+Measured on the 9145b4e tree, before the follow-ups: `new64` (shortcut on) against a build of the same tree with
+`mul_header_basecase_enabled = false` (edited in a scratch copy, not committed), interleaved, three runs each, `auto` row:
 
 x64:
 
@@ -375,14 +529,17 @@ M4:
 
 Verdict: on x64 the shortcut is worth 3.8-5.5 ns on mul 2x2..12x12 and 4-5 ns on sqr 4 and 16 (the 16x16 difference of 20 ns
 is noisy: one of the three shortcut-off runs was 99.8 ns and two were 115 ns, the rest of the data show ~4 ns), clearly above
-the 1 ns threshold. On M4 it saves 0.1-1.1 ns on mul 3..16 (in the noise of the runs; 2x2 is 0.5 ns slower with it) and 1.7-1.9 ns on sqr 4 and 16, so
-it is at best marginal there. The x64 `fromchars` regression in section 3 appears only with the shortcut compiled in. The
-trade-off is therefore: -4..5 ns on small x64 mul/sqr (13-20% of those rows) against +8-11% on decimal `fromchars` at
-64-256 limbs-worth of digits on x64 with GCC 14.
+the 1 ns threshold. On M4 it is worth -1.1 to +0.5 ns on mul 2..16 (in the noise of the runs; 2x2 is 0.5 ns slower with it) and 1.7-1.9 ns on sqr 4 and 16, so
+it is at best marginal there. The x64 `fromchars` regression seen at that commit appeared only with the shortcut compiled in, but its cause was a spilled
+product in `mul_add_single_limb_in_place` (section 3.7), which is fixed; with the fix the shortcut has no known cost, so
+the verdict is: keep it on x64 (-4..5 ns, 13-20% of the small mul/sqr rows) and it is harmless and marginally useful on M4.
+The A/B was not repeated on d689f75.
 
 ## 7. Inline-capacity study
 
-The same front-end code with the inline capacity of the integer type set to N = 64 (`big_int`), 128, 256 and 512 bits.
+Measured on the 9145b4e tree (before the add/sub, shift and single-limb follow-ups and the mul-add fix); the study was not
+repeated on d689f75, so small add/sub/shift rows are a few ns better there at every N. The same front-end code with the
+inline capacity of the integer type set to N = 64 (`big_int`), 128, 256 and 512 bits.
 `sizeof`: 16, 24, 40 and 72 bytes. `auto` and `inplace` are medians of two runs (seeds 1 and 2, so divrem is the mean of
 seeds); the vecsort row sorts and sums a `std::vector` of 100000 one-limb values of mixed sign (copy-assign + `std::sort` +
 sum, ns per element; the builtin row is `std::vector<std::int64_t>`; the copy row is the copy-assign alone).
@@ -525,31 +682,31 @@ Neutral summary of the trade-off (no default is recommended here):
   the same seeds.
 - The shift `kernel` rows include the copy-in of the source, so `auto - kernel` and `auto - floor` for shifts at
   >= 256 limbs are negative once `auto` is a single pass.
-- The x64 numbers are GCC 14 with `-march=native`; the decimal `fromchars` regression (section 3) was seen only there.
+- The x64 numbers are GCC 14 with `-march=native`; the decimal `fromchars` regression (section 3.7) was seen only there.
+  The loop-shape choices for add/sub and the shift variants were measured with GCC 14 on x64 and appleclang on M4 only;
+  clang on x64 and GCC on AArch64 were not measured.
 - The 2-run study and the 3-run shortcut comparison are small samples: treat differences below ~1 ns as noise.
 
 ## 9. Correctness matrix
 
-- M4 (appleclang): `appleclang-debug` workflow (MaxSan) 1264/1264, `appleclang-release` 1296/1296,
-  `appleclang-release-namespace` 1282/1282 (ctest counts include skipped benches).
-- x64 box: `llvm-debug` (MaxSan) 1341/1341 and `llvm-release` (clang-23, `-march=native`) 1341/1341. GCC (g++-14, g++-13,
-  IFMA=OFF g++-14, and g++-14 debug without NDEBUG): every target builds except the two test targets
-  `front_end_add_sub` and `front_end_shift`, which fail `-Werror=padded` at
-  `tests/beman/big_int/front_end_reference.hpp:44` (`std::vector<limb> mag;` in struct `ref`). With
-  `-Wno-error=padded` both pass on gcc-14 release and debug (15 and 12 tests); all other GCC tests pass (1296/1298 with the
-  two targets not built).
-- Docker linux/arm64 (GCC 16, `ctest -E float_construction`): `gcc-release` and `gcc-debug` 1225/1227 passed, the same two
-  `front_end_*` targets failing to build on `-Werror=padded`.
-- 32-bit limbs (`llvm-release` with `-DBEMAN_BIG_INT_FORCED_LIMB_WIDTH=32`, x64): `inline_tail`, `span_primitives`,
-  `front_end_shift`, `dispatch_contract` and `alloc_count` compile and pass. `front_end_add_sub`
-  (`*.IntegerOperands`, 3 tests) and `muldiv_frontend` (`CompoundWithIntegers`, aborts on a division by zero reference)
-  fail at 32-bit limbs because the tests build the reference operand from a 64-bit `v` truncated to one 32-bit limb
-  (`front_end_add_sub.test.cpp:93`, `muldiv_frontend.test.cpp:395`); `Allocation.MoveAssignStealsHeapSrcEvenWhenDstLarger`
-  replaces the baseline's equally failing `MoveAssignReusesDstStorageWhenLarger` (it assumes 64-bit limbs). Every other
-  32-bit failure (bitwise, increment_decrement, karatsuba, pmr, wide_ops fail to compile; CompoundSubtraction, BitShift,
-  Addition and IntegerAssignment cases) is in the cf1cf54 tree as well.
-- GCC with 32-bit limbs: `basic_big_int.hpp:643` (`shift_max` narrowing; line 636 at cf1cf54), `base_conversion.hpp:144`
-  (`-Wpadded`) and `base_tables.hpp:66` (`-Wconversion`) are errors at cf1cf54 too.
+All at d689f75 (ctest counts include skipped benches):
+
+- M4 (appleclang): `appleclang-debug` workflow (MaxSan) 1304/1304, `appleclang-release` 1304/1304,
+  `appleclang-release-namespace` 1290/1290.
+- Docker linux/arm64 (GCC 16, `ctest -E float_construction`): `gcc-release` and `gcc-debug` 1292/1292 each.
+- x64 box: `llvm-debug` (MaxSan) and `llvm-release` (clang-23, `-march=native`) 1381/1381 each; `gcc-release` with g++-14
+  and with g++-13 (`-march=native`), the IFMA=OFF g++-14 build and `gcc-debug` (g++-14, no NDEBUG, so the debug poison fill
+  and the debug assertions of the new primitives are compiled) 1363/1363 each, with no build failures and no
+  `-Wno-error` overrides.
+- 32-bit limbs (`llvm-release`, `-DBEMAN_BIG_INT_FORCED_LIMB_WIDTH=32`, x64): 36 of 1088 tests fail, all of them failures
+  that the cf1cf54 tree has as well (bitwise, increment_decrement, karatsuba, pmr and wide_ops do not compile; some
+  Addition, Subtraction, CompoundSubtraction, BitShift and IntegerAssignment cases assume 64-bit limbs; the baseline has 40
+  failures). `inline_tail`, `span_primitives`, `front_end_add_sub`, `front_end_shift`, `muldiv_frontend`,
+  `dispatch_contract`, `alloc_count` (85 tests) and `allocation` (70 tests) all pass at 32-bit limbs.
+- At 9145b4e (the first measurement) the GCC builds failed on `front_end_reference.hpp:44` (`-Werror=padded`) and the
+  new `front_end_add_sub` and `muldiv_frontend` tests failed at 32-bit limbs through 64-bit assumptions; both were fixed
+  in the follow-ups.
+
 
 ## 10. Reproducing
 
@@ -566,7 +723,11 @@ tools/gap_sweep.sh <bin> out.csv --seed S --ops add,sub,shl,shr,mul,sqr,divrem,f
 #   mul 2000x2000 and 16384x16384; divrem 4096x2048; tochars/fromchars 10000x10
 # study: tools/gap_sweep.sh <new{64,128,256,512}> out.csv --seed S --ops add,sub,shl,shr,mul,sqr,divrem --bands small
 #        tools/gap_sweep.sh <bin> out.csv --ops vecsort --bands medium
-# tables: python3 -I tools/item1_tables.py item1 x64   (or: mac) [small medium spots shortcut study]
+# tables: python3 -I tools/item1_tables.py item1 x64r3   (x64, mac, macr3 for the other sets) [small medium spots shortcut study]
+# regression check (rows more than 3% slower than base64): python3 -I tools/item1_regress.py item1 x64r3 3 [rows]
+# in-place shift A/B tables: python3 -I tools/item1_vshift.py item1 x64   (or: mac)
+# re-measurement driver (base64 vs new64 vs previous build): the same loop as tools/item1_bench.sh over
+#   --ops add,sub,shl,shr,mul,sqr,divrem,fromchars,tochars --bands small,medium
 # allocation counts: cmake --build <dir> --target beman.big_int.tests.alloc_count; run the binary and read the
 #   "[alloc_count]" lines
 ```
