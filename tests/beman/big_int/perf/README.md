@@ -15,3 +15,6 @@ The Google Benchmark suite is part of the CMake build (enable it with
 `-DBEMAN_BIG_INT_BUILD_BENCHMARKS=ON`, or use a `*-release-benchmarks` preset);
 the `*.perf.cpp` and `*.limbs.cpp` programs are standalone and depend on
 Boost.Multiprecision and GMP, so they are compiled by hand.
+
+The GMP gap analysis (where `big_int` is slower or faster than GMP, per operation and size band, with flame graphs
+and a ranked optimization list) is in [`gmp_gap_analysis.md`](gmp_gap_analysis.md).

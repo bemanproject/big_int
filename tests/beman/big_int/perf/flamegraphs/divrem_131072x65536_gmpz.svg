@@ -1,0 +1,2394 @@
+<?xml version="1.0" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN" "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<svg version="1.1" width="1200" height="550" onload="init(evt)" viewBox="0 0 1200 550" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<!-- Flame graph stack visualization. See https://github.com/brendangregg/FlameGraph for latest version, and http://www.brendangregg.com/flamegraphs.html for examples. -->
+<!-- NOTES:  -->
+<defs>
+	<linearGradient id="background" y1="0" y2="1" x1="0" x2="0" >
+		<stop stop-color="#eeeeee" offset="5%" />
+		<stop stop-color="#eeeeb0" offset="95%" />
+	</linearGradient>
+</defs>
+<style type="text/css">
+	text { font-family:Verdana; font-size:12px; fill:rgb(0,0,0); }
+	#search, #ignorecase { opacity:0.1; cursor:pointer; }
+	#search:hover, #search.show, #ignorecase:hover, #ignorecase.show { opacity:1; }
+	#subtitle { text-anchor:middle; font-color:rgb(160,160,160); }
+	#title { text-anchor:middle; font-size:17px}
+	#unzoom { cursor:pointer; }
+	#frames > *:hover { stroke:black; stroke-width:0.5; cursor:pointer; }
+	.hide { display:none; }
+	.parent { opacity:0.5; }
+</style>
+<script type="text/ecmascript">
+<![CDATA[
+	"use strict";
+	var details, searchbtn, unzoombtn, matchedtxt, svg, searching, currentSearchTerm, ignorecase, ignorecaseBtn;
+	function init(evt) {
+		details = document.getElementById("details").firstChild;
+		searchbtn = document.getElementById("search");
+		ignorecaseBtn = document.getElementById("ignorecase");
+		unzoombtn = document.getElementById("unzoom");
+		matchedtxt = document.getElementById("matched");
+		svg = document.getElementsByTagName("svg")[0];
+		searching = 0;
+		currentSearchTerm = null;
+
+		// use GET parameters to restore a flamegraphs state.
+		var params = get_params();
+		if (params.x && params.y)
+			zoom(find_group(document.querySelector('[x="' + params.x + '"][y="' + params.y + '"]')));
+                if (params.s) search(params.s);
+	}
+
+	// event listeners
+	window.addEventListener("click", function(e) {
+		var target = find_group(e.target);
+		if (target) {
+			if (target.nodeName == "a") {
+				if (e.ctrlKey === false) return;
+				e.preventDefault();
+			}
+			if (target.classList.contains("parent")) unzoom(true);
+			zoom(target);
+			if (!document.querySelector('.parent')) {
+				// we have basically done a clearzoom so clear the url
+				var params = get_params();
+				if (params.x) delete params.x;
+				if (params.y) delete params.y;
+				history.replaceState(null, null, parse_params(params));
+				unzoombtn.classList.add("hide");
+				return;
+			}
+
+			// set parameters for zoom state
+			var el = target.querySelector("rect");
+			if (el && el.attributes && el.attributes.y && el.attributes._orig_x) {
+				var params = get_params()
+				params.x = el.attributes._orig_x.value;
+				params.y = el.attributes.y.value;
+				history.replaceState(null, null, parse_params(params));
+			}
+		}
+		else if (e.target.id == "unzoom") clearzoom();
+		else if (e.target.id == "search") search_prompt();
+		else if (e.target.id == "ignorecase") toggle_ignorecase();
+	}, false)
+
+	// mouse-over for info
+	// show
+	window.addEventListener("mouseover", function(e) {
+		var target = find_group(e.target);
+		if (target) details.nodeValue = "Function: " + g_to_text(target);
+	}, false)
+
+	// clear
+	window.addEventListener("mouseout", function(e) {
+		var target = find_group(e.target);
+		if (target) details.nodeValue = ' ';
+	}, false)
+
+	// ctrl-F for search
+	// ctrl-I to toggle case-sensitive search
+	window.addEventListener("keydown",function (e) {
+		if (e.keyCode === 114 || (e.ctrlKey && e.keyCode === 70)) {
+			e.preventDefault();
+			search_prompt();
+		}
+		else if (e.ctrlKey && e.keyCode === 73) {
+			e.preventDefault();
+			toggle_ignorecase();
+		}
+	}, false)
+
+	// functions
+	function get_params() {
+		var params = {};
+		var paramsarr = window.location.search.substr(1).split('&');
+		for (var i = 0; i < paramsarr.length; ++i) {
+			var tmp = paramsarr[i].split("=");
+			if (!tmp[0] || !tmp[1]) continue;
+			params[tmp[0]]  = decodeURIComponent(tmp[1]);
+		}
+		return params;
+	}
+	function parse_params(params) {
+		var uri = "?";
+		for (var key in params) {
+			uri += key + '=' + encodeURIComponent(params[key]) + '&';
+		}
+		if (uri.slice(-1) == "&")
+			uri = uri.substring(0, uri.length - 1);
+		if (uri == '?')
+			uri = window.location.href.split('?')[0];
+		return uri;
+	}
+	function find_child(node, selector) {
+		var children = node.querySelectorAll(selector);
+		if (children.length) return children[0];
+	}
+	function find_group(node) {
+		var parent = node.parentElement;
+		if (!parent) return;
+		if (parent.id == "frames") return node;
+		return find_group(parent);
+	}
+	function orig_save(e, attr, val) {
+		if (e.attributes["_orig_" + attr] != undefined) return;
+		if (e.attributes[attr] == undefined) return;
+		if (val == undefined) val = e.attributes[attr].value;
+		e.setAttribute("_orig_" + attr, val);
+	}
+	function orig_load(e, attr) {
+		if (e.attributes["_orig_"+attr] == undefined) return;
+		e.attributes[attr].value = e.attributes["_orig_" + attr].value;
+		e.removeAttribute("_orig_"+attr);
+	}
+	function g_to_text(e) {
+		var text = find_child(e, "title").firstChild.nodeValue;
+		return (text)
+	}
+	function g_to_func(e) {
+		var func = g_to_text(e);
+		// if there's any manipulation we want to do to the function
+		// name before it's searched, do it here before returning.
+		return (func);
+	}
+	function update_text(e) {
+		var r = find_child(e, "rect");
+		var t = find_child(e, "text");
+		var w = parseFloat(r.attributes.width.value) -3;
+		var txt = find_child(e, "title").textContent.replace(/\([^(]*\)$/,"");
+		t.attributes.x.value = parseFloat(r.attributes.x.value) + 3;
+
+		// Smaller than this size won't fit anything
+		if (w < 2 * 12 * 0.59) {
+			t.textContent = "";
+			return;
+		}
+
+		t.textContent = txt;
+		var sl = t.getSubStringLength(0, txt.length);
+		// check if only whitespace or if we can fit the entire string into width w
+		if (/^ *$/.test(txt) || sl < w)
+			return;
+
+		// this isn't perfect, but gives a good starting point
+		// and avoids calling getSubStringLength too often
+		var start = Math.floor((w/sl) * txt.length);
+		for (var x = start; x > 0; x = x-2) {
+			if (t.getSubStringLength(0, x + 2) <= w) {
+				t.textContent = txt.substring(0, x) + "..";
+				return;
+			}
+		}
+		t.textContent = "";
+	}
+
+	// zoom
+	function zoom_reset(e) {
+		if (e.attributes != undefined) {
+			orig_load(e, "x");
+			orig_load(e, "width");
+		}
+		if (e.childNodes == undefined) return;
+		for (var i = 0, c = e.childNodes; i < c.length; i++) {
+			zoom_reset(c[i]);
+		}
+	}
+	function zoom_child(e, x, ratio) {
+		if (e.attributes != undefined) {
+			if (e.attributes.x != undefined) {
+				orig_save(e, "x");
+				e.attributes.x.value = (parseFloat(e.attributes.x.value) - x - 10) * ratio + 10;
+				if (e.tagName == "text")
+					e.attributes.x.value = find_child(e.parentNode, "rect[x]").attributes.x.value + 3;
+			}
+			if (e.attributes.width != undefined) {
+				orig_save(e, "width");
+				e.attributes.width.value = parseFloat(e.attributes.width.value) * ratio;
+			}
+		}
+
+		if (e.childNodes == undefined) return;
+		for (var i = 0, c = e.childNodes; i < c.length; i++) {
+			zoom_child(c[i], x - 10, ratio);
+		}
+	}
+	function zoom_parent(e) {
+		if (e.attributes) {
+			if (e.attributes.x != undefined) {
+				orig_save(e, "x");
+				e.attributes.x.value = 10;
+			}
+			if (e.attributes.width != undefined) {
+				orig_save(e, "width");
+				e.attributes.width.value = parseInt(svg.width.baseVal.value) - (10 * 2);
+			}
+		}
+		if (e.childNodes == undefined) return;
+		for (var i = 0, c = e.childNodes; i < c.length; i++) {
+			zoom_parent(c[i]);
+		}
+	}
+	function zoom(node) {
+		var attr = find_child(node, "rect").attributes;
+		var width = parseFloat(attr.width.value);
+		var xmin = parseFloat(attr.x.value);
+		var xmax = parseFloat(xmin + width);
+		var ymin = parseFloat(attr.y.value);
+		var ratio = (svg.width.baseVal.value - 2 * 10) / width;
+
+		// XXX: Workaround for JavaScript float issues (fix me)
+		var fudge = 0.0001;
+
+		unzoombtn.classList.remove("hide");
+
+		var el = document.getElementById("frames").children;
+		for (var i = 0; i < el.length; i++) {
+			var e = el[i];
+			var a = find_child(e, "rect").attributes;
+			var ex = parseFloat(a.x.value);
+			var ew = parseFloat(a.width.value);
+			var upstack;
+			// Is it an ancestor
+			if (0 == 0) {
+				upstack = parseFloat(a.y.value) > ymin;
+			} else {
+				upstack = parseFloat(a.y.value) < ymin;
+			}
+			if (upstack) {
+				// Direct ancestor
+				if (ex <= xmin && (ex+ew+fudge) >= xmax) {
+					e.classList.add("parent");
+					zoom_parent(e);
+					update_text(e);
+				}
+				// not in current path
+				else
+					e.classList.add("hide");
+			}
+			// Children maybe
+			else {
+				// no common path
+				if (ex < xmin || ex + fudge >= xmax) {
+					e.classList.add("hide");
+				}
+				else {
+					zoom_child(e, xmin, ratio);
+					update_text(e);
+				}
+			}
+		}
+		search();
+	}
+	function unzoom(dont_update_text) {
+		unzoombtn.classList.add("hide");
+		var el = document.getElementById("frames").children;
+		for(var i = 0; i < el.length; i++) {
+			el[i].classList.remove("parent");
+			el[i].classList.remove("hide");
+			zoom_reset(el[i]);
+			if(!dont_update_text) update_text(el[i]);
+		}
+		search();
+	}
+	function clearzoom() {
+		unzoom();
+
+		// remove zoom state
+		var params = get_params();
+		if (params.x) delete params.x;
+		if (params.y) delete params.y;
+		history.replaceState(null, null, parse_params(params));
+	}
+
+	// search
+	function toggle_ignorecase() {
+		ignorecase = !ignorecase;
+		if (ignorecase) {
+			ignorecaseBtn.classList.add("show");
+		} else {
+			ignorecaseBtn.classList.remove("show");
+		}
+		reset_search();
+		search();
+	}
+	function reset_search() {
+		var el = document.querySelectorAll("#frames rect");
+		for (var i = 0; i < el.length; i++) {
+			orig_load(el[i], "fill")
+		}
+		var params = get_params();
+		delete params.s;
+		history.replaceState(null, null, parse_params(params));
+	}
+	function search_prompt() {
+		if (!searching) {
+			var term = prompt("Enter a search term (regexp " +
+			    "allowed, eg: ^ext4_)"
+			    + (ignorecase ? ", ignoring case" : "")
+			    + "\nPress Ctrl-i to toggle case sensitivity", "");
+			if (term != null) search(term);
+		} else {
+			reset_search();
+			searching = 0;
+			currentSearchTerm = null;
+			searchbtn.classList.remove("show");
+			searchbtn.firstChild.nodeValue = "Search"
+			matchedtxt.classList.add("hide");
+			matchedtxt.firstChild.nodeValue = ""
+		}
+	}
+	function search(term) {
+		if (term) currentSearchTerm = term;
+		if (currentSearchTerm === null) return;
+
+		var re = new RegExp(currentSearchTerm, ignorecase ? 'i' : '');
+		var el = document.getElementById("frames").children;
+		var matches = new Object();
+		var maxwidth = 0;
+		for (var i = 0; i < el.length; i++) {
+			var e = el[i];
+			var func = g_to_func(e);
+			var rect = find_child(e, "rect");
+			if (func == null || rect == null)
+				continue;
+
+			// Save max width. Only works as we have a root frame
+			var w = parseFloat(rect.attributes.width.value);
+			if (w > maxwidth)
+				maxwidth = w;
+
+			if (func.match(re)) {
+				// highlight
+				var x = parseFloat(rect.attributes.x.value);
+				orig_save(rect, "fill");
+				rect.attributes.fill.value = "rgb(230,0,230)";
+
+				// remember matches
+				if (matches[x] == undefined) {
+					matches[x] = w;
+				} else {
+					if (w > matches[x]) {
+						// overwrite with parent
+						matches[x] = w;
+					}
+				}
+				searching = 1;
+			}
+		}
+		if (!searching)
+			return;
+		var params = get_params();
+		params.s = currentSearchTerm;
+		history.replaceState(null, null, parse_params(params));
+
+		searchbtn.classList.add("show");
+		searchbtn.firstChild.nodeValue = "Reset Search";
+
+		// calculate percent matched, excluding vertical overlap
+		var count = 0;
+		var lastx = -1;
+		var lastw = 0;
+		var keys = Array();
+		for (k in matches) {
+			if (matches.hasOwnProperty(k))
+				keys.push(k);
+		}
+		// sort the matched frames by their x location
+		// ascending, then width descending
+		keys.sort(function(a, b){
+			return a - b;
+		});
+		// Step through frames saving only the biggest bottom-up frames
+		// thanks to the sort order. This relies on the tree property
+		// where children are always smaller than their parents.
+		var fudge = 0.0001;	// JavaScript floating point
+		for (var k in keys) {
+			var x = parseFloat(keys[k]);
+			var w = matches[keys[k]];
+			if (x >= lastx + lastw - fudge) {
+				count += w;
+				lastx = x;
+				lastw = w;
+			}
+		}
+		// display matched percent
+		matchedtxt.classList.remove("hide");
+		var pct = 100 * count / maxwidth;
+		if (pct != 100) pct = pct.toFixed(1)
+		matchedtxt.firstChild.nodeValue = "Matched: " + pct + "%";
+	}
+]]>
+</script>
+<rect x="0.0" y="0" width="1200.0" height="550.0" fill="url(#background)"  />
+<text id="title" x="600.00" y="24" >divrem 131072x65536 GMP mpz (x64 gcc14)</text>
+<text id="details" x="10.00" y="533" > </text>
+<text id="unzoom" x="10.00" y="24" class="hide">Reset Zoom</text>
+<text id="search" x="1090.00" y="24" >Search</text>
+<text id="ignorecase" x="1174.00" y="24" >ic</text>
+<text id="matched" x="1090.00" y="533" > </text>
+<g id="frames">
+<g >
+<title>_mpn_modbnp1_kn (138,748,913 samples, 0.32%)</title><rect x="982.7" y="181" width="3.8" height="15.0" fill="rgb(231,122,29)" rx="2" ry="2" />
+<text  x="985.66" y="191.5" ></text>
+</g>
+<g >
+<title>mpn_fft_fft (112,674,442 samples, 0.26%)</title><rect x="316.2" y="165" width="3.1" height="15.0" fill="rgb(213,39,9)" rx="2" ry="2" />
+<text  x="319.24" y="175.5" ></text>
+</g>
+<g >
+<title>__gmpn_toom22_mul (277,155,239 samples, 0.64%)</title><rect x="725.9" y="85" width="7.6" height="15.0" fill="rgb(214,41,9)" rx="2" ry="2" />
+<text  x="728.89" y="95.5" ></text>
+</g>
+<g >
+<title>mpn_fft_mul_modF_K (5,576,243,769 samples, 12.91%)</title><rect x="839.3" y="213" width="152.4" height="15.0" fill="rgb(241,169,40)" rx="2" ry="2" />
+<text  x="842.30" y="223.5" >mpn_fft_mul_modF_K</text>
+</g>
+<g >
+<title>mpn_fft_fftinv (83,604,005 samples, 0.19%)</title><rect x="1090.3" y="149" width="2.3" height="15.0" fill="rgb(212,34,8)" rx="2" ry="2" />
+<text  x="1093.27" y="159.5" ></text>
+</g>
+<g >
+<title>mpn_fft_fftinv (696,048,435 samples, 1.61%)</title><rect x="817.2" y="197" width="19.0" height="15.0" fill="rgb(212,34,8)" rx="2" ry="2" />
+<text  x="820.20" y="207.5" ></text>
+</g>
+<g >
+<title>mpn_fft_fft (256,395,944 samples, 0.59%)</title><rect x="1003.7" y="117" width="7.0" height="15.0" fill="rgb(213,39,9)" rx="2" ry="2" />
+<text  x="1006.69" y="127.5" ></text>
+</g>
+<g >
+<title>__gmpn_mul_n (287,588,966 samples, 0.67%)</title><rect x="323.0" y="165" width="7.8" height="15.0" fill="rgb(237,147,35)" rx="2" ry="2" />
+<text  x="325.97" y="175.5" ></text>
+</g>
+<g >
+<title>__gmpn_toom33_mul (1,212,032,208 samples, 2.81%)</title><rect x="1039.7" y="149" width="33.1" height="15.0" fill="rgb(251,212,50)" rx="2" ry="2" />
+<text  x="1042.71" y="159.5" >__..</text>
+</g>
+<g >
+<title>__gmpn_toom22_mul (737,607,864 samples, 1.71%)</title><rect x="626.1" y="117" width="20.1" height="15.0" fill="rgb(214,41,9)" rx="2" ry="2" />
+<text  x="629.06" y="127.5" ></text>
+</g>
+<g >
+<title>divide_dc_2n1n (76,401,412 samples, 0.18%)</title><rect x="10.8" y="293" width="2.1" height="15.0" fill="rgb(226,99,23)" rx="2" ry="2" />
+<text  x="13.82" y="303.5" ></text>
+</g>
+<g >
+<title>mpn_mul_fft_internal.isra.0 (86,337,865 samples, 0.20%)</title><rect x="340.3" y="165" width="2.4" height="15.0" fill="rgb(208,18,4)" rx="2" ry="2" />
+<text  x="343.34" y="175.5" ></text>
+</g>
+<g >
+<title>__gmpn_toom22_mul (133,463,227 samples, 0.31%)</title><rect x="1159.6" y="85" width="3.7" height="15.0" fill="rgb(214,41,9)" rx="2" ry="2" />
+<text  x="1162.62" y="95.5" ></text>
+</g>
+<g >
+<title>__gmpn_mul_basecase (237,907,170 samples, 0.55%)</title><rect x="324.0" y="117" width="6.5" height="15.0" fill="rgb(231,120,28)" rx="2" ry="2" />
+<text  x="326.97" y="127.5" ></text>
+</g>
+<g >
+<title>__gmpn_toom22_mul (112,612,511 samples, 0.26%)</title><rect x="734.8" y="85" width="3.1" height="15.0" fill="rgb(214,41,9)" rx="2" ry="2" />
+<text  x="737.82" y="95.5" ></text>
+</g>
+<g >
+<title>mpn_fft_fftinv (295,748,617 samples, 0.68%)</title><rect x="220.0" y="197" width="8.1" height="15.0" fill="rgb(212,34,8)" rx="2" ry="2" />
+<text  x="222.98" y="207.5" ></text>
+</g>
+<g >
+<title>__gmpn_toom22_mul (123,119,514 samples, 0.29%)</title><rect x="336.1" y="133" width="3.4" height="15.0" fill="rgb(214,41,9)" rx="2" ry="2" />
+<text  x="339.12" y="143.5" ></text>
+</g>
+<g >
+<title>multiply_runtime_impl (82,935,430 samples, 0.19%)</title><rect x="28.9" y="229" width="2.3" height="15.0" fill="rgb(207,11,2)" rx="2" ry="2" />
+<text  x="31.93" y="239.5" ></text>
+</g>
+<g >
+<title>__gmpn_toom33_mul (4,950,616,981 samples, 11.46%)</title><rect x="840.9" y="165" width="135.3" height="15.0" fill="rgb(251,212,50)" rx="2" ry="2" />
+<text  x="843.87" y="175.5" >__gmpn_toom33_mul</text>
+</g>
+<g >
+<title>mpn_fft_mul_modF_K (188,617,810 samples, 0.44%)</title><rect x="148.8" y="133" width="5.1" height="15.0" fill="rgb(241,169,40)" rx="2" ry="2" />
+<text  x="151.79" y="143.5" ></text>
+</g>
+<g >
+<title>mpn_mul_fft_internal.isra.0 (1,342,498,740 samples, 3.11%)</title><rect x="276.3" y="213" width="36.6" height="15.0" fill="rgb(208,18,4)" rx="2" ry="2" />
+<text  x="279.26" y="223.5" >mpn..</text>
+</g>
+<g >
+<title>__gmpn_mulmod_bnm1 (1,342,802,832 samples, 3.11%)</title><rect x="312.9" y="229" width="36.7" height="15.0" fill="rgb(216,51,12)" rx="2" ry="2" />
+<text  x="315.95" y="239.5" >__g..</text>
+</g>
+<g >
+<title>__gmpn_mul_n (1,721,878,931 samples, 3.99%)</title><rect x="1025.8" y="165" width="47.0" height="15.0" fill="rgb(237,147,35)" rx="2" ry="2" />
+<text  x="1028.78" y="175.5" >__gm..</text>
+</g>
+<g >
+<title>mpn_mul_fft_internal.isra.0 (8,022,501,289 samples, 18.58%)</title><rect x="367.0" y="197" width="219.2" height="15.0" fill="rgb(208,18,4)" rx="2" ry="2" />
+<text  x="370.02" y="207.5" >mpn_mul_fft_internal.isra.0</text>
+</g>
+<g >
+<title>__gmpz_tdiv_qr (42,010,614,760 samples, 97.29%)</title><rect x="31.4" y="325" width="1147.9" height="15.0" fill="rgb(225,93,22)" rx="2" ry="2" />
+<text  x="34.36" y="335.5" >__gmpz_tdiv_qr</text>
+</g>
+<g >
+<title>mpn_fft_fft (1,480,756,952 samples, 3.43%)</title><rect x="369.8" y="181" width="40.5" height="15.0" fill="rgb(213,39,9)" rx="2" ry="2" />
+<text  x="372.81" y="191.5" >mpn..</text>
+</g>
+<g >
+<title>__gmpn_toom22_mul (298,361,580 samples, 0.69%)</title><rect x="138.9" y="117" width="8.2" height="15.0" fill="rgb(214,41,9)" rx="2" ry="2" />
+<text  x="141.92" y="127.5" ></text>
+</g>
+<g >
+<title>__gmpn_toom33_mul (4,838,801,171 samples, 11.21%)</title><rect x="436.4" y="133" width="132.2" height="15.0" fill="rgb(251,212,50)" rx="2" ry="2" />
+<text  x="439.36" y="143.5" >__gmpn_toom33_mul</text>
+</g>
+<g >
+<title>__gmpn_toom33_mul (661,916,959 samples, 1.53%)</title><rect x="1100.9" y="133" width="18.1" height="15.0" fill="rgb(251,212,50)" rx="2" ry="2" />
+<text  x="1103.92" y="143.5" ></text>
+</g>
+<g >
+<title>mpn_fft_fft (1,132,760,361 samples, 2.62%)</title><rect x="781.5" y="181" width="30.9" height="15.0" fill="rgb(213,39,9)" rx="2" ry="2" />
+<text  x="784.46" y="191.5" >mp..</text>
+</g>
+<g >
+<title>__gmpn_bdiv_dbm1c (80,892,748 samples, 0.19%)</title><rect x="557.8" y="101" width="2.2" height="15.0" fill="rgb(246,190,45)" rx="2" ry="2" />
+<text  x="560.80" y="111.5" ></text>
+</g>
+<g >
+<title>__gmpn_mul_fft (246,211,028 samples, 0.57%)</title><rect x="147.2" y="165" width="6.7" height="15.0" fill="rgb(230,116,27)" rx="2" ry="2" />
+<text  x="150.22" y="175.5" ></text>
+</g>
+<g >
+<title>mpn_mul_fft_internal.isra.0 (735,262,953 samples, 1.70%)</title><rect x="718.9" y="149" width="20.1" height="15.0" fill="rgb(208,18,4)" rx="2" ry="2" />
+<text  x="721.88" y="159.5" ></text>
+</g>
+<g >
+<title>mpn_fft_fft (334,917,549 samples, 0.78%)</title><rect x="677.3" y="149" width="9.2" height="15.0" fill="rgb(213,39,9)" rx="2" ry="2" />
+<text  x="680.33" y="159.5" ></text>
+</g>
+<g >
+<title>__gmpn_mul_basecase (850,899,504 samples, 1.97%)</title><rect x="1044.0" y="117" width="23.3" height="15.0" fill="rgb(231,120,28)" rx="2" ry="2" />
+<text  x="1047.00" y="127.5" >_..</text>
+</g>
+<g >
+<title>__gmpn_copyi (102,004,828 samples, 0.24%)</title><rect x="357.5" y="261" width="2.8" height="15.0" fill="rgb(228,109,26)" rx="2" ry="2" />
+<text  x="360.51" y="271.5" ></text>
+</g>
+<g >
+<title>__gmpn_mul_fft (2,924,099,027 samples, 6.77%)</title><rect x="193.5" y="245" width="79.9" height="15.0" fill="rgb(230,116,27)" rx="2" ry="2" />
+<text  x="196.50" y="255.5" >__gmpn_mu..</text>
+</g>
+<g >
+<title>mpn_fft_fft (83,822,090 samples, 0.19%)</title><rect x="134.1" y="117" width="2.3" height="15.0" fill="rgb(213,39,9)" rx="2" ry="2" />
+<text  x="137.12" y="127.5" ></text>
+</g>
+<g >
+<title>divide_dc_2n1n (116,677,691 samples, 0.27%)</title><rect x="22.4" y="261" width="3.2" height="15.0" fill="rgb(226,99,23)" rx="2" ry="2" />
+<text  x="25.40" y="271.5" ></text>
+</g>
+<g >
+<title>mpn_fft_fftinv (334,594,395 samples, 0.77%)</title><rect x="614.6" y="149" width="9.2" height="15.0" fill="rgb(212,34,8)" rx="2" ry="2" />
+<text  x="617.64" y="159.5" ></text>
+</g>
+<g >
+<title>__gmpn_tdiv_qr (130,906,336 samples, 0.30%)</title><rect x="1182.9" y="309" width="3.5" height="15.0" fill="rgb(252,220,52)" rx="2" ry="2" />
+<text  x="1185.86" y="319.5" ></text>
+</g>
+<g >
+<title>mpn_fft_fftinv (332,026,469 samples, 0.77%)</title><rect x="1015.0" y="197" width="9.1" height="15.0" fill="rgb(212,34,8)" rx="2" ry="2" />
+<text  x="1017.99" y="207.5" ></text>
+</g>
+<g >
+<title>mpn_fft_fft (196,328,929 samples, 0.45%)</title><rect x="1083.5" y="149" width="5.3" height="15.0" fill="rgb(213,39,9)" rx="2" ry="2" />
+<text  x="1086.48" y="159.5" ></text>
+</g>
+<g >
+<title>__gmpn_toom22_mul (426,708,178 samples, 0.99%)</title><rect x="692.2" y="117" width="11.7" height="15.0" fill="rgb(214,41,9)" rx="2" ry="2" />
+<text  x="695.20" y="127.5" ></text>
+</g>
+<g >
+<title>_mpn_crt (178,023,451 samples, 0.41%)</title><rect x="986.6" y="197" width="4.9" height="15.0" fill="rgb(222,81,19)" rx="2" ry="2" />
+<text  x="989.59" y="207.5" ></text>
+</g>
+<g >
+<title>mpn_fft_fftinv (219,824,004 samples, 0.51%)</title><rect x="825.9" y="117" width="6.0" height="15.0" fill="rgb(212,34,8)" rx="2" ry="2" />
+<text  x="828.85" y="127.5" ></text>
+</g>
+<g >
+<title>mpn_fft_fftinv (651,394,320 samples, 1.51%)</title><rect x="411.9" y="165" width="17.8" height="15.0" fill="rgb(212,34,8)" rx="2" ry="2" />
+<text  x="414.92" y="175.5" ></text>
+</g>
+<g >
+<title>_mpn_crt (78,444,179 samples, 0.18%)</title><rect x="97.4" y="165" width="2.1" height="15.0" fill="rgb(222,81,19)" rx="2" ry="2" />
+<text  x="100.37" y="175.5" ></text>
+</g>
+<g >
+<title>__gmpn_toom22_mul (4,306,753,679 samples, 9.97%)</title><rect x="846.9" y="149" width="117.7" height="15.0" fill="rgb(214,41,9)" rx="2" ry="2" />
+<text  x="849.88" y="159.5" >__gmpn_toom22_..</text>
+</g>
+<g >
+<title>mpn_fft_fftinv (75,831,475 samples, 0.18%)</title><rect x="319.9" y="165" width="2.1" height="15.0" fill="rgb(212,34,8)" rx="2" ry="2" />
+<text  x="322.89" y="175.5" ></text>
+</g>
+<g >
+<title>__gmpn_toom22_mul (541,673,199 samples, 1.25%)</title><rect x="248.7" y="165" width="14.8" height="15.0" fill="rgb(214,41,9)" rx="2" ry="2" />
+<text  x="251.66" y="175.5" ></text>
+</g>
+<g >
+<title>mpn_mul_fft_internal.isra.0 (635,830,749 samples, 1.47%)</title><rect x="315.3" y="197" width="17.4" height="15.0" fill="rgb(208,18,4)" rx="2" ry="2" />
+<text  x="318.31" y="207.5" ></text>
+</g>
+<g >
+<title>mpn_mul_fft_decompose (243,366,219 samples, 0.56%)</title><rect x="360.4" y="197" width="6.6" height="15.0" fill="rgb(214,43,10)" rx="2" ry="2" />
+<text  x="363.37" y="207.5" ></text>
+</g>
+<g >
+<title>__gmpn_toom22_mul (968,603,424 samples, 2.24%)</title><rect x="1042.1" y="133" width="26.5" height="15.0" fill="rgb(214,41,9)" rx="2" ry="2" />
+<text  x="1045.14" y="143.5" >_..</text>
+</g>
+<g >
+<title>__gmpn_mul_fft (426,484,065 samples, 0.99%)</title><rect x="1146.2" y="181" width="11.7" height="15.0" fill="rgb(230,116,27)" rx="2" ry="2" />
+<text  x="1149.25" y="191.5" ></text>
+</g>
+<g >
+<title>mpn_mul_fft_internal.isra.0 (1,075,565,282 samples, 2.49%)</title><rect x="102.4" y="181" width="29.4" height="15.0" fill="rgb(208,18,4)" rx="2" ry="2" />
+<text  x="105.44" y="191.5" >mp..</text>
+</g>
+<g >
+<title>__gmpn_mul_fft (549,834,185 samples, 1.27%)</title><rect x="132.1" y="181" width="15.0" height="15.0" fill="rgb(230,116,27)" rx="2" ry="2" />
+<text  x="135.12" y="191.5" ></text>
+</g>
+<g >
+<title>mpn_mul_fft_internal.isra.0 (1,473,162,423 samples, 3.41%)</title><rect x="1081.5" y="197" width="40.2" height="15.0" fill="rgb(208,18,4)" rx="2" ry="2" />
+<text  x="1084.47" y="207.5" >mpn..</text>
+</g>
+<g >
+<title>mpn_fft_fft (748,633,453 samples, 1.73%)</title><rect x="592.7" y="165" width="20.5" height="15.0" fill="rgb(213,39,9)" rx="2" ry="2" />
+<text  x="595.75" y="175.5" ></text>
+</g>
+<g >
+<title>mpn_fft_mul_2exp_modF (130,972,860 samples, 0.30%)</title><rect x="194.1" y="213" width="3.6" height="15.0" fill="rgb(252,217,52)" rx="2" ry="2" />
+<text  x="197.07" y="223.5" ></text>
+</g>
+<g >
+<title>mpn_fft_fft (353,569,804 samples, 0.82%)</title><rect x="599.7" y="101" width="9.6" height="15.0" fill="rgb(213,39,9)" rx="2" ry="2" />
+<text  x="602.68" y="111.5" ></text>
+</g>
+<g >
+<title>_mpn_crt (196,221,745 samples, 0.45%)</title><rect x="580.7" y="165" width="5.3" height="15.0" fill="rgb(222,81,19)" rx="2" ry="2" />
+<text  x="583.67" y="175.5" ></text>
+</g>
+<g >
+<title>mpn_fft_fftinv (235,585,732 samples, 0.55%)</title><rect x="221.0" y="181" width="6.4" height="15.0" fill="rgb(212,34,8)" rx="2" ry="2" />
+<text  x="223.98" y="191.5" ></text>
+</g>
+<g >
+<title>__gmpn_add_n (73,301,314 samples, 0.17%)</title><rect x="772.2" y="213" width="2.0" height="15.0" fill="rgb(226,96,23)" rx="2" ry="2" />
+<text  x="775.23" y="223.5" ></text>
+</g>
+<g >
+<title>__gmpn_mul_basecase (358,686,727 samples, 0.83%)</title><rect x="67.8" y="117" width="9.8" height="15.0" fill="rgb(231,120,28)" rx="2" ry="2" />
+<text  x="70.76" y="127.5" ></text>
+</g>
+<g >
+<title>__gmpn_mulmod_bknp1 (5,385,121,845 samples, 12.47%)</title><rect x="839.4" y="197" width="147.1" height="15.0" fill="rgb(205,2,0)" rx="2" ry="2" />
+<text  x="842.37" y="207.5" >__gmpn_mulmod_bknp1</text>
+</g>
+<g >
+<title>mpn_fft_fft (622,585,452 samples, 1.44%)</title><rect x="791.3" y="133" width="17.0" height="15.0" fill="rgb(213,39,9)" rx="2" ry="2" />
+<text  x="794.26" y="143.5" ></text>
+</g>
+<g >
+<title>__gmpn_mul_fft (256,668,478 samples, 0.59%)</title><rect x="332.8" y="197" width="7.0" height="15.0" fill="rgb(230,116,27)" rx="2" ry="2" />
+<text  x="335.83" y="207.5" ></text>
+</g>
+<g >
+<title>mpn_fft_fftinv (117,886,501 samples, 0.27%)</title><rect x="286.3" y="181" width="3.3" height="15.0" fill="rgb(212,34,8)" rx="2" ry="2" />
+<text  x="289.35" y="191.5" ></text>
+</g>
+<g >
+<title>__gmpn_toom22_mul (531,291,906 samples, 1.23%)</title><rect x="647.4" y="101" width="14.6" height="15.0" fill="rgb(214,41,9)" rx="2" ry="2" />
+<text  x="650.43" y="111.5" ></text>
+</g>
+<g >
+<title>mpn_mul_fft_decompose (253,971,246 samples, 0.59%)</title><rect x="765.1" y="229" width="6.9" height="15.0" fill="rgb(214,43,10)" rx="2" ry="2" />
+<text  x="768.08" y="239.5" ></text>
+</g>
+<g >
+<title>mpn_fft_fft (141,252,353 samples, 0.33%)</title><rect x="719.4" y="133" width="3.8" height="15.0" fill="rgb(213,39,9)" rx="2" ry="2" />
+<text  x="722.38" y="143.5" ></text>
+</g>
+<g >
+<title>mpn_fft_fft (332,216,104 samples, 0.77%)</title><rect x="797.0" y="101" width="9.1" height="15.0" fill="rgb(213,39,9)" rx="2" ry="2" />
+<text  x="799.97" y="111.5" ></text>
+</g>
+<g >
+<title>mpn_fft_fft (931,405,734 samples, 2.16%)</title><rect x="379.0" y="133" width="25.4" height="15.0" fill="rgb(213,39,9)" rx="2" ry="2" />
+<text  x="381.96" y="143.5" >m..</text>
+</g>
+<g >
+<title>mpn_fft_mul_modF_K (955,381,140 samples, 2.21%)</title><rect x="691.6" y="149" width="26.1" height="15.0" fill="rgb(241,169,40)" rx="2" ry="2" />
+<text  x="694.63" y="159.5" >m..</text>
+</g>
+<g >
+<title>mpn_fft_fft (282,641,250 samples, 0.65%)</title><rect x="208.0" y="133" width="7.7" height="15.0" fill="rgb(213,39,9)" rx="2" ry="2" />
+<text  x="210.96" y="143.5" ></text>
+</g>
+<g >
+<title>__gmpn_toom22_mul (266,825,348 samples, 0.62%)</title><rect x="1093.6" y="133" width="7.3" height="15.0" fill="rgb(214,41,9)" rx="2" ry="2" />
+<text  x="1096.63" y="143.5" ></text>
+</g>
+<g >
+<title>mpn_fft_fft (201,412,344 samples, 0.47%)</title><rect x="103.7" y="149" width="5.5" height="15.0" fill="rgb(213,39,9)" rx="2" ry="2" />
+<text  x="106.73" y="159.5" ></text>
+</g>
+<g >
+<title>mpn_fft_fftinv (264,287,930 samples, 0.61%)</title><rect x="418.6" y="101" width="7.3" height="15.0" fill="rgb(212,34,8)" rx="2" ry="2" />
+<text  x="421.64" y="111.5" ></text>
+</g>
+<g >
+<title>__gmpn_mul_n (183,375,049 samples, 0.42%)</title><rect x="148.9" y="117" width="5.0" height="15.0" fill="rgb(237,147,35)" rx="2" ry="2" />
+<text  x="151.93" y="127.5" ></text>
+</g>
+<g >
+<title>mpn_fft_mul_modF_K (1,232,719,968 samples, 2.85%)</title><rect x="65.8" y="181" width="33.7" height="15.0" fill="rgb(241,169,40)" rx="2" ry="2" />
+<text  x="68.83" y="191.5" >mp..</text>
+</g>
+<g >
+<title>__gmpn_toom33_mul (324,353,293 samples, 0.75%)</title><rect x="1148.8" y="117" width="8.9" height="15.0" fill="rgb(251,212,50)" rx="2" ry="2" />
+<text  x="1151.82" y="127.5" ></text>
+</g>
+<g >
+<title>__gmpn_sub_n (151,687,706 samples, 0.35%)</title><rect x="563.0" y="101" width="4.2" height="15.0" fill="rgb(212,36,8)" rx="2" ry="2" />
+<text  x="566.01" y="111.5" ></text>
+</g>
+<g >
+<title>__libc_start_call_main (43,180,814,963 samples, 100.00%)</title><rect x="10.0" y="437" width="1180.0" height="15.0" fill="rgb(210,26,6)" rx="2" ry="2" />
+<text  x="13.00" y="447.5" >__libc_start_call_main</text>
+</g>
+<g >
+<title>mpn_fft_mul_modF_K (337,447,903 samples, 0.78%)</title><rect x="1148.7" y="149" width="9.2" height="15.0" fill="rgb(241,169,40)" rx="2" ry="2" />
+<text  x="1151.68" y="159.5" ></text>
+</g>
+<g >
+<title>__gmpn_mul_basecase (240,740,006 samples, 0.56%)</title><rect x="1094.0" y="117" width="6.6" height="15.0" fill="rgb(231,120,28)" rx="2" ry="2" />
+<text  x="1096.99" y="127.5" ></text>
+</g>
+<g >
+<title>__gmpn_preinv_mu_div_qr (30,143,179,510 samples, 69.80%)</title><rect x="355.7" y="277" width="823.6" height="15.0" fill="rgb(251,213,51)" rx="2" ry="2" />
+<text  x="358.65" y="287.5" >__gmpn_preinv_mu_div_qr</text>
+</g>
+<g >
+<title>divide_dc_3n2n (76,401,412 samples, 0.18%)</title><rect x="10.8" y="277" width="2.1" height="15.0" fill="rgb(213,40,9)" rx="2" ry="2" />
+<text  x="13.82" y="287.5" ></text>
+</g>
+<g >
+<title>__gmpn_toom22_mul (290,662,324 samples, 0.67%)</title><rect x="707.4" y="85" width="8.0" height="15.0" fill="rgb(214,41,9)" rx="2" ry="2" />
+<text  x="710.44" y="95.5" ></text>
+</g>
+<g >
+<title>__gmpn_toom22_mul (562,448,356 samples, 1.30%)</title><rect x="1102.2" y="117" width="15.4" height="15.0" fill="rgb(214,41,9)" rx="2" ry="2" />
+<text  x="1105.21" y="127.5" ></text>
+</g>
+<g >
+<title>mpn_fft_fftinv (575,746,526 samples, 1.33%)</title><rect x="819.2" y="181" width="15.7" height="15.0" fill="rgb(212,34,8)" rx="2" ry="2" />
+<text  x="822.20" y="191.5" ></text>
+</g>
+<g >
+<title>__gmpn_mul_fft (151,842,442 samples, 0.35%)</title><rect x="749.8" y="133" width="4.1" height="15.0" fill="rgb(230,116,27)" rx="2" ry="2" />
+<text  x="752.77" y="143.5" ></text>
+</g>
+<g >
+<title>__gmpn_mul_basecase (115,201,903 samples, 0.27%)</title><rect x="263.5" y="149" width="3.2" height="15.0" fill="rgb(231,120,28)" rx="2" ry="2" />
+<text  x="266.53" y="159.5" ></text>
+</g>
+<g >
+<title>__gmpn_add_n (94,265,135 samples, 0.22%)</title><rect x="437.8" y="117" width="2.6" height="15.0" fill="rgb(226,96,23)" rx="2" ry="2" />
+<text  x="440.78" y="127.5" ></text>
+</g>
+<g >
+<title>__gmpn_toom22_mul (274,608,378 samples, 0.64%)</title><rect x="1149.4" y="101" width="7.5" height="15.0" fill="rgb(214,41,9)" rx="2" ry="2" />
+<text  x="1152.40" y="111.5" ></text>
+</g>
+<g >
+<title>__gmpn_mul_n (738,056,915 samples, 1.71%)</title><rect x="243.3" y="181" width="20.2" height="15.0" fill="rgb(237,147,35)" rx="2" ry="2" />
+<text  x="246.29" y="191.5" ></text>
+</g>
+<g >
+<title>__gmpn_toom33_mul (83,812,499 samples, 0.19%)</title><rect x="164.0" y="229" width="2.2" height="15.0" fill="rgb(251,212,50)" rx="2" ry="2" />
+<text  x="166.96" y="239.5" ></text>
+</g>
+<g >
+<title>mpn_fft_fft (96,841,270 samples, 0.22%)</title><rect x="1123.4" y="149" width="2.7" height="15.0" fill="rgb(213,39,9)" rx="2" ry="2" />
+<text  x="1126.45" y="159.5" ></text>
+</g>
+<g >
+<title>__gmpn_toom22_mul (622,877,278 samples, 1.44%)</title><rect x="293.0" y="149" width="17.0" height="15.0" fill="rgb(214,41,9)" rx="2" ry="2" />
+<text  x="296.00" y="159.5" ></text>
+</g>
+<g >
+<title>__gmpn_add_n (112,379,072 samples, 0.26%)</title><rect x="447.0" y="101" width="3.1" height="15.0" fill="rgb(226,96,23)" rx="2" ry="2" />
+<text  x="450.01" y="111.5" ></text>
+</g>
+<g >
+<title>__gmpn_toom8h_mul (1,062,725,224 samples, 2.46%)</title><rect x="162.8" y="245" width="29.1" height="15.0" fill="rgb(226,98,23)" rx="2" ry="2" />
+<text  x="165.81" y="255.5" >__..</text>
+</g>
+<g >
+<title>mpn_fft_fftinv (337,640,706 samples, 0.78%)</title><rect x="219.5" y="213" width="9.2" height="15.0" fill="rgb(212,34,8)" rx="2" ry="2" />
+<text  x="222.47" y="223.5" ></text>
+</g>
+<g >
+<title>mpn_bc_mulmod_bnp1 (73,314,326 samples, 0.17%)</title><rect x="1164.8" y="149" width="2.0" height="15.0" fill="rgb(253,221,53)" rx="2" ry="2" />
+<text  x="1167.83" y="159.5" ></text>
+</g>
+<g >
+<title>__gmpn_toom22_mul (607,351,628 samples, 1.41%)</title><rect x="115.0" y="133" width="16.6" height="15.0" fill="rgb(214,41,9)" rx="2" ry="2" />
+<text  x="118.02" y="143.5" ></text>
+</g>
+<g >
+<title>mpn_fft_fft (314,260,914 samples, 0.73%)</title><rect x="44.5" y="117" width="8.6" height="15.0" fill="rgb(213,39,9)" rx="2" ry="2" />
+<text  x="47.52" y="127.5" ></text>
+</g>
+<g >
+<title>__gmpn_mulmod_bnm1 (2,269,318,320 samples, 5.26%)</title><rect x="99.5" y="213" width="62.0" height="15.0" fill="rgb(216,51,12)" rx="2" ry="2" />
+<text  x="102.51" y="223.5" >__gmpn..</text>
+</g>
+<g >
+<title>mpn_mul_fft_internal.isra.0 (138,737,161 samples, 0.32%)</title><rect x="750.1" y="117" width="3.8" height="15.0" fill="rgb(208,18,4)" rx="2" ry="2" />
+<text  x="753.13" y="127.5" ></text>
+</g>
+<g >
+<title>__gmpn_toom44_mul (172,855,207 samples, 0.40%)</title><rect x="166.2" y="229" width="4.8" height="15.0" fill="rgb(238,152,36)" rx="2" ry="2" />
+<text  x="169.25" y="239.5" ></text>
+</g>
+<g >
+<title>__gmpn_mul_fft (389,936,249 samples, 0.90%)</title><rect x="739.1" y="149" width="10.7" height="15.0" fill="rgb(230,116,27)" rx="2" ry="2" />
+<text  x="742.12" y="159.5" ></text>
+</g>
+<g >
+<title>__gmpn_mul_fft (1,434,047,588 samples, 3.32%)</title><rect x="273.8" y="229" width="39.1" height="15.0" fill="rgb(230,116,27)" rx="2" ry="2" />
+<text  x="276.76" y="239.5" >__g..</text>
+</g>
+<g >
+<title>multiply_toom_cook_8_5 (80,318,516 samples, 0.19%)</title><rect x="29.0" y="181" width="2.2" height="15.0" fill="rgb(214,42,10)" rx="2" ry="2" />
+<text  x="32.01" y="191.5" ></text>
+</g>
+<g >
+<title>__gmpn_mul_basecase (188,527,002 samples, 0.44%)</title><rect x="243.5" y="165" width="5.2" height="15.0" fill="rgb(231,120,28)" rx="2" ry="2" />
+<text  x="246.50" y="175.5" ></text>
+</g>
+<g >
+<title>divide_dc_divappr (324,549,930 samples, 0.75%)</title><rect x="22.4" y="293" width="8.9" height="15.0" fill="rgb(240,164,39)" rx="2" ry="2" />
+<text  x="25.40" y="303.5" ></text>
+</g>
+<g >
+<title>mpn_fft_mul_modF_K (656,449,619 samples, 1.52%)</title><rect x="1128.2" y="165" width="18.0" height="15.0" fill="rgb(241,169,40)" rx="2" ry="2" />
+<text  x="1131.24" y="175.5" ></text>
+</g>
+<g >
+<title>mpn_fft_fftinv (771,483,822 samples, 1.79%)</title><rect x="410.3" y="181" width="21.1" height="15.0" fill="rgb(212,34,8)" rx="2" ry="2" />
+<text  x="413.27" y="191.5" ></text>
+</g>
+<g >
+<title>all (43,182,144,785 samples, 100%)</title><rect x="10.0" y="501" width="1180.0" height="15.0" fill="rgb(213,39,9)" rx="2" ry="2" />
+<text  x="13.00" y="511.5" ></text>
+</g>
+<g >
+<title>__gmpn_toom22_mul (408,478,162 samples, 0.95%)</title><rect x="66.8" y="133" width="11.2" height="15.0" fill="rgb(214,41,9)" rx="2" ry="2" />
+<text  x="69.83" y="143.5" ></text>
+</g>
+<g >
+<title>mpn_fft_mul_modF_K (75,895,658 samples, 0.18%)</title><rect x="155.2" y="117" width="2.1" height="15.0" fill="rgb(241,169,40)" rx="2" ry="2" />
+<text  x="158.23" y="127.5" ></text>
+</g>
+<g >
+<title>__gmpn_mulmod_bknp1 (1,012,535,712 samples, 2.34%)</title><rect x="1093.6" y="165" width="27.6" height="15.0" fill="rgb(205,2,0)" rx="2" ry="2" />
+<text  x="1096.56" y="175.5" >_..</text>
+</g>
+<g >
+<title>__gmpn_mul_basecase (141,385,897 samples, 0.33%)</title><rect x="745.4" y="53" width="3.9" height="15.0" fill="rgb(231,120,28)" rx="2" ry="2" />
+<text  x="748.41" y="63.5" ></text>
+</g>
+<g >
+<title>mpn_fft_fft (720,051,661 samples, 1.67%)</title><rect x="199.8" y="213" width="19.7" height="15.0" fill="rgb(213,39,9)" rx="2" ry="2" />
+<text  x="202.80" y="223.5" ></text>
+</g>
+<g >
+<title>divide_dc_3n2n (208,440,981 samples, 0.48%)</title><rect x="16.4" y="325" width="5.7" height="15.0" fill="rgb(213,40,9)" rx="2" ry="2" />
+<text  x="19.40" y="335.5" ></text>
+</g>
+<g >
+<title>mpn_fft_fft (269,496,547 samples, 0.62%)</title><rect x="678.3" y="133" width="7.4" height="15.0" fill="rgb(213,39,9)" rx="2" ry="2" />
+<text  x="681.33" y="143.5" ></text>
+</g>
+<g >
+<title>__gmpn_mul_basecase (494,648,197 samples, 1.15%)</title><rect x="249.4" y="149" width="13.6" height="15.0" fill="rgb(231,120,28)" rx="2" ry="2" />
+<text  x="252.44" y="159.5" ></text>
+</g>
+<g >
+<title>__gmpn_mulmod_bknp1 (130,847,736 samples, 0.30%)</title><rect x="90.4" y="149" width="3.6" height="15.0" fill="rgb(205,2,0)" rx="2" ry="2" />
+<text  x="93.44" y="159.5" ></text>
+</g>
+<g >
+<title>__gmpn_tdiv_qr (129,204,942 samples, 0.30%)</title><rect x="1186.4" y="341" width="3.6" height="15.0" fill="rgb(252,220,52)" rx="2" ry="2" />
+<text  x="1189.43" y="351.5" ></text>
+</g>
+<g >
+<title>mpn_fft_fft (445,061,848 samples, 1.03%)</title><rect x="204.5" y="165" width="12.2" height="15.0" fill="rgb(213,39,9)" rx="2" ry="2" />
+<text  x="207.52" y="175.5" ></text>
+</g>
+<g >
+<title>_mpn_crt (75,977,209 samples, 0.18%)</title><rect x="271.2" y="197" width="2.1" height="15.0" fill="rgb(222,81,19)" rx="2" ry="2" />
+<text  x="274.18" y="207.5" ></text>
+</g>
+<g >
+<title>mpn_fft_fftinv (104,663,026 samples, 0.24%)</title><rect x="1018.5" y="117" width="2.9" height="15.0" fill="rgb(212,34,8)" rx="2" ry="2" />
+<text  x="1021.49" y="127.5" ></text>
+</g>
+<g >
+<title>__gmpn_mulmod_bnm1 (311,551,830 samples, 0.72%)</title><rect x="749.8" y="149" width="8.5" height="15.0" fill="rgb(216,51,12)" rx="2" ry="2" />
+<text  x="752.77" y="159.5" ></text>
+</g>
+<g >
+<title>mpn_fft_mul_modF_K (1,993,848,923 samples, 4.62%)</title><rect x="1025.6" y="197" width="54.4" height="15.0" fill="rgb(241,169,40)" rx="2" ry="2" />
+<text  x="1028.56" y="207.5" >mpn_f..</text>
+</g>
+<g >
+<title>mpn_fft_fft (1,294,926,814 samples, 3.00%)</title><rect x="778.5" y="197" width="35.3" height="15.0" fill="rgb(213,39,9)" rx="2" ry="2" />
+<text  x="781.46" y="207.5" >mp..</text>
+</g>
+<g >
+<title>divide_dc_3n2n (204,154,485 samples, 0.47%)</title><rect x="10.8" y="309" width="5.6" height="15.0" fill="rgb(213,40,9)" rx="2" ry="2" />
+<text  x="13.82" y="319.5" ></text>
+</g>
+<g >
+<title>mpn_fft_fftinv (227,495,513 samples, 0.53%)</title><rect x="1016.6" y="165" width="6.2" height="15.0" fill="rgb(212,34,8)" rx="2" ry="2" />
+<text  x="1019.63" y="175.5" ></text>
+</g>
+<g >
+<title>mpn_fft_fft (1,331,535,641 samples, 3.08%)</title><rect x="372.0" y="165" width="36.4" height="15.0" fill="rgb(213,39,9)" rx="2" ry="2" />
+<text  x="375.03" y="175.5" >mpn..</text>
+</g>
+<g >
+<title>mpn_fft_fft (81,006,093 samples, 0.19%)</title><rect x="719.9" y="85" width="2.2" height="15.0" fill="rgb(213,39,9)" rx="2" ry="2" />
+<text  x="722.88" y="95.5" ></text>
+</g>
+<g >
+<title>mpn_fft_fft (172,620,517 samples, 0.40%)</title><rect x="210.2" y="101" width="4.8" height="15.0" fill="rgb(213,39,9)" rx="2" ry="2" />
+<text  x="213.25" y="111.5" ></text>
+</g>
+<g >
+<title>mpn_fft_fft (623,067,107 samples, 1.44%)</title><rect x="595.0" y="149" width="17.1" height="15.0" fill="rgb(213,39,9)" rx="2" ry="2" />
+<text  x="598.03" y="159.5" ></text>
+</g>
+<g >
+<title>__gmpn_mul_n (928,742,307 samples, 2.15%)</title><rect x="1093.6" y="149" width="25.4" height="15.0" fill="rgb(237,147,35)" rx="2" ry="2" />
+<text  x="1096.63" y="159.5" >_..</text>
+</g>
+<g >
+<title>mpn_fft_fftinv (405,116,852 samples, 0.94%)</title><rect x="613.2" y="165" width="11.1" height="15.0" fill="rgb(212,34,8)" rx="2" ry="2" />
+<text  x="616.20" y="175.5" ></text>
+</g>
+<g >
+<title>__gmpn_mul_fft (891,995,561 samples, 2.07%)</title><rect x="1121.8" y="197" width="24.4" height="15.0" fill="rgb(230,116,27)" rx="2" ry="2" />
+<text  x="1124.80" y="207.5" >_..</text>
+</g>
+<g >
+<title>mpn_fft_fft (949,550,030 samples, 2.20%)</title><rect x="784.8" y="165" width="25.9" height="15.0" fill="rgb(213,39,9)" rx="2" ry="2" />
+<text  x="787.75" y="175.5" >m..</text>
+</g>
+<g >
+<title>__gmpn_mul_fft (693,488,142 samples, 1.61%)</title><rect x="313.7" y="213" width="19.0" height="15.0" fill="rgb(230,116,27)" rx="2" ry="2" />
+<text  x="316.74" y="223.5" ></text>
+</g>
+<g >
+<title>__gmpn_mulmod_bknp1 (78,338,967 samples, 0.18%)</title><rect x="310.0" y="181" width="2.2" height="15.0" fill="rgb(205,2,0)" rx="2" ry="2" />
+<text  x="313.02" y="191.5" ></text>
+</g>
+<g >
+<title>__gmpn_mul_basecase (128,395,194 samples, 0.30%)</title><rect x="166.7" y="181" width="3.6" height="15.0" fill="rgb(231,120,28)" rx="2" ry="2" />
+<text  x="169.75" y="191.5" ></text>
+</g>
+<g >
+<title>mpn_fft_fft (478,612,890 samples, 1.11%)</title><rect x="794.3" y="117" width="13.0" height="15.0" fill="rgb(213,39,9)" rx="2" ry="2" />
+<text  x="797.26" y="127.5" ></text>
+</g>
+<g >
+<title>__gmpn_mulmod_bnm1 (2,860,689,764 samples, 6.62%)</title><rect x="273.4" y="245" width="78.2" height="15.0" fill="rgb(216,51,12)" rx="2" ry="2" />
+<text  x="276.40" y="255.5" >__gmpn_mu..</text>
+</g>
+<g >
+<title>divmod_into (334,732,313 samples, 0.78%)</title><rect x="22.2" y="373" width="9.1" height="15.0" fill="rgb(240,165,39)" rx="2" ry="2" />
+<text  x="25.17" y="383.5" ></text>
+</g>
+<g >
+<title>__gmpn_mul_n (4,906,782,300 samples, 11.36%)</title><rect x="434.5" y="149" width="134.1" height="15.0" fill="rgb(237,147,35)" rx="2" ry="2" />
+<text  x="437.50" y="159.5" >__gmpn_mul_n</text>
+</g>
+<g >
+<title>mpn_mul_fft_decompose (86,307,731 samples, 0.20%)</title><rect x="273.9" y="213" width="2.4" height="15.0" fill="rgb(214,43,10)" rx="2" ry="2" />
+<text  x="276.90" y="223.5" ></text>
+</g>
+<g >
+<title>__gmpn_mulmod_bnm1 (157,089,805 samples, 0.36%)</title><rect x="753.9" y="133" width="4.3" height="15.0" fill="rgb(216,51,12)" rx="2" ry="2" />
+<text  x="756.92" y="143.5" ></text>
+</g>
+<g >
+<title>__gmpn_toom22_mul (144,119,197 samples, 0.33%)</title><rect x="166.4" y="213" width="3.9" height="15.0" fill="rgb(214,41,9)" rx="2" ry="2" />
+<text  x="169.39" y="223.5" ></text>
+</g>
+<g >
+<title>__gmpn_toom33_mul (319,033,535 samples, 0.74%)</title><rect x="725.3" y="101" width="8.7" height="15.0" fill="rgb(251,212,50)" rx="2" ry="2" />
+<text  x="728.32" y="111.5" ></text>
+</g>
+<g >
+<title>__gmpn_mul_fft (117,817,579 samples, 0.27%)</title><rect x="154.1" y="149" width="3.2" height="15.0" fill="rgb(230,116,27)" rx="2" ry="2" />
+<text  x="157.09" y="159.5" ></text>
+</g>
+<g >
+<title>__gmpn_toom22_mul (329,722,991 samples, 0.76%)</title><rect x="171.8" y="197" width="9.0" height="15.0" fill="rgb(214,41,9)" rx="2" ry="2" />
+<text  x="174.76" y="207.5" ></text>
+</g>
+<g >
+<title>__gmpn_toom33_mul (350,791,612 samples, 0.81%)</title><rect x="706.7" y="101" width="9.5" height="15.0" fill="rgb(251,212,50)" rx="2" ry="2" />
+<text  x="709.65" y="111.5" ></text>
+</g>
+<g >
+<title>time_round&lt;::run_div (130,906,336 samples, 0.30%)</title><rect x="1182.9" y="357" width="3.5" height="15.0" fill="rgb(209,22,5)" rx="2" ry="2" />
+<text  x="1185.86" y="367.5" ></text>
+</g>
+<g >
+<title>mpn_fft_mul_modF_K (306,220,151 samples, 0.71%)</title><rect x="138.8" y="149" width="8.3" height="15.0" fill="rgb(241,169,40)" rx="2" ry="2" />
+<text  x="141.78" y="159.5" ></text>
+</g>
+<g >
+<title>__gmpn_toom22_mul (562,830,881 samples, 1.30%)</title><rect x="116.2" y="117" width="15.4" height="15.0" fill="rgb(214,41,9)" rx="2" ry="2" />
+<text  x="119.24" y="127.5" ></text>
+</g>
+<g >
+<title>double ::time_round&lt;::run_div (42,010,614,760 samples, 97.29%)</title><rect x="31.4" y="357" width="1147.9" height="15.0" fill="rgb(251,214,51)" rx="2" ry="2" />
+<text  x="34.36" y="367.5" >double ::time_round&lt;::run_div</text>
+</g>
+<g >
+<title>__gmpn_add_n (130,723,413 samples, 0.30%)</title><rect x="849.9" y="133" width="3.6" height="15.0" fill="rgb(226,96,23)" rx="2" ry="2" />
+<text  x="852.88" y="143.5" ></text>
+</g>
+<g >
+<title>__gmpn_mul_n (115,201,903 samples, 0.27%)</title><rect x="263.5" y="165" width="3.2" height="15.0" fill="rgb(237,147,35)" rx="2" ry="2" />
+<text  x="266.53" y="175.5" ></text>
+</g>
+<g >
+<title>divide_dc_2n1n (204,154,485 samples, 0.47%)</title><rect x="10.8" y="325" width="5.6" height="15.0" fill="rgb(226,99,23)" rx="2" ry="2" />
+<text  x="13.82" y="335.5" ></text>
+</g>
+<g >
+<title>mpn_fft_fft (473,511,762 samples, 1.10%)</title><rect x="388.5" y="85" width="13.0" height="15.0" fill="rgb(213,39,9)" rx="2" ry="2" />
+<text  x="391.54" y="95.5" ></text>
+</g>
+<g >
+<title>__gmpn_mulmod_bnm1 (274,866,649 samples, 0.64%)</title><rect x="339.8" y="197" width="7.6" height="15.0" fill="rgb(216,51,12)" rx="2" ry="2" />
+<text  x="342.84" y="207.5" ></text>
+</g>
+<g >
+<title>__gmpn_mulmod_bnm1 (4,580,297,152 samples, 10.61%)</title><rect x="37.1" y="229" width="125.1" height="15.0" fill="rgb(216,51,12)" rx="2" ry="2" />
+<text  x="40.08" y="239.5" >__gmpn_mulmod_b..</text>
+</g>
+<g >
+<title>__gmpn_mulmod_bnm1 (332,247,696 samples, 0.77%)</title><rect x="1157.9" y="181" width="9.1" height="15.0" fill="rgb(216,51,12)" rx="2" ry="2" />
+<text  x="1160.90" y="191.5" ></text>
+</g>
+<g >
+<title>__gmpn_mulmod_bnm1 (3,114,300,779 samples, 7.21%)</title><rect x="675.0" y="197" width="85.1" height="15.0" fill="rgb(216,51,12)" rx="2" ry="2" />
+<text  x="677.97" y="207.5" >__gmpn_mul..</text>
+</g>
+<g >
+<title>mpn_fft_fft (235,621,555 samples, 0.55%)</title><rect x="1082.8" y="165" width="6.4" height="15.0" fill="rgb(213,39,9)" rx="2" ry="2" />
+<text  x="1085.76" y="175.5" ></text>
+</g>
+<g >
+<title>mpn_fft_fft (141,503,835 samples, 0.33%)</title><rect x="315.7" y="181" width="3.8" height="15.0" fill="rgb(213,39,9)" rx="2" ry="2" />
+<text  x="318.67" y="191.5" ></text>
+</g>
+<g >
+<title>mpn_fft_fft (133,454,593 samples, 0.31%)</title><rect x="1084.7" y="133" width="3.6" height="15.0" fill="rgb(213,39,9)" rx="2" ry="2" />
+<text  x="1087.69" y="143.5" ></text>
+</g>
+<g >
+<title>__gmpn_sub_n (128,077,241 samples, 0.30%)</title><rect x="551.4" y="101" width="3.5" height="15.0" fill="rgb(212,36,8)" rx="2" ry="2" />
+<text  x="554.44" y="111.5" ></text>
+</g>
+<g >
+<title>__gmpz_tdiv_qr (130,906,336 samples, 0.30%)</title><rect x="1182.9" y="325" width="3.5" height="15.0" fill="rgb(225,93,22)" rx="2" ry="2" />
+<text  x="1185.86" y="335.5" ></text>
+</g>
+<g >
+<title>__gmpn_mulmod_bknp1 (1,883,926,380 samples, 4.36%)</title><rect x="1025.6" y="181" width="51.5" height="15.0" fill="rgb(205,2,0)" rx="2" ry="2" />
+<text  x="1028.63" y="191.5" >__gmp..</text>
+</g>
+<g >
+<title>__gmpn_mulmod_bnm1 (479,141,154 samples, 1.11%)</title><rect x="147.1" y="181" width="13.1" height="15.0" fill="rgb(216,51,12)" rx="2" ry="2" />
+<text  x="150.15" y="191.5" ></text>
+</g>
+<g >
+<title>mpn_fft_fftinv (790,294,291 samples, 1.83%)</title><rect x="815.7" y="213" width="21.6" height="15.0" fill="rgb(212,34,8)" rx="2" ry="2" />
+<text  x="818.70" y="223.5" >m..</text>
+</g>
+<g >
+<title>__gmpn_mulmod_bnm1 (1,695,254,431 samples, 3.93%)</title><rect x="1121.7" y="213" width="46.4" height="15.0" fill="rgb(216,51,12)" rx="2" ry="2" />
+<text  x="1124.73" y="223.5" >__gm..</text>
+</g>
+<g >
+<title>mpn_fft_fft (94,098,698 samples, 0.22%)</title><rect x="719.8" y="101" width="2.6" height="15.0" fill="rgb(213,39,9)" rx="2" ry="2" />
+<text  x="722.81" y="111.5" ></text>
+</g>
+<g >
+<title>__gmpn_lshiftc (73,369,186 samples, 0.17%)</title><rect x="769.9" y="197" width="2.0" height="15.0" fill="rgb(230,116,27)" rx="2" ry="2" />
+<text  x="772.94" y="207.5" ></text>
+</g>
+<g >
+<title>mpn_fft_fftinv (73,269,378 samples, 0.17%)</title><rect x="829.2" y="85" width="2.0" height="15.0" fill="rgb(212,34,8)" rx="2" ry="2" />
+<text  x="832.21" y="95.5" ></text>
+</g>
+<g >
+<title>mpn_mul_fft_internal.isra.0 (3,069,099,974 samples, 7.11%)</title><rect x="996.2" y="213" width="83.8" height="15.0" fill="rgb(208,18,4)" rx="2" ry="2" />
+<text  x="999.18" y="223.5" >mpn_mul_f..</text>
+</g>
+<g >
+<title>divide_quotient (334,732,313 samples, 0.78%)</title><rect x="22.2" y="341" width="9.1" height="15.0" fill="rgb(243,178,42)" rx="2" ry="2" />
+<text  x="25.17" y="351.5" ></text>
+</g>
+<g >
+<title>mpn_fft_mul_modF_K (5,568,763,525 samples, 12.90%)</title><rect x="434.1" y="181" width="152.1" height="15.0" fill="rgb(241,169,40)" rx="2" ry="2" />
+<text  x="437.07" y="191.5" >mpn_fft_mul_modF_K</text>
+</g>
+<g >
+<title>__gmpn_mul_n (78,600,626 samples, 0.18%)</title><rect x="664.3" y="117" width="2.2" height="15.0" fill="rgb(237,147,35)" rx="2" ry="2" />
+<text  x="667.31" y="127.5" ></text>
+</g>
+<g >
+<title>__gmpn_mul_basecase (256,617,574 samples, 0.59%)</title><rect x="707.9" y="69" width="7.1" height="15.0" fill="rgb(231,120,28)" rx="2" ry="2" />
+<text  x="710.94" y="79.5" ></text>
+</g>
+<g >
+<title>mpn_fft_fft (212,098,647 samples, 0.49%)</title><rect x="602.6" y="69" width="5.8" height="15.0" fill="rgb(213,39,9)" rx="2" ry="2" />
+<text  x="605.62" y="79.5" ></text>
+</g>
+<g >
+<title>__gmpn_toom22_mul (91,635,945 samples, 0.21%)</title><rect x="750.8" y="53" width="2.5" height="15.0" fill="rgb(214,41,9)" rx="2" ry="2" />
+<text  x="753.77" y="63.5" ></text>
+</g>
+<g >
+<title>mpn_fft_fft (303,543,774 samples, 0.70%)</title><rect x="1003.1" y="133" width="8.3" height="15.0" fill="rgb(213,39,9)" rx="2" ry="2" />
+<text  x="1006.12" y="143.5" ></text>
+</g>
+<g >
+<title>multiply_runtime (82,935,430 samples, 0.19%)</title><rect x="28.9" y="245" width="2.3" height="15.0" fill="rgb(224,90,21)" rx="2" ry="2" />
+<text  x="31.93" y="255.5" ></text>
+</g>
+<g >
+<title>shape_sweep (43,181,894,786 samples, 100.00%)</title><rect x="10.0" y="485" width="1180.0" height="15.0" fill="rgb(242,172,41)" rx="2" ry="2" />
+<text  x="13.00" y="495.5" >shape_sweep</text>
+</g>
+<g >
+<title>mpn_fft_fftinv (277,130,205 samples, 0.64%)</title><rect x="1015.7" y="181" width="7.6" height="15.0" fill="rgb(212,34,8)" rx="2" ry="2" />
+<text  x="1018.70" y="191.5" ></text>
+</g>
+<g >
+<title>__gmpn_mulmod_bnm1 (5,923,533,450 samples, 13.72%)</title><rect x="191.9" y="261" width="161.8" height="15.0" fill="rgb(216,51,12)" rx="2" ry="2" />
+<text  x="194.85" y="271.5" >__gmpn_mulmod_bnm1</text>
+</g>
+<g >
+<title>__gmpn_toom33_mul (99,496,666 samples, 0.23%)</title><rect x="750.7" y="69" width="2.7" height="15.0" fill="rgb(251,212,50)" rx="2" ry="2" />
+<text  x="753.70" y="79.5" ></text>
+</g>
+<g >
+<title>mpn_fft_fftinv (337,577,137 samples, 0.78%)</title><rect x="417.2" y="117" width="9.2" height="15.0" fill="rgb(212,34,8)" rx="2" ry="2" />
+<text  x="420.21" y="127.5" ></text>
+</g>
+<g >
+<title>__gmpn_mul_fft (96,822,135 samples, 0.22%)</title><rect x="340.1" y="181" width="2.6" height="15.0" fill="rgb(230,116,27)" rx="2" ry="2" />
+<text  x="343.06" y="191.5" ></text>
+</g>
+<g >
+<title>__gmpn_toom_interpolate_5pts (73,290,062 samples, 0.17%)</title><rect x="662.0" y="101" width="2.0" height="15.0" fill="rgb(252,216,51)" rx="2" ry="2" />
+<text  x="664.95" y="111.5" ></text>
+</g>
+<g >
+<title>mpn_fft_fft (444,903,573 samples, 1.03%)</title><rect x="1000.9" y="165" width="12.2" height="15.0" fill="rgb(213,39,9)" rx="2" ry="2" />
+<text  x="1003.90" y="175.5" ></text>
+</g>
+<g >
+<title>__gmpn_mul_fft (1,551,810,354 samples, 3.59%)</title><rect x="675.3" y="181" width="42.4" height="15.0" fill="rgb(230,116,27)" rx="2" ry="2" />
+<text  x="678.33" y="191.5" >__g..</text>
+</g>
+<g >
+<title>mpn_fft_fft (363,832,883 samples, 0.84%)</title><rect x="206.1" y="149" width="9.9" height="15.0" fill="rgb(213,39,9)" rx="2" ry="2" />
+<text  x="209.10" y="159.5" ></text>
+</g>
+<g >
+<title>_mpn_modbknp1dbnp1_n (183,172,657 samples, 0.42%)</title><rect x="976.2" y="181" width="5.0" height="15.0" fill="rgb(251,215,51)" rx="2" ry="2" />
+<text  x="979.22" y="191.5" ></text>
+</g>
+<g >
+<title>mpn_fft_fft (421,491,951 samples, 0.98%)</title><rect x="598.3" y="117" width="11.5" height="15.0" fill="rgb(213,39,9)" rx="2" ry="2" />
+<text  x="601.25" y="127.5" ></text>
+</g>
+<g >
+<title>__gmpn_toom22_mul (564,803,983 samples, 1.31%)</title><rect x="1129.0" y="117" width="15.5" height="15.0" fill="rgb(214,41,9)" rx="2" ry="2" />
+<text  x="1132.02" y="127.5" ></text>
+</g>
+<g >
+<title>__gmpn_mulmod_bnm1 (769,209,304 samples, 1.78%)</title><rect x="1146.2" y="197" width="21.0" height="15.0" fill="rgb(216,51,12)" rx="2" ry="2" />
+<text  x="1149.18" y="207.5" ></text>
+</g>
+<g >
+<title>__gmpn_mul_basecase (3,901,131,013 samples, 9.03%)</title><rect x="853.7" y="133" width="106.6" height="15.0" fill="rgb(231,120,28)" rx="2" ry="2" />
+<text  x="856.67" y="143.5" >__gmpn_mul_ba..</text>
+</g>
+<g >
+<title>mpn_fft_fft (611,963,353 samples, 1.42%)</title><rect x="385.4" y="101" width="16.7" height="15.0" fill="rgb(213,39,9)" rx="2" ry="2" />
+<text  x="388.40" y="111.5" ></text>
+</g>
+<g >
+<title>mpn_fft_fft (133,584,176 samples, 0.31%)</title><rect x="280.3" y="133" width="3.7" height="15.0" fill="rgb(213,39,9)" rx="2" ry="2" />
+<text  x="283.33" y="143.5" ></text>
+</g>
+<g >
+<title>__gmpn_lshiftc (81,084,634 samples, 0.19%)</title><rect x="364.8" y="165" width="2.2" height="15.0" fill="rgb(230,116,27)" rx="2" ry="2" />
+<text  x="367.80" y="175.5" ></text>
+</g>
+<g >
+<title>__gmpn_mulmod_bknp1 (701,341,422 samples, 1.62%)</title><rect x="78.0" y="165" width="19.2" height="15.0" fill="rgb(205,2,0)" rx="2" ry="2" />
+<text  x="80.99" y="175.5" ></text>
+</g>
+<g >
+<title>__gmpn_mul_n (99,496,666 samples, 0.23%)</title><rect x="750.7" y="85" width="2.7" height="15.0" fill="rgb(237,147,35)" rx="2" ry="2" />
+<text  x="753.70" y="95.5" ></text>
+</g>
+<g >
+<title>__gmpn_toom22_mul (400,675,786 samples, 0.93%)</title><rect x="692.9" y="101" width="11.0" height="15.0" fill="rgb(214,41,9)" rx="2" ry="2" />
+<text  x="695.91" y="111.5" ></text>
+</g>
+<g >
+<title>mpn_fft_fftinv (167,313,508 samples, 0.39%)</title><rect x="686.5" y="149" width="4.6" height="15.0" fill="rgb(212,34,8)" rx="2" ry="2" />
+<text  x="689.48" y="159.5" ></text>
+</g>
+<g >
+<title>__gmpn_mul_basecase (293,160,778 samples, 0.68%)</title><rect x="172.4" y="181" width="8.0" height="15.0" fill="rgb(231,120,28)" rx="2" ry="2" />
+<text  x="175.40" y="191.5" ></text>
+</g>
+<g >
+<title>mpn_fft_fft (125,651,803 samples, 0.29%)</title><rect x="1122.9" y="165" width="3.5" height="15.0" fill="rgb(213,39,9)" rx="2" ry="2" />
+<text  x="1125.95" y="175.5" ></text>
+</g>
+<g >
+<title>mpn_fft_fftinv (183,144,054 samples, 0.42%)</title><rect x="617.3" y="101" width="5.0" height="15.0" fill="rgb(212,34,8)" rx="2" ry="2" />
+<text  x="620.27" y="111.5" ></text>
+</g>
+<g >
+<title>mpn_fft_mul_2exp_modF (75,936,213 samples, 0.18%)</title><rect x="406.3" y="149" width="2.1" height="15.0" fill="rgb(252,217,52)" rx="2" ry="2" />
+<text  x="409.34" y="159.5" ></text>
+</g>
+<g >
+<title>__gmpn_mul_basecase (492,103,299 samples, 1.14%)</title><rect x="117.4" y="101" width="13.4" height="15.0" fill="rgb(231,120,28)" rx="2" ry="2" />
+<text  x="120.38" y="111.5" ></text>
+</g>
+<g >
+<title>divide_quotient (334,732,313 samples, 0.78%)</title><rect x="22.2" y="325" width="9.1" height="15.0" fill="rgb(243,178,42)" rx="2" ry="2" />
+<text  x="25.17" y="335.5" ></text>
+</g>
+<g >
+<title>mpn_fft_fft (544,370,973 samples, 1.26%)</title><rect x="998.8" y="181" width="14.9" height="15.0" fill="rgb(213,39,9)" rx="2" ry="2" />
+<text  x="1001.82" y="191.5" ></text>
+</g>
+<g >
+<title>mpn_mu_div_qr2 (128,286,286 samples, 0.30%)</title><rect x="1182.9" y="293" width="3.5" height="15.0" fill="rgb(248,199,47)" rx="2" ry="2" />
+<text  x="1185.93" y="303.5" ></text>
+</g>
+<g >
+<title>mpn_mul_fft_decompose (83,724,457 samples, 0.19%)</title><rect x="37.2" y="197" width="2.3" height="15.0" fill="rgb(214,43,10)" rx="2" ry="2" />
+<text  x="40.22" y="207.5" ></text>
+</g>
+<g >
+<title>__gmpn_mul_basecase (245,826,542 samples, 0.57%)</title><rect x="726.3" y="69" width="6.7" height="15.0" fill="rgb(231,120,28)" rx="2" ry="2" />
+<text  x="729.32" y="79.5" ></text>
+</g>
+<g >
+<title>__gmpn_mulmod_bknp1 (473,752,420 samples, 1.10%)</title><rect x="703.9" y="133" width="12.9" height="15.0" fill="rgb(205,2,0)" rx="2" ry="2" />
+<text  x="706.86" y="143.5" ></text>
+</g>
+<g >
+<title>__gmpn_sub_n (73,300,872 samples, 0.17%)</title><rect x="377.0" y="133" width="2.0" height="15.0" fill="rgb(212,36,8)" rx="2" ry="2" />
+<text  x="379.95" y="143.5" ></text>
+</g>
+<g >
+<title>__gmpn_sub_n (149,262,558 samples, 0.35%)</title><rect x="970.6" y="133" width="4.1" height="15.0" fill="rgb(212,36,8)" rx="2" ry="2" />
+<text  x="973.65" y="143.5" ></text>
+</g>
+<g >
+<title>__gmpn_mulmod_bnm1 (109,816,780 samples, 0.25%)</title><rect x="1163.8" y="165" width="3.0" height="15.0" fill="rgb(216,51,12)" rx="2" ry="2" />
+<text  x="1166.84" y="175.5" ></text>
+</g>
+<g >
+<title>mpn_fft_fft (523,647,219 samples, 1.21%)</title><rect x="596.8" y="133" width="14.3" height="15.0" fill="rgb(213,39,9)" rx="2" ry="2" />
+<text  x="599.75" y="143.5" ></text>
+</g>
+<g >
+<title>mpn_fft_fftinv (81,224,016 samples, 0.19%)</title><rect x="224.2" y="117" width="2.2" height="15.0" fill="rgb(212,34,8)" rx="2" ry="2" />
+<text  x="227.20" y="127.5" ></text>
+</g>
+<g >
+<title>mpn_fft_fft (164,751,806 samples, 0.38%)</title><rect x="104.4" y="133" width="4.5" height="15.0" fill="rgb(213,39,9)" rx="2" ry="2" />
+<text  x="107.38" y="143.5" ></text>
+</g>
+<g >
+<title>__gmpn_toom33_mul (154,419,614 samples, 0.36%)</title><rect x="1159.5" y="101" width="4.2" height="15.0" fill="rgb(251,212,50)" rx="2" ry="2" />
+<text  x="1162.47" y="111.5" ></text>
+</g>
+<g >
+<title>__gmpn_mul_basecase (81,158,489 samples, 0.19%)</title><rect x="750.9" y="37" width="2.2" height="15.0" fill="rgb(231,120,28)" rx="2" ry="2" />
+<text  x="753.92" y="47.5" ></text>
+</g>
+<g >
+<title>__gmpn_mul_fft (1,515,036,406 samples, 3.51%)</title><rect x="1080.3" y="213" width="41.4" height="15.0" fill="rgb(230,116,27)" rx="2" ry="2" />
+<text  x="1083.33" y="223.5" >__g..</text>
+</g>
+<g >
+<title>__gmpn_toom22_mul (434,674,617 samples, 1.01%)</title><rect x="66.1" y="149" width="11.9" height="15.0" fill="rgb(214,41,9)" rx="2" ry="2" />
+<text  x="69.12" y="159.5" ></text>
+</g>
+<g >
+<title>mpn_fft_fft (536,758,322 samples, 1.24%)</title><rect x="202.7" y="181" width="14.7" height="15.0" fill="rgb(213,39,9)" rx="2" ry="2" />
+<text  x="205.73" y="191.5" ></text>
+</g>
+<g >
+<title>mpn_mul_fft_internal.isra.0 (355,981,193 samples, 0.82%)</title><rect x="740.0" y="133" width="9.8" height="15.0" fill="rgb(208,18,4)" rx="2" ry="2" />
+<text  x="743.04" y="143.5" ></text>
+</g>
+<g >
+<title>mpn_fft_fft (1,125,005,104 samples, 2.61%)</title><rect x="375.6" y="149" width="30.7" height="15.0" fill="rgb(213,39,9)" rx="2" ry="2" />
+<text  x="378.59" y="159.5" >mp..</text>
+</g>
+<g >
+<title>__gmpn_mul_n (5,000,357,609 samples, 11.58%)</title><rect x="839.5" y="181" width="136.7" height="15.0" fill="rgb(237,147,35)" rx="2" ry="2" />
+<text  x="842.51" y="191.5" >__gmpn_mul_n</text>
+</g>
+<g >
+<title>__gmpn_mul_n (648,591,935 samples, 1.50%)</title><rect x="1128.3" y="149" width="17.7" height="15.0" fill="rgb(237,147,35)" rx="2" ry="2" />
+<text  x="1131.31" y="159.5" ></text>
+</g>
+<g >
+<title>__gmpn_toom_interpolate_5pts (154,378,873 samples, 0.36%)</title><rect x="1068.6" y="133" width="4.2" height="15.0" fill="rgb(252,216,51)" rx="2" ry="2" />
+<text  x="1071.61" y="143.5" ></text>
+</g>
+<g >
+<title>mpn_fft_mul_modF_K (502,387,319 samples, 1.16%)</title><rect x="725.2" y="133" width="13.8" height="15.0" fill="rgb(241,169,40)" rx="2" ry="2" />
+<text  x="728.25" y="143.5" ></text>
+</g>
+<g >
+<title>mpn_fft_fftinv (88,786,135 samples, 0.21%)</title><rect x="110.6" y="117" width="2.4" height="15.0" fill="rgb(212,34,8)" rx="2" ry="2" />
+<text  x="113.60" y="127.5" ></text>
+</g>
+<g >
+<title>__gmpn_mul_basecase (366,456,881 samples, 0.85%)</title><rect x="232.4" y="149" width="10.0" height="15.0" fill="rgb(231,120,28)" rx="2" ry="2" />
+<text  x="235.42" y="159.5" ></text>
+</g>
+<g >
+<title>__gmpn_preinv_mu_div_qr (91,690,258 samples, 0.21%)</title><rect x="1180.4" y="293" width="2.5" height="15.0" fill="rgb(251,213,51)" rx="2" ry="2" />
+<text  x="1183.35" y="303.5" ></text>
+</g>
+<g >
+<title>__gmpn_mul_basecase (672,228,558 samples, 1.56%)</title><rect x="627.1" y="101" width="18.3" height="15.0" fill="rgb(231,120,28)" rx="2" ry="2" />
+<text  x="630.06" y="111.5" ></text>
+</g>
+<g >
+<title>__gmpn_sub_n (141,400,620 samples, 0.33%)</title><rect x="960.5" y="133" width="3.9" height="15.0" fill="rgb(212,36,8)" rx="2" ry="2" />
+<text  x="963.49" y="143.5" ></text>
+</g>
+<g >
+<title>_mpn_crt (104,686,698 samples, 0.24%)</title><rect x="1077.1" y="181" width="2.9" height="15.0" fill="rgb(222,81,19)" rx="2" ry="2" />
+<text  x="1080.11" y="191.5" ></text>
+</g>
+<g >
+<title>__gmpn_add_n (86,327,377 samples, 0.20%)</title><rect x="800.1" y="69" width="2.4" height="15.0" fill="rgb(226,96,23)" rx="2" ry="2" />
+<text  x="803.12" y="79.5" ></text>
+</g>
+<g >
+<title>mpn_fft_fft (138,774,513 samples, 0.32%)</title><rect x="604.1" y="53" width="3.8" height="15.0" fill="rgb(213,39,9)" rx="2" ry="2" />
+<text  x="607.12" y="63.5" ></text>
+</g>
+<g >
+<title>mpn_mul_fft_internal.isra.0 (868,422,662 samples, 2.01%)</title><rect x="1122.4" y="181" width="23.8" height="15.0" fill="rgb(208,18,4)" rx="2" ry="2" />
+<text  x="1125.45" y="191.5" >m..</text>
+</g>
+<g >
+<title>mpn_fft_fftinv (86,309,213 samples, 0.20%)</title><rect x="687.8" y="101" width="2.3" height="15.0" fill="rgb(212,34,8)" rx="2" ry="2" />
+<text  x="690.77" y="111.5" ></text>
+</g>
+<g >
+<title>__gmpn_mulmod_bknp1 (73,314,326 samples, 0.17%)</title><rect x="1164.8" y="133" width="2.0" height="15.0" fill="rgb(205,2,0)" rx="2" ry="2" />
+<text  x="1167.83" y="143.5" ></text>
+</g>
+<g >
+<title>__gmpn_mul_basecase (243,285,122 samples, 0.56%)</title><rect x="1150.0" y="85" width="6.7" height="15.0" fill="rgb(231,120,28)" rx="2" ry="2" />
+<text  x="1153.04" y="95.5" ></text>
+</g>
+<g >
+<title>mpn_mul_fft_internal.isra.0 (1,483,816,924 samples, 3.44%)</title><rect x="677.2" y="165" width="40.5" height="15.0" fill="rgb(208,18,4)" rx="2" ry="2" />
+<text  x="680.19" y="175.5" >mpn..</text>
+</g>
+<g >
+<title>mpn_fft_mul_2exp_modF (104,669,179 samples, 0.24%)</title><rect x="993.3" y="197" width="2.9" height="15.0" fill="rgb(252,217,52)" rx="2" ry="2" />
+<text  x="996.32" y="207.5" ></text>
+</g>
+<g >
+<title>mpn_fft_fft (201,609,594 samples, 0.47%)</title><rect x="278.9" y="149" width="5.5" height="15.0" fill="rgb(213,39,9)" rx="2" ry="2" />
+<text  x="281.90" y="159.5" ></text>
+</g>
+<g >
+<title>divide_burnikel_ziegler (415,213,112 samples, 0.96%)</title><rect x="10.8" y="357" width="11.4" height="15.0" fill="rgb(246,191,45)" rx="2" ry="2" />
+<text  x="13.82" y="367.5" ></text>
+</g>
+<g >
+<title>mpn_mul_fft_decompose (117,770,994 samples, 0.27%)</title><rect x="993.0" y="213" width="3.2" height="15.0" fill="rgb(214,43,10)" rx="2" ry="2" />
+<text  x="995.96" y="223.5" ></text>
+</g>
+<g >
+<title>mpn_fft_fft (282,719,734 samples, 0.65%)</title><rect x="1082.0" y="181" width="7.7" height="15.0" fill="rgb(213,39,9)" rx="2" ry="2" />
+<text  x="1084.98" y="191.5" ></text>
+</g>
+<g >
+<title>mpn_fft_mul_modF_K (159,658,648 samples, 0.37%)</title><rect x="1159.5" y="133" width="4.3" height="15.0" fill="rgb(241,169,40)" rx="2" ry="2" />
+<text  x="1162.47" y="143.5" ></text>
+</g>
+<g >
+<title>mpn_fft_fftinv (209,309,215 samples, 0.48%)</title><rect x="419.9" y="85" width="5.7" height="15.0" fill="rgb(212,34,8)" rx="2" ry="2" />
+<text  x="422.85" y="95.5" ></text>
+</g>
+<g >
+<title>__gmpn_mul_n (455,359,710 samples, 1.05%)</title><rect x="230.4" y="197" width="12.5" height="15.0" fill="rgb(237,147,35)" rx="2" ry="2" />
+<text  x="233.42" y="207.5" ></text>
+</g>
+<g >
+<title>mpn_fft_fftinv (151,702,953 samples, 0.35%)</title><rect x="421.2" y="69" width="4.2" height="15.0" fill="rgb(212,34,8)" rx="2" ry="2" />
+<text  x="424.21" y="79.5" ></text>
+</g>
+<g >
+<title>__gmpn_toom33_mul (649,097,819 samples, 1.50%)</title><rect x="646.2" y="117" width="17.8" height="15.0" fill="rgb(251,212,50)" rx="2" ry="2" />
+<text  x="649.22" y="127.5" ></text>
+</g>
+<g >
+<title>mpn_fft_mul_modF_K (628,283,228 samples, 1.45%)</title><rect x="114.7" y="165" width="17.1" height="15.0" fill="rgb(241,169,40)" rx="2" ry="2" />
+<text  x="117.67" y="175.5" ></text>
+</g>
+<g >
+<title>__gmpn_bdiv_dbm1c (83,775,171 samples, 0.19%)</title><rect x="966.6" y="133" width="2.3" height="15.0" fill="rgb(246,190,45)" rx="2" ry="2" />
+<text  x="969.57" y="143.5" ></text>
+</g>
+<g >
+<title>mpn_fft_fftinv (165,016,877 samples, 0.38%)</title><rect x="222.4" y="165" width="4.5" height="15.0" fill="rgb(212,34,8)" rx="2" ry="2" />
+<text  x="225.41" y="175.5" ></text>
+</g>
+<g >
+<title>operator (130,906,336 samples, 0.30%)</title><rect x="1182.9" y="341" width="3.5" height="15.0" fill="rgb(254,228,54)" rx="2" ry="2" />
+<text  x="1185.86" y="351.5" ></text>
+</g>
+<g >
+<title>mpn_fft_fftinv (149,236,790 samples, 0.35%)</title><rect x="827.5" y="101" width="4.1" height="15.0" fill="rgb(212,34,8)" rx="2" ry="2" />
+<text  x="830.49" y="111.5" ></text>
+</g>
+<g >
+<title>mpn_mul_fft_internal.isra.0 (410,770,156 samples, 0.95%)</title><rect x="1146.7" y="165" width="11.2" height="15.0" fill="rgb(208,18,4)" rx="2" ry="2" />
+<text  x="1149.68" y="175.5" ></text>
+</g>
+<g >
+<title>__gmpn_mul_basecase (565,260,656 samples, 1.31%)</title><rect x="293.9" y="133" width="15.5" height="15.0" fill="rgb(231,120,28)" rx="2" ry="2" />
+<text  x="296.93" y="143.5" ></text>
+</g>
+<g >
+<title>divide_burnikel_ziegler (415,213,112 samples, 0.96%)</title><rect x="10.8" y="341" width="11.4" height="15.0" fill="rgb(246,191,45)" rx="2" ry="2" />
+<text  x="13.82" y="351.5" ></text>
+</g>
+<g >
+<title>divide_dc_2n1n (78,087,416 samples, 0.18%)</title><rect x="16.4" y="309" width="2.1" height="15.0" fill="rgb(226,99,23)" rx="2" ry="2" />
+<text  x="19.40" y="319.5" ></text>
+</g>
+<g >
+<title>__gmpn_ni_invertappr (11,731,299,090 samples, 27.17%)</title><rect x="35.1" y="277" width="320.6" height="15.0" fill="rgb(216,54,13)" rx="2" ry="2" />
+<text  x="38.08" y="287.5" >__gmpn_ni_invertappr</text>
+</g>
+<g >
+<title>__gmpn_toom22_mul (455,359,710 samples, 1.05%)</title><rect x="230.4" y="181" width="12.5" height="15.0" fill="rgb(214,41,9)" rx="2" ry="2" />
+<text  x="233.42" y="191.5" ></text>
+</g>
+<g >
+<title>mpn_fft_fft (214,593,225 samples, 0.50%)</title><rect x="679.3" y="117" width="5.9" height="15.0" fill="rgb(213,39,9)" rx="2" ry="2" />
+<text  x="682.33" y="127.5" ></text>
+</g>
+<g >
+<title>__gmpn_toom_interpolate_16pts (112,607,920 samples, 0.26%)</title><rect x="182.8" y="213" width="3.0" height="15.0" fill="rgb(229,110,26)" rx="2" ry="2" />
+<text  x="185.77" y="223.5" ></text>
+</g>
+<g >
+<title>__gmpn_mul_n (154,419,614 samples, 0.36%)</title><rect x="1159.5" y="117" width="4.2" height="15.0" fill="rgb(237,147,35)" rx="2" ry="2" />
+<text  x="1162.47" y="127.5" ></text>
+</g>
+<g >
+<title>__gmpn_toom_interpolate_5pts (478,445,649 samples, 1.11%)</title><rect x="555.5" y="117" width="13.1" height="15.0" fill="rgb(252,216,51)" rx="2" ry="2" />
+<text  x="558.51" y="127.5" ></text>
+</g>
+<g >
+<title>__gmpn_preinv_mu_div_qr (94,306,537 samples, 0.22%)</title><rect x="1183.9" y="277" width="2.5" height="15.0" fill="rgb(251,213,51)" rx="2" ry="2" />
+<text  x="1186.86" y="287.5" ></text>
+</g>
+<g >
+<title>__gmpn_mulmod_bnm1 (14,752,760,607 samples, 34.16%)</title><rect x="360.3" y="229" width="403.1" height="15.0" fill="rgb(216,51,12)" rx="2" ry="2" />
+<text  x="363.30" y="239.5" >__gmpn_mulmod_bnm1</text>
+</g>
+<g >
+<title>__gmpn_mul_n (298,361,580 samples, 0.69%)</title><rect x="138.9" y="133" width="8.2" height="15.0" fill="rgb(237,147,35)" rx="2" ry="2" />
+<text  x="141.92" y="143.5" ></text>
+</g>
+<g >
+<title>__gmpn_toom8h_mul (544,234,050 samples, 1.26%)</title><rect x="171.0" y="229" width="14.8" height="15.0" fill="rgb(226,98,23)" rx="2" ry="2" />
+<text  x="173.97" y="239.5" ></text>
+</g>
+<g >
+<title>__gmpn_add_n (73,242,214 samples, 0.17%)</title><rect x="555.8" y="101" width="2.0" height="15.0" fill="rgb(226,96,23)" rx="2" ry="2" />
+<text  x="558.79" y="111.5" ></text>
+</g>
+<g >
+<title>_mpn_modbnp1_kn (88,863,498 samples, 0.21%)</title><rect x="583.5" y="149" width="2.5" height="15.0" fill="rgb(231,122,29)" rx="2" ry="2" />
+<text  x="586.53" y="159.5" ></text>
+</g>
+<g >
+<title>mpn_fft_fftinv (227,742,837 samples, 0.53%)</title><rect x="58.3" y="149" width="6.2" height="15.0" fill="rgb(212,34,8)" rx="2" ry="2" />
+<text  x="61.32" y="159.5" ></text>
+</g>
+<g >
+<title>__gmpn_toom_interpolate_5pts (424,001,651 samples, 0.98%)</title><rect x="964.6" y="149" width="11.6" height="15.0" fill="rgb(252,216,51)" rx="2" ry="2" />
+<text  x="967.57" y="159.5" ></text>
+</g>
+<g >
+<title>__gmpn_mul_basecase (3,688,271,737 samples, 8.54%)</title><rect x="450.4" y="101" width="100.7" height="15.0" fill="rgb(231,120,28)" rx="2" ry="2" />
+<text  x="453.36" y="111.5" >__gmpn_mul_b..</text>
+</g>
+<g >
+<title>mpn_mu_div_qr2 (41,919,014,525 samples, 97.07%)</title><rect x="33.9" y="293" width="1145.4" height="15.0" fill="rgb(248,199,47)" rx="2" ry="2" />
+<text  x="36.86" y="303.5" >mpn_mu_div_qr2</text>
+</g>
+<g >
+<title>__gmpn_toom22_mul (138,877,459 samples, 0.32%)</title><rect x="166.5" y="197" width="3.8" height="15.0" fill="rgb(214,41,9)" rx="2" ry="2" />
+<text  x="169.53" y="207.5" ></text>
+</g>
+<g >
+<title>__gmpn_mul_n (123,119,514 samples, 0.29%)</title><rect x="336.1" y="149" width="3.4" height="15.0" fill="rgb(237,147,35)" rx="2" ry="2" />
+<text  x="339.12" y="159.5" ></text>
+</g>
+<g >
+<title>mpn_fft_fftinv (494,656,448 samples, 1.15%)</title><rect x="820.5" y="165" width="13.5" height="15.0" fill="rgb(212,34,8)" rx="2" ry="2" />
+<text  x="823.49" y="175.5" ></text>
+</g>
+<g >
+<title>mpn_fft_fft (78,510,630 samples, 0.18%)</title><rect x="1123.9" y="133" width="2.1" height="15.0" fill="rgb(213,39,9)" rx="2" ry="2" />
+<text  x="1126.88" y="143.5" ></text>
+</g>
+<g >
+<title>__gmpn_mulmod_bnm1 (568,215,622 samples, 1.32%)</title><rect x="332.7" y="213" width="15.5" height="15.0" fill="rgb(216,51,12)" rx="2" ry="2" />
+<text  x="335.69" y="223.5" ></text>
+</g>
+<g >
+<title>mpn_fft_fft (745,483,746 samples, 1.73%)</title><rect x="382.5" y="117" width="20.4" height="15.0" fill="rgb(213,39,9)" rx="2" ry="2" />
+<text  x="385.53" y="127.5" ></text>
+</g>
+<g >
+<title>divide_dispatch_q (334,732,313 samples, 0.78%)</title><rect x="22.2" y="357" width="9.1" height="15.0" fill="rgb(214,45,10)" rx="2" ry="2" />
+<text  x="25.17" y="367.5" ></text>
+</g>
+<g >
+<title>divmod_into (415,213,112 samples, 0.96%)</title><rect x="10.8" y="373" width="11.4" height="15.0" fill="rgb(240,165,39)" rx="2" ry="2" />
+<text  x="13.82" y="383.5" ></text>
+</g>
+<g >
+<title>mpn_fft_fftinv (167,286,783 samples, 0.39%)</title><rect x="109.5" y="165" width="4.5" height="15.0" fill="rgb(212,34,8)" rx="2" ry="2" />
+<text  x="112.45" y="175.5" ></text>
+</g>
+<g >
+<title>mpn_fft_mul_modF_K (373,964,099 samples, 0.87%)</title><rect x="322.5" y="181" width="10.2" height="15.0" fill="rgb(241,169,40)" rx="2" ry="2" />
+<text  x="325.47" y="191.5" ></text>
+</g>
+<g >
+<title>__gmpn_toom22_mul (426,627,757 samples, 0.99%)</title><rect x="231.2" y="165" width="11.7" height="15.0" fill="rgb(214,41,9)" rx="2" ry="2" />
+<text  x="234.20" y="175.5" ></text>
+</g>
+<g >
+<title>__gmpn_mul_basecase (418,723,059 samples, 0.97%)</title><rect x="79.0" y="117" width="11.4" height="15.0" fill="rgb(231,120,28)" rx="2" ry="2" />
+<text  x="82.00" y="127.5" ></text>
+</g>
+<g >
+<title>mpn_fft_fft (188,295,798 samples, 0.44%)</title><rect x="800.0" y="85" width="5.1" height="15.0" fill="rgb(213,39,9)" rx="2" ry="2" />
+<text  x="802.98" y="95.5" ></text>
+</g>
+<g >
+<title>__gmpn_mul_basecase (115,131,008 samples, 0.27%)</title><rect x="1160.0" y="69" width="3.1" height="15.0" fill="rgb(231,120,28)" rx="2" ry="2" />
+<text  x="1162.97" y="79.5" ></text>
+</g>
+<g >
+<title>_mpn_modbnp1_kn (133,508,674 samples, 0.31%)</title><rect x="576.8" y="149" width="3.7" height="15.0" fill="rgb(231,122,29)" rx="2" ry="2" />
+<text  x="579.80" y="159.5" ></text>
+</g>
+<g >
+<title>mpn_mul_fft_internal.isra.0 (107,337,532 samples, 0.25%)</title><rect x="154.4" y="133" width="2.9" height="15.0" fill="rgb(208,18,4)" rx="2" ry="2" />
+<text  x="157.37" y="143.5" ></text>
+</g>
+<g >
+<title>mpn_fft_fftinv (232,567,949 samples, 0.54%)</title><rect x="616.3" y="117" width="6.3" height="15.0" fill="rgb(212,34,8)" rx="2" ry="2" />
+<text  x="619.28" y="127.5" ></text>
+</g>
+<g >
+<title>__gmpn_mul_n (434,674,617 samples, 1.01%)</title><rect x="66.1" y="165" width="11.9" height="15.0" fill="rgb(237,147,35)" rx="2" ry="2" />
+<text  x="69.12" y="175.5" ></text>
+</g>
+<g >
+<title>__gmpn_mulmod_bknp1 (162,395,844 samples, 0.38%)</title><rect x="734.0" y="117" width="4.5" height="15.0" fill="rgb(205,2,0)" rx="2" ry="2" />
+<text  x="737.03" y="127.5" ></text>
+</g>
+<g >
+<title>mpn_fft_fft (1,472,842,539 samples, 3.41%)</title><rect x="775.5" y="213" width="40.2" height="15.0" fill="rgb(213,39,9)" rx="2" ry="2" />
+<text  x="778.45" y="223.5" >mpn..</text>
+</g>
+<g >
+<title>divide_quotient_appr (334,732,313 samples, 0.78%)</title><rect x="22.2" y="309" width="9.1" height="15.0" fill="rgb(220,69,16)" rx="2" ry="2" />
+<text  x="25.17" y="319.5" ></text>
+</g>
+<g >
+<title>__gmpn_mul_n (141,433,035 samples, 0.33%)</title><rect x="734.0" y="101" width="3.9" height="15.0" fill="rgb(237,147,35)" rx="2" ry="2" />
+<text  x="737.03" y="111.5" ></text>
+</g>
+<g >
+<title>mpn_mul_fft_internal.isra.0 (8,038,332,813 samples, 18.61%)</title><rect x="772.0" y="229" width="219.7" height="15.0" fill="rgb(208,18,4)" rx="2" ry="2" />
+<text  x="775.02" y="239.5" >mpn_mul_fft_internal.isra.0</text>
+</g>
+<g >
+<title>__gmpn_mul_basecase (102,132,817 samples, 0.24%)</title><rect x="735.0" y="69" width="2.8" height="15.0" fill="rgb(231,120,28)" rx="2" ry="2" />
+<text  x="737.97" y="79.5" ></text>
+</g>
+<g >
+<title>mpn_fft_fft (782,295,233 samples, 1.81%)</title><rect x="787.8" y="149" width="21.4" height="15.0" fill="rgb(213,39,9)" rx="2" ry="2" />
+<text  x="790.82" y="159.5" >m..</text>
+</g>
+<g >
+<title>mpn_fft_fftinv (94,284,777 samples, 0.22%)</title><rect x="60.4" y="85" width="2.6" height="15.0" fill="rgb(212,34,8)" rx="2" ry="2" />
+<text  x="63.40" y="95.5" ></text>
+</g>
+<g >
+<title>__gmpn_mulmod_bnm1 (711,958,745 samples, 1.65%)</title><rect x="739.0" y="165" width="19.4" height="15.0" fill="rgb(216,51,12)" rx="2" ry="2" />
+<text  x="741.97" y="175.5" ></text>
+</g>
+<g >
+<title>mpn_mul_fft_internal.isra.0 (3,064,061,471 samples, 7.10%)</title><rect x="591.2" y="181" width="83.8" height="15.0" fill="rgb(208,18,4)" rx="2" ry="2" />
+<text  x="594.24" y="191.5" >mpn_mul_f..</text>
+</g>
+<g >
+<title>mpn_fft_fft (274,981,570 samples, 0.64%)</title><rect x="601.3" y="85" width="7.5" height="15.0" fill="rgb(213,39,9)" rx="2" ry="2" />
+<text  x="604.33" y="95.5" ></text>
+</g>
+<g >
+<title>mpn_fft_fft (83,850,423 samples, 0.19%)</title><rect x="316.7" y="149" width="2.3" height="15.0" fill="rgb(213,39,9)" rx="2" ry="2" />
+<text  x="319.74" y="159.5" ></text>
+</g>
+<g >
+<title>mpn_mul_fft_decompose (151,928,240 samples, 0.35%)</title><rect x="193.5" y="229" width="4.2" height="15.0" fill="rgb(214,43,10)" rx="2" ry="2" />
+<text  x="196.50" y="239.5" ></text>
+</g>
+<g >
+<title>_mpn_modbknp1dbnp1_n (238,030,129 samples, 0.55%)</title><rect x="568.9" y="149" width="6.5" height="15.0" fill="rgb(251,215,51)" rx="2" ry="2" />
+<text  x="571.87" y="159.5" ></text>
+</g>
+<g >
+<title>mpn_mul_fft_decompose (135,964,949 samples, 0.31%)</title><rect x="587.5" y="181" width="3.7" height="15.0" fill="rgb(214,43,10)" rx="2" ry="2" />
+<text  x="590.53" y="191.5" ></text>
+</g>
+<g >
+<title>mpn_fft_fft (424,016,899 samples, 0.98%)</title><rect x="42.5" y="149" width="11.6" height="15.0" fill="rgb(213,39,9)" rx="2" ry="2" />
+<text  x="45.51" y="159.5" ></text>
+</g>
+<g >
+<title>mpn_fft_mul_2exp_modF (109,864,832 samples, 0.25%)</title><rect x="588.2" y="165" width="3.0" height="15.0" fill="rgb(252,217,52)" rx="2" ry="2" />
+<text  x="591.24" y="175.5" ></text>
+</g>
+<g >
+<title>__gmpn_toom22_mul (675,276,833 samples, 1.56%)</title><rect x="291.6" y="165" width="18.4" height="15.0" fill="rgb(214,41,9)" rx="2" ry="2" />
+<text  x="294.57" y="175.5" ></text>
+</g>
+<g >
+<title>operator (129,204,942 samples, 0.30%)</title><rect x="1186.4" y="373" width="3.6" height="15.0" fill="rgb(254,228,54)" rx="2" ry="2" />
+<text  x="1189.43" y="383.5" ></text>
+</g>
+<g >
+<title>__gmpn_mul_fft (8,268,480,528 samples, 19.15%)</title><rect x="360.3" y="213" width="225.9" height="15.0" fill="rgb(230,116,27)" rx="2" ry="2" />
+<text  x="363.30" y="223.5" >__gmpn_mul_fft</text>
+</g>
+<g >
+<title>__gmpn_mulmod_bnm1 (120,409,147 samples, 0.28%)</title><rect x="342.7" y="181" width="3.3" height="15.0" fill="rgb(216,51,12)" rx="2" ry="2" />
+<text  x="345.70" y="191.5" ></text>
+</g>
+<g >
+<title>__gmpn_toom22_mul (115,258,368 samples, 0.27%)</title><rect x="336.3" y="117" width="3.2" height="15.0" fill="rgb(214,41,9)" rx="2" ry="2" />
+<text  x="339.34" y="127.5" ></text>
+</g>
+<g >
+<title>mpn_fft_fftinv (308,881,248 samples, 0.72%)</title><rect x="56.9" y="181" width="8.4" height="15.0" fill="rgb(212,34,8)" rx="2" ry="2" />
+<text  x="59.89" y="191.5" ></text>
+</g>
+<g >
+<title>__gmpn_toom22_mul (287,588,966 samples, 0.67%)</title><rect x="323.0" y="149" width="7.8" height="15.0" fill="rgb(214,41,9)" rx="2" ry="2" />
+<text  x="325.97" y="159.5" ></text>
+</g>
+<g >
+<title>__gmpn_add_n (96,822,787 samples, 0.22%)</title><rect x="842.4" y="149" width="2.7" height="15.0" fill="rgb(226,96,23)" rx="2" ry="2" />
+<text  x="845.44" y="159.5" ></text>
+</g>
+<g >
+<title>run_div (43,180,814,963 samples, 100.00%)</title><rect x="10.0" y="405" width="1180.0" height="15.0" fill="rgb(210,25,6)" rx="2" ry="2" />
+<text  x="13.00" y="415.5" >run_div</text>
+</g>
+<g >
+<title>__gmpz_tdiv_qr (129,204,942 samples, 0.30%)</title><rect x="1186.4" y="357" width="3.6" height="15.0" fill="rgb(225,93,22)" rx="2" ry="2" />
+<text  x="1189.43" y="367.5" ></text>
+</g>
+<g >
+<title>mpn_mul_fft_internal.isra.0 (2,772,170,787 samples, 6.42%)</title><rect x="197.7" y="229" width="75.7" height="15.0" fill="rgb(208,18,4)" rx="2" ry="2" />
+<text  x="200.65" y="239.5" >mpn_mul_..</text>
+</g>
+<g >
+<title>__gmpn_sub_n (146,325,129 samples, 0.34%)</title><rect x="1175.3" y="261" width="4.0" height="15.0" fill="rgb(212,36,8)" rx="2" ry="2" />
+<text  x="1178.35" y="271.5" ></text>
+</g>
+<g >
+<title>operator (42,010,614,760 samples, 97.29%)</title><rect x="31.4" y="341" width="1147.9" height="15.0" fill="rgb(254,228,54)" rx="2" ry="2" />
+<text  x="34.36" y="351.5" >operator</text>
+</g>
+<g >
+<title>mpn_fft_fftinv (96,704,721 samples, 0.22%)</title><rect x="1090.1" y="165" width="2.6" height="15.0" fill="rgb(212,34,8)" rx="2" ry="2" />
+<text  x="1093.06" y="175.5" ></text>
+</g>
+<g >
+<title>__gmpn_nussbaumer_mul (4,580,297,152 samples, 10.61%)</title><rect x="37.1" y="245" width="125.1" height="15.0" fill="rgb(236,146,35)" rx="2" ry="2" />
+<text  x="40.08" y="255.5" >__gmpn_nussbaum..</text>
+</g>
+<g >
+<title>__gmpn_toom22_mul (450,158,662 samples, 1.04%)</title><rect x="78.1" y="133" width="12.3" height="15.0" fill="rgb(214,41,9)" rx="2" ry="2" />
+<text  x="81.14" y="143.5" ></text>
+</g>
+<g >
+<title>operator% (415,213,112 samples, 0.96%)</title><rect x="10.8" y="389" width="11.4" height="15.0" fill="rgb(215,49,11)" rx="2" ry="2" />
+<text  x="13.82" y="399.5" ></text>
+</g>
+<g >
+<title>mpn_fft_fftinv (120,280,361 samples, 0.28%)</title><rect x="1089.7" y="181" width="3.3" height="15.0" fill="rgb(212,34,8)" rx="2" ry="2" />
+<text  x="1092.70" y="191.5" ></text>
+</g>
+<g >
+<title>__libc_start_main_impl (43,180,814,963 samples, 100.00%)</title><rect x="10.0" y="453" width="1180.0" height="15.0" fill="rgb(218,63,15)" rx="2" ry="2" />
+<text  x="13.00" y="463.5" >__libc_start_main_impl</text>
+</g>
+<g >
+<title>mpn_fft_fft (183,066,038 samples, 0.42%)</title><rect x="1005.4" y="101" width="5.0" height="15.0" fill="rgb(213,39,9)" rx="2" ry="2" />
+<text  x="1008.41" y="111.5" ></text>
+</g>
+<g >
+<title>operator (128,380,659 samples, 0.30%)</title><rect x="1179.3" y="357" width="3.6" height="15.0" fill="rgb(254,228,54)" rx="2" ry="2" />
+<text  x="1182.35" y="367.5" ></text>
+</g>
+<g >
+<title>mpn_fft_fftinv (123,147,458 samples, 0.29%)</title><rect x="223.3" y="149" width="3.3" height="15.0" fill="rgb(212,34,8)" rx="2" ry="2" />
+<text  x="226.27" y="159.5" ></text>
+</g>
+<g >
+<title>run_ladder (82,935,430 samples, 0.19%)</title><rect x="28.9" y="213" width="2.3" height="15.0" fill="rgb(241,169,40)" rx="2" ry="2" />
+<text  x="31.93" y="223.5" ></text>
+</g>
+<g >
+<title>mpn_fft_mul_modF_K (117,837,940 samples, 0.27%)</title><rect x="750.7" y="101" width="3.2" height="15.0" fill="rgb(241,169,40)" rx="2" ry="2" />
+<text  x="753.70" y="111.5" ></text>
+</g>
+<g >
+<title>__gmpn_mul_fft (214,574,578 samples, 0.50%)</title><rect x="1158.0" y="165" width="5.8" height="15.0" fill="rgb(230,116,27)" rx="2" ry="2" />
+<text  x="1160.97" y="175.5" ></text>
+</g>
+<g >
+<title>mpn_fft_fft (130,683,583 samples, 0.30%)</title><rect x="1006.8" y="85" width="3.5" height="15.0" fill="rgb(213,39,9)" rx="2" ry="2" />
+<text  x="1009.77" y="95.5" ></text>
+</g>
+<g >
+<title>__gmpn_toom22_mul (269,348,498 samples, 0.62%)</title><rect x="323.5" y="133" width="7.3" height="15.0" fill="rgb(214,41,9)" rx="2" ry="2" />
+<text  x="326.47" y="143.5" ></text>
+</g>
+<g >
+<title>__gmpz_tdiv_qr (128,380,659 samples, 0.30%)</title><rect x="1179.3" y="341" width="3.6" height="15.0" fill="rgb(225,93,22)" rx="2" ry="2" />
+<text  x="1182.35" y="351.5" ></text>
+</g>
+<g >
+<title>__gmpn_toom22_mul (499,391,578 samples, 1.16%)</title><rect x="1026.1" y="149" width="13.6" height="15.0" fill="rgb(214,41,9)" rx="2" ry="2" />
+<text  x="1029.06" y="159.5" ></text>
+</g>
+<g >
+<title>__gmpn_mul_basecase (89,046,549 samples, 0.21%)</title><rect x="336.9" y="101" width="2.4" height="15.0" fill="rgb(231,120,28)" rx="2" ry="2" />
+<text  x="339.91" y="111.5" ></text>
+</g>
+<g >
+<title>mpn_fft_fft (104,642,343 samples, 0.24%)</title><rect x="1085.1" y="117" width="2.9" height="15.0" fill="rgb(213,39,9)" rx="2" ry="2" />
+<text  x="1088.12" y="127.5" ></text>
+</g>
+<g >
+<title>__gmpn_mul_basecase (468,476,624 samples, 1.08%)</title><rect x="648.6" y="85" width="12.8" height="15.0" fill="rgb(231,120,28)" rx="2" ry="2" />
+<text  x="651.58" y="95.5" ></text>
+</g>
+<g >
+<title>mpn_fft_fft (502,608,202 samples, 1.16%)</title><rect x="41.4" y="165" width="13.7" height="15.0" fill="rgb(213,39,9)" rx="2" ry="2" />
+<text  x="44.37" y="175.5" ></text>
+</g>
+<g >
+<title>mpn_fft_fftinv (81,217,985 samples, 0.19%)</title><rect x="287.0" y="165" width="2.2" height="15.0" fill="rgb(212,34,8)" rx="2" ry="2" />
+<text  x="289.99" y="175.5" ></text>
+</g>
+<g >
+<title>operator/ (334,732,313 samples, 0.78%)</title><rect x="22.2" y="389" width="9.1" height="15.0" fill="rgb(251,211,50)" rx="2" ry="2" />
+<text  x="25.17" y="399.5" ></text>
+</g>
+<g >
+<title>__gmpn_mulmod_bnm1 (219,986,319 samples, 0.51%)</title><rect x="153.9" y="165" width="6.1" height="15.0" fill="rgb(216,51,12)" rx="2" ry="2" />
+<text  x="156.94" y="175.5" ></text>
+</g>
+<g >
+<title>__gmpn_mulmod_bnm1 (6,572,341,722 samples, 15.22%)</title><rect x="991.7" y="245" width="179.6" height="15.0" fill="rgb(216,51,12)" rx="2" ry="2" />
+<text  x="994.67" y="255.5" >__gmpn_mulmod_bnm1</text>
+</g>
+<g >
+<title>__gmpn_mulmod_bknp1 (149,251,238 samples, 0.35%)</title><rect x="263.5" y="181" width="4.0" height="15.0" fill="rgb(205,2,0)" rx="2" ry="2" />
+<text  x="266.46" y="191.5" ></text>
+</g>
+<g >
+<title>mpn_fft_fftinv (295,683,411 samples, 0.68%)</title><rect x="824.0" y="133" width="8.1" height="15.0" fill="rgb(212,34,8)" rx="2" ry="2" />
+<text  x="826.99" y="143.5" ></text>
+</g>
+<g >
+<title>__gmpn_sub_n (117,825,603 samples, 0.27%)</title><rect x="1172.1" y="245" width="3.2" height="15.0" fill="rgb(212,36,8)" rx="2" ry="2" />
+<text  x="1175.13" y="255.5" ></text>
+</g>
+<g >
+<title>mpn_mu_div_qr2 (128,380,659 samples, 0.30%)</title><rect x="1179.3" y="309" width="3.6" height="15.0" fill="rgb(248,199,47)" rx="2" ry="2" />
+<text  x="1182.35" y="319.5" ></text>
+</g>
+<g >
+<title>__gmpn_mul_basecase (75,981,114 samples, 0.18%)</title><rect x="664.4" y="101" width="2.1" height="15.0" fill="rgb(231,120,28)" rx="2" ry="2" />
+<text  x="667.39" y="111.5" ></text>
+</g>
+<g >
+<title>__gmpn_mul_n (14,752,760,607 samples, 34.16%)</title><rect x="360.3" y="261" width="403.1" height="15.0" fill="rgb(237,147,35)" rx="2" ry="2" />
+<text  x="363.30" y="271.5" >__gmpn_mul_n</text>
+</g>
+<g >
+<title>__gmpn_mul_n (1,386,705,683 samples, 3.21%)</title><rect x="626.1" y="133" width="37.9" height="15.0" fill="rgb(237,147,35)" rx="2" ry="2" />
+<text  x="629.06" y="143.5" >__g..</text>
+</g>
+<g >
+<title>mpn_fft_mul_modF_K (240,709,452 samples, 0.56%)</title><rect x="743.2" y="117" width="6.6" height="15.0" fill="rgb(241,169,40)" rx="2" ry="2" />
+<text  x="746.19" y="127.5" ></text>
+</g>
+<g >
+<title>mpn_fft_fftinv (538,947,714 samples, 1.25%)</title><rect x="413.4" y="149" width="14.7" height="15.0" fill="rgb(212,34,8)" rx="2" ry="2" />
+<text  x="416.42" y="159.5" ></text>
+</g>
+<g >
+<title>mpn_fft_fftinv (143,929,125 samples, 0.33%)</title><rect x="59.6" y="117" width="3.9" height="15.0" fill="rgb(212,34,8)" rx="2" ry="2" />
+<text  x="62.61" y="127.5" ></text>
+</g>
+<g >
+<title>mpn_mul_fft_internal.isra.0 (233,156,272 samples, 0.54%)</title><rect x="147.6" y="149" width="6.3" height="15.0" fill="rgb(208,18,4)" rx="2" ry="2" />
+<text  x="150.57" y="159.5" ></text>
+</g>
+<g >
+<title>mpn_mul_fft_internal.isra.0 (2,195,836,982 samples, 5.09%)</title><rect x="39.5" y="197" width="60.0" height="15.0" fill="rgb(208,18,4)" rx="2" ry="2" />
+<text  x="42.51" y="207.5" >mpn_mu..</text>
+</g>
+<g >
+<title>__gmpn_toom33_mul (648,591,935 samples, 1.50%)</title><rect x="1128.3" y="133" width="17.7" height="15.0" fill="rgb(251,212,50)" rx="2" ry="2" />
+<text  x="1131.31" y="143.5" ></text>
+</g>
+<g >
+<title>mpn_fft_fftinv (115,033,201 samples, 0.27%)</title><rect x="687.3" y="117" width="3.1" height="15.0" fill="rgb(212,34,8)" rx="2" ry="2" />
+<text  x="690.27" y="127.5" ></text>
+</g>
+<g >
+<title>__gmpn_mul_n (5,663,977,432 samples, 13.12%)</title><rect x="37.1" y="261" width="154.8" height="15.0" fill="rgb(237,147,35)" rx="2" ry="2" />
+<text  x="40.08" y="271.5" >__gmpn_mul_n</text>
+</g>
+<g >
+<title>mpn_fft_mul_2exp_modF (99,398,532 samples, 0.23%)</title><rect x="431.4" y="181" width="2.7" height="15.0" fill="rgb(252,217,52)" rx="2" ry="2" />
+<text  x="434.35" y="191.5" ></text>
+</g>
+<g >
+<title>mpn_fft_mul_modF_K (798,087,469 samples, 1.85%)</title><rect x="291.1" y="197" width="21.8" height="15.0" fill="rgb(241,169,40)" rx="2" ry="2" />
+<text  x="294.14" y="207.5" >m..</text>
+</g>
+<g >
+<title>mpn_fft_fft (130,789,447 samples, 0.30%)</title><rect x="104.8" y="117" width="3.6" height="15.0" fill="rgb(213,39,9)" rx="2" ry="2" />
+<text  x="107.81" y="127.5" ></text>
+</g>
+<g >
+<title>mpn_fft_fft (104,686,954 samples, 0.24%)</title><rect x="105.2" y="101" width="2.9" height="15.0" fill="rgb(213,39,9)" rx="2" ry="2" />
+<text  x="108.23" y="111.5" ></text>
+</g>
+<g >
+<title>__gmpn_mulmod_bnm1 (3,257,194,799 samples, 7.54%)</title><rect x="1080.0" y="229" width="89.1" height="15.0" fill="rgb(216,51,12)" rx="2" ry="2" />
+<text  x="1083.05" y="239.5" >__gmpn_mul..</text>
+</g>
+<g >
+<title>__gmpn_toom22_mul (272,265,154 samples, 0.63%)</title><rect x="139.6" y="101" width="7.5" height="15.0" fill="rgb(214,41,9)" rx="2" ry="2" />
+<text  x="142.63" y="111.5" ></text>
+</g>
+<g >
+<title>__gmpn_sub_n (73,277,791 samples, 0.17%)</title><rect x="1169.3" y="229" width="2.0" height="15.0" fill="rgb(212,36,8)" rx="2" ry="2" />
+<text  x="1172.27" y="239.5" ></text>
+</g>
+<g >
+<title>__gmpn_mul_basecase (348,271,092 samples, 0.81%)</title><rect x="693.8" y="85" width="9.5" height="15.0" fill="rgb(231,120,28)" rx="2" ry="2" />
+<text  x="696.77" y="95.5" ></text>
+</g>
+<g >
+<title>mpn_fft_fft (112,562,257 samples, 0.26%)</title><rect x="48.4" y="69" width="3.1" height="15.0" fill="rgb(213,39,9)" rx="2" ry="2" />
+<text  x="51.38" y="79.5" ></text>
+</g>
+<g >
+<title>__gmpn_mul_n (232,849,477 samples, 0.54%)</title><rect x="743.2" y="101" width="6.4" height="15.0" fill="rgb(237,147,35)" rx="2" ry="2" />
+<text  x="746.19" y="111.5" ></text>
+</g>
+<g >
+<title>__gmpn_mul_basecase (467,955,405 samples, 1.08%)</title><rect x="1026.9" y="133" width="12.7" height="15.0" fill="rgb(231,120,28)" rx="2" ry="2" />
+<text  x="1029.85" y="143.5" ></text>
+</g>
+<g >
+<title>mpn_mu_div_qr2 (129,204,942 samples, 0.30%)</title><rect x="1186.4" y="325" width="3.6" height="15.0" fill="rgb(248,199,47)" rx="2" ry="2" />
+<text  x="1189.43" y="335.5" ></text>
+</g>
+<g >
+<title>__gmpn_mul_n (426,708,178 samples, 0.99%)</title><rect x="692.2" y="133" width="11.7" height="15.0" fill="rgb(237,147,35)" rx="2" ry="2" />
+<text  x="695.20" y="143.5" ></text>
+</g>
+<g >
+<title>mpn_mul_fft_internal.isra.0 (196,238,271 samples, 0.45%)</title><rect x="1158.5" y="149" width="5.3" height="15.0" fill="rgb(208,18,4)" rx="2" ry="2" />
+<text  x="1161.47" y="159.5" ></text>
+</g>
+<g >
+<title>mpn_fft_fftinv (91,583,459 samples, 0.21%)</title><rect x="618.9" y="69" width="2.5" height="15.0" fill="rgb(212,34,8)" rx="2" ry="2" />
+<text  x="621.92" y="79.5" ></text>
+</g>
+<g >
+<title>__gmpn_mul_n (452,904,174 samples, 1.05%)</title><rect x="703.9" y="117" width="12.3" height="15.0" fill="rgb(237,147,35)" rx="2" ry="2" />
+<text  x="706.86" y="127.5" ></text>
+</g>
+<g >
+<title>mpn_fft_fft (188,337,349 samples, 0.44%)</title><rect x="395.1" y="53" width="5.2" height="15.0" fill="rgb(213,39,9)" rx="2" ry="2" />
+<text  x="398.12" y="63.5" ></text>
+</g>
+<g >
+<title>__gmpn_mulmod_bknp1 (128,383,749 samples, 0.30%)</title><rect x="664.0" y="133" width="3.5" height="15.0" fill="rgb(205,2,0)" rx="2" ry="2" />
+<text  x="667.03" y="143.5" ></text>
+</g>
+<g >
+<title>mpn_fft_fft (75,977,663 samples, 0.18%)</title><rect x="740.2" y="117" width="2.1" height="15.0" fill="rgb(213,39,9)" rx="2" ry="2" />
+<text  x="743.19" y="127.5" ></text>
+</g>
+<g >
+<title>divide_dc_3n2n (122,318,985 samples, 0.28%)</title><rect x="25.6" y="261" width="3.3" height="15.0" fill="rgb(213,40,9)" rx="2" ry="2" />
+<text  x="28.59" y="271.5" ></text>
+</g>
+<g >
+<title>mpn_fft_fftinv (146,326,233 samples, 0.34%)</title><rect x="109.7" y="149" width="4.0" height="15.0" fill="rgb(212,34,8)" rx="2" ry="2" />
+<text  x="112.67" y="159.5" ></text>
+</g>
+<g >
+<title>__gmpn_mul_n (607,351,628 samples, 1.41%)</title><rect x="115.0" y="149" width="16.6" height="15.0" fill="rgb(237,147,35)" rx="2" ry="2" />
+<text  x="118.02" y="159.5" ></text>
+</g>
+<g >
+<title>mpn_fft_fft (319,177,268 samples, 0.74%)</title><rect x="392.1" y="69" width="8.7" height="15.0" fill="rgb(213,39,9)" rx="2" ry="2" />
+<text  x="395.11" y="79.5" ></text>
+</g>
+<g >
+<title>__gmpn_mulmod_bknp1 (5,356,850,916 samples, 12.41%)</title><rect x="434.3" y="165" width="146.4" height="15.0" fill="rgb(205,2,0)" rx="2" ry="2" />
+<text  x="437.28" y="175.5" >__gmpn_mulmod_bknp1</text>
+</g>
+<g >
+<title>__gmpn_mul_fft (3,202,644,331 samples, 7.42%)</title><rect x="587.5" y="197" width="87.5" height="15.0" fill="rgb(230,116,27)" rx="2" ry="2" />
+<text  x="590.46" y="207.5" >__gmpn_mul..</text>
+</g>
+<g >
+<title>__gmpn_mul_n (326,971,009 samples, 0.76%)</title><rect x="1148.8" y="133" width="8.9" height="15.0" fill="rgb(237,147,35)" rx="2" ry="2" />
+<text  x="1151.75" y="143.5" ></text>
+</g>
+<g >
+<title>__gmpn_toom22_mul (4,103,920,083 samples, 9.50%)</title><rect x="443.2" y="117" width="112.2" height="15.0" fill="rgb(214,41,9)" rx="2" ry="2" />
+<text  x="446.22" y="127.5" >__gmpn_toom22..</text>
+</g>
+<g >
+<title>mpn_fft_fft (112,643,096 samples, 0.26%)</title><rect x="133.7" y="133" width="3.1" height="15.0" fill="rgb(213,39,9)" rx="2" ry="2" />
+<text  x="136.70" y="143.5" ></text>
+</g>
+<g >
+<title>__gmpn_mul_fft (8,297,543,939 samples, 19.22%)</title><rect x="764.9" y="245" width="226.8" height="15.0" fill="rgb(230,116,27)" rx="2" ry="2" />
+<text  x="767.93" y="255.5" >__gmpn_mul_fft</text>
+</g>
+<g >
+<title>__gmpn_mul_n (83,722,956 samples, 0.19%)</title><rect x="90.4" y="133" width="2.3" height="15.0" fill="rgb(237,147,35)" rx="2" ry="2" />
+<text  x="93.44" y="143.5" ></text>
+</g>
+<g >
+<title>__gmpn_toom22_mul (358,503,210 samples, 0.83%)</title><rect x="171.0" y="213" width="9.8" height="15.0" fill="rgb(214,41,9)" rx="2" ry="2" />
+<text  x="173.97" y="223.5" ></text>
+</g>
+<g >
+<title>mpn_fft_mul_modF_K (143,985,375 samples, 0.33%)</title><rect x="335.9" y="165" width="3.9" height="15.0" fill="rgb(241,169,40)" rx="2" ry="2" />
+<text  x="338.91" y="175.5" ></text>
+</g>
+<g >
+<title>__gmpn_tdiv_qr (128,380,659 samples, 0.30%)</title><rect x="1179.3" y="325" width="3.6" height="15.0" fill="rgb(252,220,52)" rx="2" ry="2" />
+<text  x="1182.35" y="335.5" ></text>
+</g>
+<g >
+<title>mpn_fft_fft (633,244,457 samples, 1.47%)</title><rect x="997.7" y="197" width="17.3" height="15.0" fill="rgb(213,39,9)" rx="2" ry="2" />
+<text  x="1000.68" y="207.5" ></text>
+</g>
+<g >
+<title>divide_dc_3n2n (75,624,145 samples, 0.18%)</title><rect x="12.9" y="293" width="2.1" height="15.0" fill="rgb(213,40,9)" rx="2" ry="2" />
+<text  x="15.91" y="303.5" ></text>
+</g>
+<g >
+<title>mpn_fft_fftinv (177,981,109 samples, 0.41%)</title><rect x="59.1" y="133" width="4.9" height="15.0" fill="rgb(212,34,8)" rx="2" ry="2" />
+<text  x="62.11" y="143.5" ></text>
+</g>
+<g >
+<title>multiply_runtime_any (82,935,430 samples, 0.19%)</title><rect x="28.9" y="261" width="2.3" height="15.0" fill="rgb(242,171,40)" rx="2" ry="2" />
+<text  x="31.93" y="271.5" ></text>
+</g>
+<g >
+<title>mpn_fft_fft (298,364,984 samples, 0.69%)</title><rect x="277.4" y="181" width="8.2" height="15.0" fill="rgb(213,39,9)" rx="2" ry="2" />
+<text  x="280.41" y="191.5" ></text>
+</g>
+<g >
+<title>__gmpn_nussbaumer_mul (14,752,760,607 samples, 34.16%)</title><rect x="360.3" y="245" width="403.1" height="15.0" fill="rgb(236,146,35)" rx="2" ry="2" />
+<text  x="363.30" y="255.5" >__gmpn_nussbaumer_mul</text>
+</g>
+<g >
+<title>mpn_fft_fft (342,908,853 samples, 0.79%)</title><rect x="276.8" y="197" width="9.3" height="15.0" fill="rgb(213,39,9)" rx="2" ry="2" />
+<text  x="279.76" y="207.5" ></text>
+</g>
+<g >
+<title>mpn_fft_fftinv (99,564,521 samples, 0.23%)</title><rect x="223.7" y="133" width="2.7" height="15.0" fill="rgb(212,34,8)" rx="2" ry="2" />
+<text  x="226.70" y="143.5" ></text>
+</g>
+<g >
+<title>__gmpn_toom22_mul (144,005,383 samples, 0.33%)</title><rect x="745.3" y="69" width="4.0" height="15.0" fill="rgb(214,41,9)" rx="2" ry="2" />
+<text  x="748.34" y="79.5" ></text>
+</g>
+<g >
+<title>mpn_fft_fft (358,795,398 samples, 0.83%)</title><rect x="43.7" y="133" width="9.8" height="15.0" fill="rgb(213,39,9)" rx="2" ry="2" />
+<text  x="46.66" y="143.5" ></text>
+</g>
+<g >
+<title>mpn_fft_fftinv (191,070,342 samples, 0.44%)</title><rect x="1017.1" y="149" width="5.3" height="15.0" fill="rgb(212,34,8)" rx="2" ry="2" />
+<text  x="1020.13" y="159.5" ></text>
+</g>
+<g >
+<title>__gmpn_toom_interpolate_16pts (104,765,953 samples, 0.24%)</title><rect x="189.0" y="229" width="2.9" height="15.0" fill="rgb(229,110,26)" rx="2" ry="2" />
+<text  x="191.99" y="239.5" ></text>
+</g>
+<g >
+<title>__gmpn_mul_n (675,276,833 samples, 1.56%)</title><rect x="291.6" y="181" width="18.4" height="15.0" fill="rgb(237,147,35)" rx="2" ry="2" />
+<text  x="294.57" y="191.5" ></text>
+</g>
+<g >
+<title>__gmpn_mul_basecase (81,102,292 samples, 0.19%)</title><rect x="90.5" y="117" width="2.2" height="15.0" fill="rgb(231,120,28)" rx="2" ry="2" />
+<text  x="93.51" y="127.5" ></text>
+</g>
+<g >
+<title>mpn_fft_fft (620,495,495 samples, 1.44%)</title><rect x="201.4" y="197" width="17.0" height="15.0" fill="rgb(213,39,9)" rx="2" ry="2" />
+<text  x="204.44" y="207.5" ></text>
+</g>
+<g >
+<title>__gmpn_toom33_mul (162,187,992 samples, 0.38%)</title><rect x="745.1" y="85" width="4.5" height="15.0" fill="rgb(251,212,50)" rx="2" ry="2" />
+<text  x="748.13" y="95.5" ></text>
+</g>
+<g >
+<title>__gmpn_preinv_mu_div_qr (93,219,652 samples, 0.22%)</title><rect x="1187.4" y="309" width="2.6" height="15.0" fill="rgb(251,213,51)" rx="2" ry="2" />
+<text  x="1190.42" y="319.5" ></text>
+</g>
+<g >
+<title>__gmpn_mul_fft (1,164,381,298 samples, 2.70%)</title><rect x="100.0" y="197" width="31.8" height="15.0" fill="rgb(230,116,27)" rx="2" ry="2" />
+<text  x="103.02" y="207.5" >__..</text>
+</g>
+<g >
+<title>__gmpn_mul_fft (2,284,801,963 samples, 5.29%)</title><rect x="37.1" y="213" width="62.4" height="15.0" fill="rgb(230,116,27)" rx="2" ry="2" />
+<text  x="40.08" y="223.5" >__gmpn..</text>
+</g>
+<g >
+<title>mpn_mul_fft_decompose (86,195,842 samples, 0.20%)</title><rect x="100.1" y="181" width="2.3" height="15.0" fill="rgb(214,43,10)" rx="2" ry="2" />
+<text  x="103.09" y="191.5" ></text>
+</g>
+<g >
+<title>__gmpn_mulmod_bnm1 (1,510,088,353 samples, 3.50%)</title><rect x="717.7" y="181" width="41.3" height="15.0" fill="rgb(216,51,12)" rx="2" ry="2" />
+<text  x="720.74" y="191.5" >__g..</text>
+</g>
+<g >
+<title>mpn_fft_fft (138,822,897 samples, 0.32%)</title><rect x="133.1" y="149" width="3.8" height="15.0" fill="rgb(213,39,9)" rx="2" ry="2" />
+<text  x="136.12" y="159.5" ></text>
+</g>
+<g >
+<title>mpn_fft_fftinv (130,832,972 samples, 0.30%)</title><rect x="618.2" y="85" width="3.6" height="15.0" fill="rgb(212,34,8)" rx="2" ry="2" />
+<text  x="621.20" y="95.5" ></text>
+</g>
+<g >
+<title>__gmpn_mulmod_bnm1 (6,411,130,642 samples, 14.85%)</title><rect x="586.2" y="213" width="175.2" height="15.0" fill="rgb(216,51,12)" rx="2" ry="2" />
+<text  x="589.24" y="223.5" >__gmpn_mulmod_bnm1</text>
+</g>
+<g >
+<title>_start (43,181,894,786 samples, 100.00%)</title><rect x="10.0" y="469" width="1180.0" height="15.0" fill="rgb(245,185,44)" rx="2" ry="2" />
+<text  x="13.00" y="479.5" >_start</text>
+</g>
+<g >
+<title>divide_dc_3n2n (324,549,930 samples, 0.75%)</title><rect x="22.4" y="277" width="8.9" height="15.0" fill="rgb(213,40,9)" rx="2" ry="2" />
+<text  x="25.40" y="287.5" ></text>
+</g>
+<g >
+<title>mpn_fft_fft (109,817,935 samples, 0.25%)</title><rect x="719.5" y="117" width="3.0" height="15.0" fill="rgb(213,39,9)" rx="2" ry="2" />
+<text  x="722.53" y="127.5" ></text>
+</g>
+<g >
+<title>mpn_fft_mul_2exp_modF (185,756,307 samples, 0.43%)</title><rect x="361.9" y="181" width="5.1" height="15.0" fill="rgb(252,217,52)" rx="2" ry="2" />
+<text  x="364.94" y="191.5" ></text>
+</g>
+<g >
+<title>mpn_fft_mul_2exp_modF (206,808,579 samples, 0.48%)</title><rect x="766.4" y="213" width="5.6" height="15.0" fill="rgb(252,217,52)" rx="2" ry="2" />
+<text  x="769.37" y="223.5" ></text>
+</g>
+<g >
+<title>mpn_fft_mul_modF_K (1,583,474,122 samples, 3.67%)</title><rect x="230.1" y="213" width="43.3" height="15.0" fill="rgb(241,169,40)" rx="2" ry="2" />
+<text  x="233.13" y="223.5" >mpn_..</text>
+</g>
+<g >
+<title>divide_dc_3n2n (116,677,691 samples, 0.27%)</title><rect x="22.4" y="245" width="3.2" height="15.0" fill="rgb(213,40,9)" rx="2" ry="2" />
+<text  x="25.40" y="255.5" ></text>
+</g>
+<g >
+<title>measure&lt;::run_div (42,269,901,755 samples, 97.89%)</title><rect x="31.4" y="373" width="1155.0" height="15.0" fill="rgb(252,219,52)" rx="2" ry="2" />
+<text  x="34.36" y="383.5" >measure&lt;::run_div</text>
+</g>
+<g >
+<title>__gmpn_mul_fft (766,693,468 samples, 1.78%)</title><rect x="718.0" y="165" width="21.0" height="15.0" fill="rgb(230,116,27)" rx="2" ry="2" />
+<text  x="721.02" y="175.5" ></text>
+</g>
+<g >
+<title>mpn_fft_fftinv (104,503,976 samples, 0.24%)</title><rect x="110.2" y="133" width="2.9" height="15.0" fill="rgb(212,34,8)" rx="2" ry="2" />
+<text  x="113.24" y="143.5" ></text>
+</g>
+<g >
+<title>mpn_fft_fft (245,953,954 samples, 0.57%)</title><rect x="102.7" y="165" width="6.8" height="15.0" fill="rgb(213,39,9)" rx="2" ry="2" />
+<text  x="105.73" y="175.5" ></text>
+</g>
+<g >
+<title>__gmpn_mul_basecase (227,725,115 samples, 0.53%)</title><rect x="140.6" y="85" width="6.3" height="15.0" fill="rgb(231,120,28)" rx="2" ry="2" />
+<text  x="143.64" y="95.5" ></text>
+</g>
+<g >
+<title>_mpn_crt (88,957,551 samples, 0.21%)</title><rect x="672.5" y="149" width="2.4" height="15.0" fill="rgb(222,81,19)" rx="2" ry="2" />
+<text  x="675.47" y="159.5" ></text>
+</g>
+<g >
+<title>mpn_fft_mul_modF_K (1,033,485,788 samples, 2.39%)</title><rect x="1093.5" y="181" width="28.2" height="15.0" fill="rgb(241,169,40)" rx="2" ry="2" />
+<text  x="1096.49" y="191.5" >m..</text>
+</g>
+<g >
+<title>mpn_fft_fftinv (88,932,047 samples, 0.21%)</title><rect x="319.5" y="181" width="2.5" height="15.0" fill="rgb(212,34,8)" rx="2" ry="2" />
+<text  x="322.54" y="191.5" ></text>
+</g>
+<g >
+<title>mpn_fft_fftinv (133,606,233 samples, 0.31%)</title><rect x="286.1" y="197" width="3.7" height="15.0" fill="rgb(212,34,8)" rx="2" ry="2" />
+<text  x="289.13" y="207.5" ></text>
+</g>
+<g >
+<title>__gmpn_mul_n (450,158,662 samples, 1.04%)</title><rect x="78.1" y="149" width="12.3" height="15.0" fill="rgb(237,147,35)" rx="2" ry="2" />
+<text  x="81.14" y="159.5" ></text>
+</g>
+<g >
+<title>__gmpn_tdiv_qr (42,010,614,760 samples, 97.29%)</title><rect x="31.4" y="309" width="1147.9" height="15.0" fill="rgb(252,220,52)" rx="2" ry="2" />
+<text  x="34.36" y="319.5" >__gmpn_tdiv_qr</text>
+</g>
+<g >
+<title>__gmpn_mulmod_bnm1 (94,305,552 samples, 0.22%)</title><rect x="157.3" y="149" width="2.6" height="15.0" fill="rgb(216,51,12)" rx="2" ry="2" />
+<text  x="160.31" y="159.5" ></text>
+</g>
+<g >
+<title>__gmpn_mulmod_bknp1 (1,706,142,795 samples, 3.95%)</title><rect x="625.8" y="149" width="46.7" height="15.0" fill="rgb(205,2,0)" rx="2" ry="2" />
+<text  x="628.85" y="159.5" >__gm..</text>
+</g>
+<g >
+<title>__gmpn_mulmod_bknp1 (1,036,492,804 samples, 2.40%)</title><rect x="242.9" y="197" width="28.3" height="15.0" fill="rgb(205,2,0)" rx="2" ry="2" />
+<text  x="245.86" y="207.5" >__..</text>
+</g>
+<g >
+<title>mpn_fft_fftinv (392,593,506 samples, 0.91%)</title><rect x="822.1" y="149" width="10.8" height="15.0" fill="rgb(212,34,8)" rx="2" ry="2" />
+<text  x="825.13" y="159.5" ></text>
+</g>
+<g >
+<title>mpn_fft_fftinv (261,733,807 samples, 0.61%)</title><rect x="57.7" y="165" width="7.1" height="15.0" fill="rgb(212,34,8)" rx="2" ry="2" />
+<text  x="60.68" y="175.5" ></text>
+</g>
+<g >
+<title>__gmpn_mul_basecase (157,173,846 samples, 0.36%)</title><rect x="149.6" y="69" width="4.3" height="15.0" fill="rgb(231,120,28)" rx="2" ry="2" />
+<text  x="152.65" y="79.5" ></text>
+</g>
+<g >
+<title>toom_ladder (82,935,430 samples, 0.19%)</title><rect x="28.9" y="197" width="2.3" height="15.0" fill="rgb(207,9,2)" rx="2" ry="2" />
+<text  x="31.93" y="207.5" ></text>
+</g>
+<g >
+<title>mpn_fft_fft (607,277,137 samples, 1.41%)</title><rect x="40.3" y="181" width="16.6" height="15.0" fill="rgb(213,39,9)" rx="2" ry="2" />
+<text  x="43.30" y="191.5" ></text>
+</g>
+<g >
+<title>main (43,180,814,963 samples, 100.00%)</title><rect x="10.0" y="421" width="1180.0" height="15.0" fill="rgb(243,179,42)" rx="2" ry="2" />
+<text  x="13.00" y="431.5" >main</text>
+</g>
+<g >
+<title>__gmpn_mulmod_bnm1 (15,074,121,559 samples, 34.91%)</title><rect x="763.4" y="261" width="411.9" height="15.0" fill="rgb(216,51,12)" rx="2" ry="2" />
+<text  x="766.43" y="271.5" >__gmpn_mulmod_bnm1</text>
+</g>
+<g >
+<title>time_row&lt;::run_div (42,399,106,697 samples, 98.19%)</title><rect x="31.4" y="389" width="1158.6" height="15.0" fill="rgb(253,222,53)" rx="2" ry="2" />
+<text  x="34.36" y="399.5" >time_row&lt;::run_div</text>
+</g>
+<g >
+<title>__gmpn_mulmod_bnm1 (1,055,157,296 samples, 2.44%)</title><rect x="131.8" y="197" width="28.9" height="15.0" fill="rgb(216,51,12)" rx="2" ry="2" />
+<text  x="134.83" y="207.5" >__..</text>
+</g>
+<g >
+<title>mpn_fft_fft (253,876,375 samples, 0.59%)</title><rect x="277.9" y="165" width="6.9" height="15.0" fill="rgb(213,39,9)" rx="2" ry="2" />
+<text  x="280.91" y="175.5" ></text>
+</g>
+<g >
+<title>mpn_fft_mul_modF_K (1,797,720,400 samples, 4.16%)</title><rect x="625.8" y="165" width="49.2" height="15.0" fill="rgb(241,169,40)" rx="2" ry="2" />
+<text  x="628.85" y="175.5" >mpn_..</text>
+</g>
+<g >
+<title>mpn_fft_fftinv (107,376,106 samples, 0.25%)</title><rect x="60.1" y="101" width="2.9" height="15.0" fill="rgb(212,34,8)" rx="2" ry="2" />
+<text  x="63.11" y="111.5" ></text>
+</g>
+<g >
+<title>mpn_fft_fft (238,309,115 samples, 0.55%)</title><rect x="46.1" y="101" width="6.5" height="15.0" fill="rgb(213,39,9)" rx="2" ry="2" />
+<text  x="49.09" y="111.5" ></text>
+</g>
+<g >
+<title>__gmpn_mul_basecase (517,762,456 samples, 1.20%)</title><rect x="1130.0" y="101" width="14.2" height="15.0" fill="rgb(231,120,28)" rx="2" ry="2" />
+<text  x="1133.03" y="111.5" ></text>
+</g>
+<g >
+<title>mpn_fft_fft (112,409,936 samples, 0.26%)</title><rect x="680.9" y="85" width="3.1" height="15.0" fill="rgb(213,39,9)" rx="2" ry="2" />
+<text  x="683.91" y="95.5" ></text>
+</g>
+<g >
+<title>__gmpn_mul_fft (3,186,870,968 samples, 7.38%)</title><rect x="993.0" y="229" width="87.0" height="15.0" fill="rgb(230,116,27)" rx="2" ry="2" />
+<text  x="995.96" y="239.5" >__gmpn_mul..</text>
+</g>
+<g >
+<title>mpn_mul_fft_internal.isra.0 (526,262,384 samples, 1.22%)</title><rect x="132.8" y="165" width="14.3" height="15.0" fill="rgb(208,18,4)" rx="2" ry="2" />
+<text  x="135.76" y="175.5" ></text>
+</g>
+<g >
+<title>divide_dc_3n2n (78,087,416 samples, 0.18%)</title><rect x="16.4" y="293" width="2.1" height="15.0" fill="rgb(213,40,9)" rx="2" ry="2" />
+<text  x="19.40" y="303.5" ></text>
+</g>
+<g >
+<title>divide_dc_3n2n (78,191,585 samples, 0.18%)</title><rect x="18.5" y="309" width="2.2" height="15.0" fill="rgb(213,40,9)" rx="2" ry="2" />
+<text  x="21.53" y="319.5" ></text>
+</g>
+<g >
+<title>__gmpn_sub_n (83,800,910 samples, 0.19%)</title><rect x="782.4" y="165" width="2.3" height="15.0" fill="rgb(212,36,8)" rx="2" ry="2" />
+<text  x="785.39" y="175.5" ></text>
+</g>
+<g >
+<title>mpn_mul_fft_internal.isra.0 (225,218,197 samples, 0.52%)</title><rect x="333.7" y="181" width="6.1" height="15.0" fill="rgb(208,18,4)" rx="2" ry="2" />
+<text  x="336.69" y="191.5" ></text>
+</g>
+<g >
+<title>__gmpn_toom22_mul (167,654,846 samples, 0.39%)</title><rect x="149.4" y="85" width="4.5" height="15.0" fill="rgb(214,41,9)" rx="2" ry="2" />
+<text  x="152.36" y="95.5" ></text>
+</g>
+<g >
+<title>mpn_fft_fftinv (141,327,940 samples, 0.33%)</title><rect x="1017.8" y="133" width="3.9" height="15.0" fill="rgb(212,34,8)" rx="2" ry="2" />
+<text  x="1020.85" y="143.5" ></text>
+</g>
+<g >
+<title>mpn_fft_fft (154,328,679 samples, 0.36%)</title><rect x="680.3" y="101" width="4.3" height="15.0" fill="rgb(213,39,9)" rx="2" ry="2" />
+<text  x="683.34" y="111.5" ></text>
+</g>
+<g >
+<title>__gmpn_rsh1sub_n (83,596,537 samples, 0.19%)</title><rect x="560.7" y="101" width="2.3" height="15.0" fill="rgb(245,184,44)" rx="2" ry="2" />
+<text  x="563.72" y="111.5" ></text>
+</g>
+<g >
+<title>mpn_fft_fftinv (431,804,535 samples, 1.00%)</title><rect x="415.2" y="133" width="11.8" height="15.0" fill="rgb(212,34,8)" rx="2" ry="2" />
+<text  x="418.20" y="143.5" ></text>
+</g>
+<g >
+<title>mpn_fft_fft (363,755,346 samples, 0.84%)</title><rect x="1002.2" y="149" width="9.9" height="15.0" fill="rgb(213,39,9)" rx="2" ry="2" />
+<text  x="1005.19" y="159.5" ></text>
+</g>
+<g >
+<title>mpn_fft_fft (102,146,027 samples, 0.24%)</title><rect x="280.9" y="117" width="2.8" height="15.0" fill="rgb(213,39,9)" rx="2" ry="2" />
+<text  x="283.91" y="127.5" ></text>
+</g>
+<g >
+<title>mpn_fft_fft (167,584,344 samples, 0.39%)</title><rect x="47.7" y="85" width="4.5" height="15.0" fill="rgb(213,39,9)" rx="2" ry="2" />
+<text  x="50.67" y="95.5" ></text>
+</g>
+<g >
+<title>__gmpn_mul_n (319,033,535 samples, 0.74%)</title><rect x="725.3" y="117" width="8.7" height="15.0" fill="rgb(237,147,35)" rx="2" ry="2" />
+<text  x="728.32" y="127.5" ></text>
+</g>
+<g >
+<title>__gmpn_toom22_mul (183,375,049 samples, 0.42%)</title><rect x="148.9" y="101" width="5.0" height="15.0" fill="rgb(214,41,9)" rx="2" ry="2" />
+<text  x="151.93" y="111.5" ></text>
+</g>
+<g >
+<title>__gmpn_toom22_mul (102,112,562 samples, 0.24%)</title><rect x="703.9" y="101" width="2.8" height="15.0" fill="rgb(214,41,9)" rx="2" ry="2" />
+<text  x="706.86" y="111.5" ></text>
+</g>
+<g >
+<title>__gmpn_mul_basecase (99,494,111 samples, 0.23%)</title><rect x="703.9" y="85" width="2.8" height="15.0" fill="rgb(231,120,28)" rx="2" ry="2" />
+<text  x="706.93" y="95.5" ></text>
+</g>
+<g >
+<title>mpn_fft_fftinv (282,214,890 samples, 0.65%)</title><rect x="615.6" y="133" width="7.7" height="15.0" fill="rgb(212,34,8)" rx="2" ry="2" />
+<text  x="618.57" y="143.5" ></text>
+</g>
+<g >
+<title>mpn_fft_mul_2exp_modF (73,336,407 samples, 0.17%)</title><rect x="837.3" y="213" width="2.0" height="15.0" fill="rgb(252,217,52)" rx="2" ry="2" />
+<text  x="840.29" y="223.5" ></text>
+</g>
+<g >
+<title>mpn_fft_fft (227,613,090 samples, 0.53%)</title><rect x="209.1" y="117" width="6.2" height="15.0" fill="rgb(213,39,9)" rx="2" ry="2" />
+<text  x="212.10" y="127.5" ></text>
+</g>
+<g >
+<title>__gmpn_mul_basecase (489,124,194 samples, 1.13%)</title><rect x="1103.6" y="101" width="13.4" height="15.0" fill="rgb(231,120,28)" rx="2" ry="2" />
+<text  x="1106.64" y="111.5" ></text>
+</g>
+<g >
+<title>mpn_fft_fftinv (138,492,101 samples, 0.32%)</title><rect x="686.8" y="133" width="3.8" height="15.0" fill="rgb(212,34,8)" rx="2" ry="2" />
+<text  x="689.77" y="143.5" ></text>
+</g>
+</g>
+</svg>
