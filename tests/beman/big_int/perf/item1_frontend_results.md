@@ -8,7 +8,7 @@ SPDX-License-Identifier: BSL-1.0
 Item 1 of [`gmp_gap_analysis.md`](gmp_gap_analysis.md) section 6 targeted the 13-18 ns that `+ - << >>` add on top of the
 span kernel at <= 16 limbs, the ~21 ns for small `*`, and the 37-66 ns for small divrem. This document records what changed,
 how it was measured, and where the targets were and were not met. Numbers are nanoseconds per operation unless noted;
-"before" is the library at cf1cf54 and "after" is `opt_1` at d689f75, both measured with the same harness (`shape_sweep.cpp`,
+"before" is the library at cf1cf54 and "after" is `opt_1` at b823c5f, both measured with the same harness (`shape_sweep.cpp`,
 with the `floor` row added). The inline-capacity decision is left to the reader: the study in section 7 reports costs and
 benefits without recommending a default.
 
@@ -27,8 +27,9 @@ benefits without recommending a default.
   `storage_for_overwrite` storage: no zero re-scan, no one-step trim. Single-limb operands take a fast path.
 - **Shifts.** `c = a << s` and `c = a >> s` build the result from the source in one pass (`lshift_copy`/`rshift_copy`) into an
   exactly sized buffer; `<<=` and `>>=` shift in one in-place pass without reserving a spare limb the value does not need
-  (so `1 << 127` stays inline in a 128-bit `basic_big_int`). A later change routes in-place pure bit shifts to the older
-  `shift_left_n`/`shift_right_n`; its effect is discussed in sections 3.6 and 3.8. Negative right shifts keep floor rounding by detecting
+  (so `1 << 127` stays inline in a 128-bit `basic_big_int`). A later change that routed in-place pure bit shifts to the older
+  `shift_left_n`/`shift_right_n` was reverted after it slowed M4 (sections 3.6 and 3.8); under GCC the shift primitives use
+  register-carried loops. Negative right shifts keep floor rounding by detecting
   discarded bits during the pass.
 - **Multiply.** `multiply_into` writes into `storage_for_overwrite` storage and drops the fill and the zero re-scan. `*=`
   keeps the allocator and capacity (one-limb rhs in place, small products through a stack buffer, larger ones into a fresh
@@ -69,9 +70,11 @@ benefits without recommending a default.
 ## 3. Before and after
 
 Cells read `before -> after`. `auto/gmpz` is the user-visible gap to GMP (above 1 means `big_int` is slower). The tables are
-the re-measurement on `opt_1` at d689f75 (the add/sub, shift and single-limb follow-ups and the mul-add fix included);
-an earlier measurement of 9145b4e is described in section 3.6. Rows are the median of four runs per binary
-(`macr3_*`, `x64r3_*` CSVs).
+the re-measurement on `opt_1` (the add/sub, shift and single-limb follow-ups and the mul-add fix included): all rows come
+from the d689f75 runs (`macr3_*`, `x64r3_*`) except the shl/shr rows, which were re-measured at b823c5f (`macr4_*`,
+`x64r4_*`), the commit that changes only the shift code; one interleaved check of add/sub/mul/sqr/divrem at b823c5f found
+nothing else moved. Rows are the median of four runs per binary. An earlier measurement of 9145b4e is described in
+section 3.6.
 
 ### 3.1 x64 (g++-14, -march=native), small band
 
@@ -87,12 +90,12 @@ an earlier measurement of 9145b4e is described in section 3.6. Rows are the medi
 | sub | 4x4 | 19.0 -> 16.5 | 5.5 -> 5.6 | 8.3 -> 5.9 | 4.12 -> 3.60 | 16.2 -> 13.7 |
 | sub | 8x8 | 20.6 -> 18.1 | 7.2 -> 7.3 | 8.2 -> 5.9 | 4.14 -> 3.64 | 16.2 -> 13.7 |
 | sub | 16x16 | 25.7 -> 21.0 | 10.6 -> 10.0 | 10.3 -> 5.7 | 3.78 -> 3.09 | 17.7 -> 13.6 |
-| shl | 1x13 | 16.8 -> 12.5 | 4.1 -> 4.2 | 6.9 -> 2.7 | 4.83 -> 3.83 | 14.7 -> 10.4 |
-| shl | 4x13 | 18.7 -> 13.5 | 5.2 -> 5.3 | 7.4 -> 2.3 | 4.63 -> 3.34 | 15.2 -> 10.0 |
-| shl | 16x13 | 24.6 -> 17.1 | 9.2 -> 9.3 | 9.3 -> 1.9 | 4.17 -> 2.94 | 17.0 -> 9.6 |
-| shr | 1x13 | 10.2 -> 8.2 | 3.6 -> 3.9 | 7.9 -> 5.9 | 3.11 -> 2.36 | 8.5 -> 6.5 |
-| shr | 4x13 | 21.0 -> 16.0 | 4.7 -> 5.0 | 9.0 -> 4.1 | 5.29 -> 4.04 | 17.5 -> 12.6 |
-| shr | 16x13 | 25.8 -> 20.0 | 8.8 -> 9.0 | 8.8 -> 2.9 | 4.12 -> 3.18 | 17.6 -> 11.3 |
+| shl | 1x13 | 16.9 -> 12.7 | 4.2 -> 3.5 | 7.0 -> 2.9 | 4.86 -> 3.88 | 14.8 -> 10.6 |
+| shl | 4x13 | 18.7 -> 13.4 | 5.3 -> 4.4 | 7.5 -> 2.2 | 4.63 -> 3.32 | 15.2 -> 9.9 |
+| shl | 16x13 | 24.6 -> 16.8 | 9.3 -> 8.6 | 9.3 -> 1.5 | 4.22 -> 2.88 | 17.1 -> 9.3 |
+| shr | 1x13 | 10.3 -> 8.4 | 3.6 -> 3.1 | 8.0 -> 6.1 | 3.14 -> 2.56 | 8.6 -> 6.7 |
+| shr | 4x13 | 21.0 -> 15.9 | 4.8 -> 4.2 | 9.0 -> 4.7 | 5.28 -> 4.01 | 17.5 -> 12.4 |
+| shr | 16x13 | 25.9 -> 20.2 | 9.0 -> 8.2 | 8.9 -> 4.7 | 3.96 -> 3.26 | 17.7 -> 11.7 |
 | mul | 2x2 | 28.2 -> 18.9 | - | 13.1 -> 3.9 | 4.61 -> 3.08 | 20.7 -> 11.3 |
 | mul | 3x3 | 29.7 -> 20.3 | - | 13.1 -> 3.9 | 2.97 -> 2.03 | 20.7 -> 11.4 |
 | mul | 4x4 | 32.0 -> 22.4 | - | 13.4 -> 4.2 | 2.63 -> 1.84 | 20.9 -> 11.5 |
@@ -124,12 +127,12 @@ an earlier measurement of 9145b4e is described in section 3.6. Rows are the medi
 | sub | 4x4 | 15.8 -> 15.1 | 3.9 -> 4.0 | 5.8 -> 5.2 | 5.31 -> 5.52 | 13.9 -> 13.2 |
 | sub | 8x8 | 16.3 -> 15.7 | 5.0 -> 4.4 | 4.6 -> 4.3 | 4.65 -> 4.86 | 12.7 -> 12.2 |
 | sub | 16x16 | 18.4 -> 18.1 | 10.9 -> 5.4 | 3.0 -> 3.0 | 4.22 -> 4.13 | 10.7 -> 10.3 |
-| shl | 1x13 | 16.9 -> 12.3 | 2.3 -> 3.4 | 5.9 -> 1.4 | 8.50 -> 6.17 | 14.7 -> 9.8 |
-| shl | 4x13 | 19.1 -> 13.1 | 3.6 -> 5.5 | 6.1 -> 0.0 | 6.95 -> 4.79 | 15.4 -> 9.4 |
-| shl | 16x13 | 21.7 -> 15.5 | 5.8 -> 6.9 | 9.6 -> 3.3 | 4.31 -> 2.99 | 17.6 -> 11.4 |
-| shr | 1x13 | 9.1 -> 6.6 | 2.3 -> 3.1 | 6.6 -> 4.1 | 4.58 -> 3.32 | 6.9 -> 4.4 |
-| shr | 4x13 | 18.4 -> 14.1 | 3.3 -> 4.7 | 6.2 -> 1.8 | 6.70 -> 5.15 | 14.6 -> 10.4 |
-| shr | 16x13 | 21.3 -> 18.0 | 5.1 -> 6.1 | 8.2 -> 4.8 | 5.02 -> 4.24 | 17.1 -> 13.9 |
+| shl | 1x13 | 17.5 -> 12.3 | 2.3 -> 2.5 | 6.5 -> 0.9 | 8.82 -> 6.14 | 15.3 -> 10.0 |
+| shl | 4x13 | 19.0 -> 13.1 | 3.6 -> 3.8 | 5.9 -> -0.1 | 6.98 -> 4.73 | 15.3 -> 9.4 |
+| shl | 16x13 | 21.5 -> 16.1 | 5.8 -> 5.4 | 9.4 -> 3.9 | 4.26 -> 3.09 | 17.4 -> 12.0 |
+| shr | 1x13 | 9.5 -> 6.6 | 2.4 -> 3.3 | 7.0 -> 4.1 | 4.77 -> 3.31 | 7.3 -> 4.3 |
+| shr | 4x13 | 17.8 -> 15.2 | 3.3 -> 3.6 | 5.4 -> 2.9 | 6.41 -> 5.56 | 14.0 -> 11.5 |
+| shr | 16x13 | 21.6 -> 18.5 | 5.1 -> 5.2 | 8.3 -> 5.2 | 5.07 -> 4.35 | 17.4 -> 14.4 |
 | mul | 2x2 | 28.1 -> 18.2 | - | 13.4 -> 3.7 | 4.29 -> 2.81 | 21.5 -> 11.9 |
 | mul | 3x3 | 30.1 -> 20.0 | - | 13.2 -> 3.0 | 3.57 -> 1.91 | 21.8 -> 11.9 |
 | mul | 4x4 | 29.7 -> 21.6 | - | 12.6 -> 4.8 | 2.87 -> 1.97 | 18.5 -> 10.6 |
@@ -157,12 +160,12 @@ an earlier measurement of 9145b4e is described in section 3.6. Rows are the medi
 | add | 2000x2000 | 1721.6 -> 1153.3 | 1134.8 -> 1132.4 | 571.1 -> 3.9 | 3.56 -> 2.40 | 588.6 -> 21.7 |
 | sub | 64x64 | 65.9 -> 45.3 | 37.7 -> 34.6 | 23.8 -> 3.1 | 3.94 -> 2.70 | 33.0 -> 12.6 |
 | sub | 1024x1024 | 842.3 -> 598.3 | 581.5 -> 579.9 | 247.9 -> 4.1 | 2.15 -> 1.53 | 264.0 -> 20.5 |
-| shl | 256x13 | 135.4 -> 122.0 | 93.0 -> 99.3 | 18.8 -> 7.4 | 2.69 -> 2.43 | 42.0 -> 28.1 |
-| shl | 2000x13 | 917.2 -> 772.7 | 657.3 -> 716.9 | 177.7 -> 33.4 | 2.71 -> 2.29 | 196.9 -> 53.0 |
-| shl | 2000x77 | 1065.8 -> 774.6 | 764.9 -> 741.6 | 193.2 -> -98.0 | 3.14 -> 2.29 | 216.0 -> -77.6 |
-| shr | 256x13 | 137.9 -> 125.0 | 93.8 -> 99.1 | 6.7 -> -6.0 | 2.72 -> 2.46 | 27.8 -> 15.0 |
-| shr | 2000x13 | 949.9 -> 749.4 | 656.8 -> 716.5 | 117.3 -> -83.4 | 2.80 -> 2.21 | 138.1 -> -62.9 |
-| shr | 2000x77 | 1083.7 -> 749.4 | 764.9 -> 740.2 | 232.9 -> -102.6 | 3.19 -> 2.21 | 255.4 -> -80.7 |
+| shl | 256x13 | 136.9 -> 121.8 | 93.1 -> 98.7 | 19.7 -> 4.0 | 2.69 -> 2.43 | 41.7 -> 26.6 |
+| shl | 2000x13 | 916.7 -> 773.4 | 657.7 -> 712.5 | 177.8 -> 34.0 | 2.69 -> 2.28 | 197.2 -> 54.0 |
+| shl | 2000x77 | 1066.1 -> 774.4 | 764.8 -> 712.6 | 194.2 -> -98.4 | 3.09 -> 2.25 | 216.0 -> -75.5 |
+| shr | 256x13 | 139.7 -> 133.7 | 93.7 -> 98.3 | 7.5 -> 2.9 | 2.71 -> 2.61 | 28.1 -> 23.1 |
+| shr | 2000x13 | 950.7 -> 787.9 | 657.2 -> 711.5 | 118.1 -> -44.1 | 2.78 -> 2.31 | 138.9 -> -24.1 |
+| shr | 2000x77 | 1084.3 -> 789.8 | 765.0 -> 712.1 | 233.6 -> -60.9 | 3.16 -> 2.31 | 255.9 -> -39.5 |
 | mul | 32x32 | 212.3 -> 205.8 | - | 12.1 -> 9.3 | 0.78 -> 0.76 | 24.7 -> 18.9 |
 | mul | 64x64 | 524.5 -> 496.2 | - | 31.0 -> 3.7 | 0.60 -> 0.58 | 41.5 -> 9.5 |
 | mul | 256x256 | 6231.5 -> 6176.4 | - | 28.3 -> 2.4 | 0.80 -> 0.79 | 62.6 -> -2.4 |
@@ -195,12 +198,12 @@ an earlier measurement of 9145b4e is described in section 3.6. Rows are the medi
 | add | 2000x2000 | 1132.3 -> 877.0 | 1948.4 -> 858.2 | -812.1 -> -1054.3 | 2.27 -> 1.76 | -797.7 -> -1050.8 |
 | sub | 64x64 | 41.2 -> 36.1 | 51.2 -> 19.8 | -19.0 -> -25.1 | 2.97 -> 2.68 | -8.6 -> -17.3 |
 | sub | 1024x1024 | 562.3 -> 454.6 | 988.4 -> 435.0 | -424.5 -> -532.1 | 2.21 -> 1.80 | -416.2 -> -524.8 |
-| shl | 256x13 | 86.1 -> 41.2 | 36.6 -> 45.1 | 28.4 -> -15.9 | 2.27 -> 1.09 | 36.8 -> -8.0 |
-| shl | 2000x13 | 653.2 -> 261.0 | 284.3 -> 347.8 | 250.6 -> -141.2 | 0.32 -> 0.12 | 268.9 -> -125.3 |
-| shl | 2000x77 | 818.5 -> 450.3 | 426.3 -> 233.4 | 277.3 -> -96.6 | 2.81 -> 1.56 | 287.6 -> -79.8 |
-| shr | 256x13 | 87.8 -> 42.6 | 36.0 -> 44.8 | 11.6 -> -32.8 | 2.30 -> 1.12 | 21.3 -> -24.2 |
-| shr | 2000x13 | 698.0 -> 271.2 | 283.2 -> 347.5 | 171.3 -> -255.8 | 2.33 -> 0.90 | 179.5 -> -241.6 |
-| shr | 2000x77 | 1040.9 -> 280.7 | 421.2 -> 195.9 | 506.5 -> -247.6 | 3.59 -> 0.98 | 522.6 -> -236.7 |
+| shl | 256x13 | 87.5 -> 41.5 | 36.5 -> 29.8 | 29.7 -> -16.6 | 2.30 -> 1.08 | 38.0 -> -8.2 |
+| shl | 2000x13 | 653.6 -> 260.4 | 283.7 -> 195.9 | 252.2 -> -141.8 | 0.30 -> 0.15 | 267.7 -> -124.8 |
+| shl | 2000x77 | 796.3 -> 452.3 | 425.8 -> 228.4 | 253.6 -> -92.1 | 2.74 -> 1.55 | 268.9 -> -76.9 |
+| shr | 256x13 | 87.6 -> 42.9 | 35.8 -> 30.4 | 12.0 -> -33.0 | 2.27 -> 1.13 | 21.2 -> -23.7 |
+| shr | 2000x13 | 692.2 -> 273.8 | 282.5 -> 196.0 | 164.0 -> -252.4 | 2.32 -> 0.89 | 179.5 -> -239.9 |
+| shr | 2000x77 | 1064.4 -> 276.0 | 420.0 -> 196.1 | 535.7 -> -254.6 | 3.67 -> 0.96 | 546.1 -> -245.5 |
 | mul | 32x32 | 298.7 -> 281.4 | - | 17.5 -> 2.3 | 1.12 -> 1.07 | 39.3 -> 23.1 |
 | mul | 64x64 | 1039.3 -> 1007.8 | - | 23.9 -> -2.6 | 1.34 -> 1.30 | 53.3 -> 22.9 |
 | mul | 256x256 | 11896.3 -> 12025.0 | - | 102.9 -> 238.8 | 1.51 -> 1.53 | 138.2 -> 229.3 |
@@ -264,33 +267,45 @@ M4:
 - **Decimal `fromchars` regression is fixed** (it was +8-11% at 64-256 limbs-worth of digits at 9145b4e); see section 3.7
   for the cause. Now x64 `auto` 64x10 2791 -> 2852 ns (+2%), 256x10 28564 -> 27920 (-2%), 2000x10 429k -> 386k (-10%),
   16x10 +0.8%; 10000x10 is -5.3%. M4 is unchanged (<= +-1%).
-- **Still open: in-place shifts (`c <<= s; c >>= s`, per op).** After the follow-up that routes whole-limb-free in-place
-  shifts to `shift_left_n`/`shift_right_n` they are slower than the baseline on both machines and, on M4, much slower than
-  in the 9145b4e build:
+- **In-place shifts (`c <<= s; c >>= s`, per op) after the shift fix (b823c5f).** The history is: the first build
+  (9145b4e, single in-place `lshift_copy`/`rshift_copy` pass) was faster than the baseline on M4 and slower on x64;
+  d689f75 routed whole-limb-free in-place shifts to `shift_left_n`/`shift_right_n`, which made M4 much slower; b823c5f
+  reverts that and uses register-carried loops under GCC only (section 3.8):
 
-  | `inplace` ns | x64 base | x64 9145b4e | x64 now | M4 base | M4 9145b4e | M4 now |
-  |---|---:|---:|---:|---:|---:|---:|
-  | shl 4x13 | 5.2 | 4.6 | 5.3 | 3.6 | 3.8 | 5.5 |
-  | shl 16x13 | 9.2 | 9.1 | 9.3 | 5.8 | 5.3 | 6.9 |
-  | shl 256x13 | 93.0 | 102.2 | 99.3 | 36.6 | 29.9 | 45.1 |
-  | shl 2000x13 | 657.3 | 740.9 | 716.9 | 284.3 | 196.0 | 347.8 |
-  | shr 2000x13 | 656.8 | 738.7 | 716.5 | 283.2 | 196.8 | 347.5 |
+  | `inplace` ns | x64 base | x64 9145b4e | x64 d689f75 | x64 b823c5f | M4 base | M4 9145b4e | M4 d689f75 | M4 b823c5f |
+  |---|---:|---:|---:|---:|---:|---:|---:|---:|
+  | shl 4x13 | 5.2 | 4.6 | 5.3 | 4.4 | 3.6 | 3.8 | 5.5 | 3.8 |
+  | shl 16x13 | 9.2 | 9.1 | 9.3 | 8.6 | 5.8 | 5.3 | 6.9 | 5.4 |
+  | shl 256x13 | 93.1 | 102.2 | 99.3 | 98.7 | 36.5 | 29.9 | 45.1 | 29.8 |
+  | shl 2000x13 | 657.7 | 740.9 | 716.9 | 712.5 | 283.7 | 196.0 | 347.8 | 195.9 |
+  | shr 2000x13 | 657.2 | 738.7 | 716.5 | 711.5 | 282.5 | 196.8 | 347.5 | 196.0 |
 
-  so x64 +9% (2000x13) and +6-7% (256x13), M4 +22% (2000x13) and +23% (256x13) against the baseline. M4 `auto` shifts did
-  not move (shl 2000x13 `auto` 261 ns).
-- **Rows more than 3% slower than the baseline** (`item1_regress.py`, `auto` and `inplace`, four-run medians):
-  - x64: 11 of 107 rows, all the shift in-place rows above plus add 2x2 `inplace` +0.4 ns (+5.9%), sub 2x2/4x4 `inplace`
-    +0.2 ns, shr 1x13/4x13 `inplace` +0.2-0.3 ns, tochars 256x10 `auto` +3.1% and divrem 128x64 `auto` +3.1%. Kernel rows
-    (library code, not the front end): divrem 8x4 45.7 -> 50.3 ns (+10%), divrem 128x64 +4.4%, sqr 4x4 9.1 -> 9.9 ns
-    (+9%), within the 1-2 ns kernel noise at the smallest sizes.
-  - M4: 15 of 107 rows: the in-place shift rows above (1x13 and 4x13 `inplace` +1-2 ns, +34..+53%), add 2x2 `auto` +1.1 ns
-    (+7%), add 16x16 `auto` +1.3 ns (+7.7%), add/sub 2x2 `inplace` +0.3-0.6 ns, sub 4x4 `inplace` +0.1 ns.
-  - No medium or large `auto` row on either machine is more than 3% slower, and no large spot check moves by more than
-    +2.5% (M4 mul 2000x2000).
+  Now M4 in-place shifts are 6-53% faster than the baseline at >= 16 limbs (shl/shr 2000x13 -31%, 256x13 -15..-18%,
+  131072x13 -6%) and four small-shape rows are slower by 0.2-1.0 ns (shr 1x13 2.4 -> 3.3 ns +41%, shr 4x13 3.3 -> 3.6 +10%,
+  shl 1x13 2.3 -> 2.5 +9%, shl 4x13 3.6 -> 3.8 +6%). On x64 the 1-16-limb rows are 8-17% faster than the baseline but
+  >= 256 limbs stay +5-8% slower (256x13 +5-6%, 2000x13 +8%, 131072x13 +7%); the `auto` rows keep their gains on both
+  machines (x64 -4..-49%, M4 -14..-74%), with x64 shr 256x13 `auto` down to -4% from -9%.
+- **Rows more than 3% slower than the baseline** (`item1_regress.py` on the d689f75 runs with the shift rows replaced by the
+  b823c5f runs; `auto` and `inplace`, small and medium bands, four-run medians):
+  - x64: 9 of 107 rows. The in-place shift rows shl/shr 256x13 (+5-6%) and 2000x13 (+8%); add 2x2 `inplace` +0.4 ns
+    (+5.9%), sub 2x2/4x4 `inplace` +0.2 ns (+4.4%, +3.4%); tochars 256x10 `auto` +3.1% and divrem 128x64 `auto` +3.1%
+    (both borderline). Kernel rows (library code, not the front end): divrem 8x4 45.7 -> 50.3 ns (+10%), divrem 128x64
+    +4.4%, sqr 4x4 9.1 -> 9.9 ns (+9%), within the 1-2 ns kernel noise at the smallest sizes. The 131072x13 in-place shift
+    spot check is +7% (+3 us).
+  - M4: 9 of 107 rows. The four small in-place shift rows above (+0.2-1.0 ns); add 2x2 `auto` +1.1 ns (+7%), add 16x16
+    `auto` +1.3 ns (+7.7%), add/sub 2x2 `inplace` +0.3-0.6 ns, sub 4x4 `inplace` +0.1 ns.
+  - No medium or large `auto` row on either machine is more than 3% slower, and no large spot check other than the x64
+    131072x13 in-place shift (+7%) moves by more than +2.5% (M4 mul 2000x2000).
+  - A single interleaved check at b823c5f of add/sub/mul/sqr/divrem in the small band (one run per binary) found nothing
+    else moved against the d689f75 numbers beyond noise (x64 add 2x2 `inplace` 6.5 vs 6.2 ns; the M4 mul 6x6 and add 16x16
+    `auto` rows flip between their usual noise modes).
+  - These are the open items for item 2: the x64 GCC in-place shift gap at >= 256 limbs (+5-8%; the baseline in-place path
+    is faster than every variant tried), the sub-nanosecond small add/sub in-place rows on both machines, and the M4 small
+    add `auto` rows (+1.1-1.3 ns).
 - **History.** The first measurement (opt_1 at 9145b4e, CSVs `x64_*`/`mac_*`) showed x64 add/sub `inplace` +23..+35% at
   >= 64 limbs, decimal `fromchars` +8-11%, and in-place shifts +10-13% on x64 but -30..-35% on M4. The follow-ups fixed the
-  first two and the add/sub `auto` rows improved a further 20-26%, but the in-place shift change traded the x64 result for
-  an M4 loss.
+  first two and the add/sub `auto` rows improved a further 20-26%; the in-place shift change in d689f75 traded the x64
+  result for an M4 loss, and b823c5f (revert plus per-compiler loops) restored the M4 result and kept most of the x64 one.
 
 ### 3.7 Cause of the x64 `fromchars` regression (diagnosis and fix)
 
@@ -410,19 +425,24 @@ loops (V2, V3) are slower than the original two-load form under clang. On x64 (G
 by 8-17% against the baseline and equal `new64` at >= 256 limbs (+6-9%), at the price of 4-7 points on shr `auto`; the
 baseline in-place path is still 6-9% faster there than any variant.
 
+Outcome: b823c5f reverts 2f9150b and uses the register-carried loop bodies under GCC only (the original two-load loops
+under clang and MSVC), the per-compiler split these numbers suggested. Re-measured at b823c5f (four interleaved runs per
+binary on each machine, plus a 131072x13 spot) the result matches V1 on M4 and V2 on x64 (section 3.6).
+The pairings measured are GCC 14 on x64 and appleclang on AArch64; clang on x64 and GCC on AArch64 were not.
+
 ## 4. Plan targets
 
-Targets from the plan, with the achieved values (median of four runs, d689f75). Kernel-row noise at <= 16 limbs is 1-2 ns
+Targets from the plan, with the achieved values (median of four runs; b823c5f for shifts, d689f75 for the rest). Kernel-row noise at <= 16 limbs is 1-2 ns
 (section 8), so a miss of less than ~1.5 ns on an `inplace - kernel` target is within noise.
 
 | target | x64 | M4 |
 |---|---|---|
-| `inplace - kernel` <= 3 ns for add/sub/shl/shr at 2-16 limbs | **mostly met**: add 3.9/2.7/2.8/3.6 (2/4/8/16 limbs, before 3.5/2.5/2.7/4.3), sub 2.7/2.8/3.0/2.6, shl 1.8/1.7, shr 1.5/0.3 (add 2x2 and 16x16 are within kernel noise of the line) | **met**: add 2.7/1.9/0.8/-1.8, sub 2.4/2.1/0.9/-2.3, shl 1.7/2.8, shr 1.0/2.0 |
-| `auto - floor` <= 3 ns at <= 16 limbs, add/sub/shl/shr | **not met except shifts**: add 5.7/4.5/4.4/5.6 (before 7.6/7.1/6.8/9.8; 1x1 -4.4), sub 5.8/5.9/5.9/5.7, shl 2.3/1.9 (met), shr 4.1/2.9 | **mostly not met**: add 6.3/4.2/3.6/3.7, sub 5.4/5.2/4.3/3.0, shl 0.0/3.3, shr 1.8/4.8 |
+| `inplace - kernel` <= 3 ns for add/sub/shl/shr at 2-16 limbs | **mostly met**: add 3.9/2.7/2.8/3.6 (2/4/8/16 limbs, before 3.5/2.5/2.7/4.3), sub 2.7/2.8/3.0/2.6, shl 0.9/1.1, shr 0.7/-0.3 (add 2x2 and 16x16 are within kernel noise of the line) | **met**: add 2.7/1.9/0.8/-1.8, sub 2.4/2.1/0.9/-2.3, shl 0.0/1.3, shr -0.1/1.0 |
+| `auto - floor` <= 3 ns at <= 16 limbs, add/sub/shl/shr | **not met except shifts**: add 5.7/4.5/4.4/5.6 (before 7.6/7.1/6.8/9.8; 1x1 -4.4), sub 5.8/5.9/5.9/5.7, shl 2.2/1.5 (met), shr 4.7/4.7 | **mostly not met**: add 6.3/4.2/3.6/3.7, sub 5.4/5.2/4.3/3.0, shl -0.1/3.9, shr 2.9/5.2 |
 | `auto - floor` <= 5 ns at <= 16 limbs, mul/sqr | **met**: mul 1.8-4.2 (before 13.1-17.4); sqr 5.5 (4x4, marginal) and 4.2 | **met**: mul 2.9-4.8 (before 9.2-15.7); sqr 5.3 (4x4, marginal) and 4.0 |
 | x64 add 1000 `auto`: 840 -> <= 650 ns | **met**: add 1024x1024 842 -> 599 ns (2000x2000 1722 -> 1153; `auto - floor` 4-5 ns at 64-2000 limbs) | n/a (M4: 565 -> 450 ns) |
 | divrem 8x4 `auto - kernel`: 66 -> <= 2 floors + 5 ns (i.e. `auto - floor` <= 5) | **not met**: `auto - kernel` 67.0 -> 43.8, `auto - floor` 52.9 -> 26.3 | **not met**: `auto - kernel` 49.8 -> 28.8, `auto - floor` 34.8 -> 14.6 |
-| medium and large rows: no regression > 3% | **not met only for in-place shifts**: 256x13 +6-7%, 2000x13 +9%; every other medium and large `auto` and `inplace` row, and every large spot check, is within 3% | **not met only for in-place shifts**: 256x13 +23%, 2000x13 +22%; the other medium and large rows and spot checks are within 3% (largest M4 mul 2000x2000 +2.5%) |
+| medium and large rows: no regression > 3% | **not met only for in-place shifts at >= 256 limbs**: shl/shr 256x13 +5-6%, 2000x13 +8%, 131072x13 +7%; every other medium and large `auto` and `inplace` row and every other large spot check is within 3% | **met for medium and large rows**; only small rows exceed 3% (four in-place shift rows by 0.2-1.0 ns, add 2x2/16x16 `auto` +1.1/+1.3 ns, sub/add 2x2 `inplace` +0.3-0.6 ns); largest large spot check M4 mul 2000x2000 +2.5% |
 
 The allocation targets in `alloc_count.test.cpp` all hold (section 5).
 
@@ -689,7 +709,9 @@ Neutral summary of the trade-off (no default is recommended here):
 
 ## 9. Correctness matrix
 
-All at d689f75 (ctest counts include skipped benches):
+At d689f75 (ctest counts include skipped benches); at b823c5f, which changes only the shift code, the GCC-only loop path was
+re-run: x64 `gcc-release` and `gcc-debug` (g++-14) 1363/1363 each, Docker linux/arm64 `gcc-release` and `gcc-debug`
+1292/1292 each, M4 `appleclang-release` 1304/1304:
 
 - M4 (appleclang): `appleclang-debug` workflow (MaxSan) 1304/1304, `appleclang-release` 1304/1304,
   `appleclang-release-namespace` 1290/1290.
