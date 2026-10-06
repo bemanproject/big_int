@@ -620,6 +620,13 @@ class BEMAN_BIG_INT_TRIVIAL_ABI basic_big_int {
     constexpr void                              free_limbs(pointer p, size_type n);
     constexpr void                              free_storage();
     constexpr void                              grow(size_type limbs_needed);
+    // Ensures room for `n` limbs and discards the contents (no copy, no zero-fill). Does not change the limb
+    // count or sign. The caller writes the limbs, sets the count, and zeroes any in-place tail
+    // (see `clear_inline_tail`). No operand of the caller may alias `*this`.
+    [[nodiscard]] constexpr limb_type* storage_for_overwrite(size_type n);
+    // For in-place storage, zeroes the limbs in [limb_count(), old_count). Keeps the invariant
+    // that in-place limbs past the limb count are zero, which `inplace_to_bit_uint` relies on.
+    constexpr void clear_inline_tail(size_type old_count) noexcept;
     constexpr void copy_n_to_allocation(const limb_type* p, size_type n, alloc_result out);
     // Copies the limbs of `x` into a freshly constructed `*this` whose control word already matches `x`.
     constexpr void copy_limbs_from(const basic_big_int& x);
@@ -793,12 +800,12 @@ class BEMAN_BIG_INT_TRIVIAL_ABI basic_big_int {
                     if constexpr (propagate_alloc) {
                         m_alloc = std::forward<Src>(src).m_alloc;
                     }
-                    m_capacity             = src.m_capacity;
-                    m_storage.data         = src.m_storage.data;
-                    m_size_and_sign        = src.m_size_and_sign;
-                    src.m_capacity         = 0;
-                    src.m_size_and_sign    = 1;
-                    src.m_storage.limbs[0] = limb_type{0};
+                    m_capacity          = src.m_capacity;
+                    m_storage.data      = src.m_storage.data;
+                    m_size_and_sign     = src.m_size_and_sign;
+                    src.m_capacity      = 0;
+                    src.m_size_and_sign = 1;
+                    src.m_storage       = {};
                     if (m_capacity < needed) {
                         grow(needed);
                     }
@@ -1035,7 +1042,16 @@ constexpr void basic_big_int<b, L, A>::negate() noexcept {
 
 template <std::size_t b, class L, class A>
 constexpr void basic_big_int<b, L, A>::set_zero() noexcept {
-    limb_ptr()[0]   = 0;
+    limb_type* const limbs = limb_ptr();
+    limbs[0]               = 0;
+    if constexpr (inplace_capacity != 1) {
+        // Keep "inline limbs past the limb count are zero" (see `clear_inline_tail`).
+        if (is_representation_inplace()) {
+            for (size_type i = 1; i < inplace_capacity; ++i) {
+                limbs[i] = 0;
+            }
+        }
+    }
     m_size_and_sign = 1;
 }
 
@@ -1399,6 +1415,7 @@ constexpr void basic_big_int<b, L, A>::shift_right(const shift_type s) {
             std::shift_left(limbs, limbs + current_count, static_cast<std::ptrdiff_t>(shifted_limbs));
             unchecked_set_limb_count(static_cast<std::uint32_t>(current_count - shifted_limbs));
         }
+        clear_inline_tail(current_count);
     }
     if (shifted_bits != 0) {
         for (size_type i = 0; i + 1 < limb_count(); ++i) {
@@ -2938,8 +2955,10 @@ constexpr uint_multiprecision_t basic_big_int<b, L, A>::divmod_in_place_short(co
     if (want_quotient) {
         unchecked_trim_magnitude();
     } else {
-        limb_ptr()[0] = remainder;
+        const auto old_count = limb_count();
+        limb_ptr()[0]        = remainder;
         unchecked_set_limb_count(1);
+        clear_inline_tail(old_count);
     }
     unchecked_set_sign(result_neg && !unchecked_is_magnitude_zero());
     return remainder;
@@ -3445,6 +3464,46 @@ constexpr void basic_big_int<b, L, A>::grow(const size_type limbs_needed) {
 
     m_storage.data = allocation.ptr;
     m_capacity     = static_cast<std::uint32_t>(allocation.count);
+}
+
+// Same growth policy as `grow`. The new block is allocated before the old one is released.
+// Runtime blocks are left uninitialized (poisoned in debug builds); constant evaluation
+// must construct every limb before use.
+template <std::size_t b, class L, class A>
+constexpr auto basic_big_int<b, L, A>::storage_for_overwrite(const size_type n) -> limb_type* {
+    const size_type current_cap = is_representation_inplace() ? inplace_capacity : m_capacity;
+    if (n > current_cap) {
+        if (n > max_limbs) {
+            detail::throw_length_error();
+        }
+        const size_type    new_cap    = std::min(std::max(n, 2 * current_cap), max_limbs);
+        const alloc_result allocation = alloc_limbs(new_cap);
+        if BEMAN_BIG_INT_IS_NOT_CONSTEVAL {
+#ifndef NDEBUG
+            std::uninitialized_fill_n(allocation.ptr, allocation.count, static_cast<limb_type>(0xDEADBEEFDEADBEEFULL));
+#endif
+        } else {
+            for (size_type i = 0; i < allocation.count; ++i) {
+                std::construct_at(allocation.ptr + i);
+            }
+        }
+        free_storage();
+        m_storage.data = allocation.ptr;
+        m_capacity     = static_cast<std::uint32_t>(allocation.count);
+    }
+    return limb_ptr();
+}
+
+template <std::size_t b, class L, class A>
+constexpr void basic_big_int<b, L, A>::clear_inline_tail(const size_type old_count) noexcept {
+    if constexpr (inplace_capacity != 1) {
+        if (is_representation_inplace()) {
+            limb_type* const limbs = m_storage.limbs;
+            for (size_type i = limb_count(); i < old_count; ++i) {
+                limbs[i] = limb_type{0};
+            }
+        }
+    }
 }
 
 BEMAN_BIG_INT_DIAGNOSTIC_POP()
