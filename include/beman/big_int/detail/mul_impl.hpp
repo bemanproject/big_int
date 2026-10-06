@@ -1308,17 +1308,36 @@ static_assert(mul_slice_zones_valid(), "invalid slicing zone table (see mul_slic
 #define BEMAN_BIG_INT_HAS_SHAPE_DISPATCH 1
 
 // ---------------------------------------------------------------------------
+// multiply_single_limb that also writes result[a.size()] when the product has
+// no carry limb, so all a.size() + 1 limbs are defined. Same contract
+// otherwise: `result` has space for a.size() + 1 limbs, no aliasing. Returns
+// the number of significant result limbs.
+// ---------------------------------------------------------------------------
+constexpr std::size_t multiply_by_limb_full(const std::span<uint_multiprecision_t>       result,
+                                            const std::span<const uint_multiprecision_t> a,
+                                            const uint_multiprecision_t                  val) noexcept {
+    const std::size_t n = multiply_single_limb(result, a, val);
+    if (n == a.size()) {
+        result[n] = 0;
+    }
+    return n;
+}
+
+// ---------------------------------------------------------------------------
 // Runtime multiplication tier ladders (src/mul_dispatch.cpp): operands must
-// be trimmed with at least two limbs; `result` pre-zeroed, sized for the
-// full product, non-aliasing. Kernel workspaces come from the type-erased
-// heap hooks. Returns the trimmed significant size.
+// be trimmed with at least two limbs; `result` sized for the full product,
+// non-aliasing, and need NOT be pre-zeroed: limbs [0, a.size() + b.size()) are
+// all written (tiers that accumulate zero-fill them first), limbs beyond are
+// untouched. Kernel workspaces come from the type-erased heap hooks. Returns
+// the trimmed significant size.
 // ---------------------------------------------------------------------------
 std::size_t multiply_runtime(std::span<uint_multiprecision_t>       result,
                              std::span<const uint_multiprecision_t> a,
                              std::span<const uint_multiprecision_t> b,
                              const scratch_heap_source&             heap);
 
-// Benchmark/test-only variants of multiply_runtime, same contract. The
+// Benchmark/test-only variants of multiply_runtime, same contract (a result
+// that is not pre-zeroed is fine). The
 // schoolbook (min < karatsuba_cutoff) and power-of-two shortcuts still apply in
 // both. _sliced forces slicing of the top-level product whenever max > min,
 // ignoring the ratio test, and skips the FFT gate even where it would take the
@@ -1341,18 +1360,38 @@ std::size_t square_runtime(std::span<uint_multiprecision_t>       result,
 
 // Untrimmed/short-operand-tolerant runtime product for the src-side callers
 // (the division tiers and mulmod): trims, takes the single-limb shortcuts,
-// then runs the tier ladder. The runtime mirror of multiply_dispatch.
+// then runs the tier ladder. The runtime mirror of multiply_dispatch, with the
+// same non-zeroed-result contract.
 std::size_t multiply_runtime_any(std::span<uint_multiprecision_t>       result,
                                  std::span<const uint_multiprecision_t> a_untrimmed,
                                  std::span<const uint_multiprecision_t> b_untrimmed,
                                  const scratch_heap_source&             heap);
 
+// Master switch for the header-side basecase shortcut in multiply_dispatch.
+inline constexpr bool mul_header_basecase_enabled = true;
+
+// Operand length below which multiply_dispatch calls multiply_basecase_runtime
+// instead of building the scratch hooks and entering the ladder. A fixed
+// constant, deliberately not an arch cutoff: AUTO-mode ISA macros can differ
+// between a user TU and the library. src/mul_dispatch.cpp static_asserts that
+// it is at most every Karatsuba cutoff of the compiled configuration.
+inline constexpr std::size_t mul_header_basecase_limbs = 32;
+
+// Product (or square, when a and b are the same span) of trimmed operands with
+// at least two limbs each, min(a.size(), b.size()) < mul_header_basecase_limbs,
+// via the basecase kernels only: no scratch. Same result contract as
+// multiply_runtime (no pre-zeroing needed). Returns the trimmed size.
+std::size_t multiply_basecase_runtime(std::span<uint_multiprecision_t>       result,
+                                      std::span<const uint_multiprecision_t> a,
+                                      std::span<const uint_multiprecision_t> b) noexcept;
+
 // ---------------------------------------------------------------------------
 // result <- a * p2 where p2 is a trimmed power of two: a shifted copy of `a`
 // placed at limb offset p2.size() - 1, bit-shifted by countr_zero(p2.back()).
 // O(n) with no scratch, versus a full kernel dispatch (see GMP mpz_mul_2exp).
-// `result` must be pre-zeroed, have space for a.size() + p2.size() limbs, and
-// must NOT alias `a`. Returns the number of significant result limbs.
+// Writes all a.size() + p2.size() limbs of `result` (it need NOT be pre-zeroed),
+// which must have space for them and must NOT alias `a`. Returns the number of
+// significant result limbs.
 // ---------------------------------------------------------------------------
 constexpr std::size_t multiply_power_of_two(const std::span<uint_multiprecision_t>       result,
                                             const std::span<const uint_multiprecision_t> a,
@@ -1367,14 +1406,20 @@ constexpr std::size_t multiply_power_of_two(const std::span<uint_multiprecision_
     const auto        bit_shift   = static_cast<unsigned>(std::countr_zero(p2.back()));
     const auto        dst         = result.subspan(limb_offset);
 
+    std::ranges::fill(result.first(limb_offset), uint_multiprecision_t{0});
     std::ranges::copy(a, dst.begin());
-    return limb_offset + shift_left_n(dst, a.size(), bit_shift);
+    const std::size_t shifted = shift_left_n(dst, a.size(), bit_shift);
+    if (shifted == a.size()) {
+        dst[shifted] = 0;
+    }
+    return limb_offset + shifted;
 }
 
 // ---------------------------------------------------------------------------
 // Squaring dispatcher: result <- a * a using kernels that exploit the
 // symmetric cross products. Same contract as multiply_dispatch: `result` must
-// be pre-zeroed with space for 2 * a.size() limbs and must NOT alias `a`.
+// have space for 2 * a.size() limbs (it need NOT be pre-zeroed) and must NOT
+// alias `a`.
 // `a` must be trimmed with at least two limbs. Returns the number of
 // significant result limbs.
 // ---------------------------------------------------------------------------
@@ -1393,7 +1438,10 @@ std::size_t square_dispatch(const std::span<uint_multiprecision_t>       result,
 
 // ---------------------------------------------------------------------------
 // Top-level multiplication dispatcher.
-// `result` must be pre-zeroed and have space for a.size() + b.size() limbs.
+// `result` must have space for a.size() + b.size() limbs; it need NOT be
+// pre-zeroed. On return limbs [0, trimmed a.size() + trimmed b.size()) hold the
+// product (the high ones zero when the product is shorter); limbs beyond are
+// untouched, so a caller that wants zeros there fills them itself.
 // `result` must NOT alias `a` or `b`.
 // Returns the number of significant result limbs (trimmed).
 // ---------------------------------------------------------------------------
@@ -1419,10 +1467,10 @@ constexpr std::size_t multiply_dispatch(const std::span<uint_multiprecision_t>  
         return hi != 0 ? 2 : 1;
     }
     if (a.size() == 1) {
-        return multiply_single_limb(result, b, a[0]);
+        return multiply_by_limb_full(result, b, a[0]);
     }
     if (b.size() == 1) {
-        return multiply_single_limb(result, a, b[0]);
+        return multiply_by_limb_full(result, a, b[0]);
     }
 
     // This check has 0 runtime cost, but could speed up/reduce depth of constant evaluation
@@ -1435,6 +1483,7 @@ constexpr std::size_t multiply_dispatch(const std::span<uint_multiprecision_t>  
         }
         // Squaring halves the widening muls, and so the consteval step count.
         if (a.data() == b.data() && a.size() == b.size()) {
+            std::ranges::fill(result.first(2 * a.size()), uint_multiprecision_t{0});
             square_long(result, a);
             return trimmed_size_span(std::span<const uint_multiprecision_t>{result.data(), 2 * a.size()});
         }
@@ -1444,6 +1493,11 @@ constexpr std::size_t multiply_dispatch(const std::span<uint_multiprecision_t>  
     // keeps long multiplication (the recursive tiers could blow up consteval
     // step limits, and the kernels are runtime-compiled).
     if BEMAN_BIG_INT_IS_NOT_CONSTEVAL {
+        if constexpr (mul_header_basecase_enabled) {
+            if (std::min(a.size(), b.size()) < mul_header_basecase_limbs) {
+                return multiply_basecase_runtime(result, a, b);
+            }
+        }
         const scratch_allocator<Allocator> hooks(alloc);
         return multiply_runtime(result, a, b, hooks.heap());
     } else {
