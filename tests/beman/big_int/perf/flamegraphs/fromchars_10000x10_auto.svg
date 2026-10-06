@@ -1,0 +1,1294 @@
+<?xml version="1.0" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN" "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<svg version="1.1" width="1200" height="518" onload="init(evt)" viewBox="0 0 1200 518" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<!-- Flame graph stack visualization. See https://github.com/brendangregg/FlameGraph for latest version, and http://www.brendangregg.com/flamegraphs.html for examples. -->
+<!-- NOTES:  -->
+<defs>
+	<linearGradient id="background" y1="0" y2="1" x1="0" x2="0" >
+		<stop stop-color="#eeeeee" offset="5%" />
+		<stop stop-color="#eeeeb0" offset="95%" />
+	</linearGradient>
+</defs>
+<style type="text/css">
+	text { font-family:Verdana; font-size:12px; fill:rgb(0,0,0); }
+	#search, #ignorecase { opacity:0.1; cursor:pointer; }
+	#search:hover, #search.show, #ignorecase:hover, #ignorecase.show { opacity:1; }
+	#subtitle { text-anchor:middle; font-color:rgb(160,160,160); }
+	#title { text-anchor:middle; font-size:17px}
+	#unzoom { cursor:pointer; }
+	#frames > *:hover { stroke:black; stroke-width:0.5; cursor:pointer; }
+	.hide { display:none; }
+	.parent { opacity:0.5; }
+</style>
+<script type="text/ecmascript">
+<![CDATA[
+	"use strict";
+	var details, searchbtn, unzoombtn, matchedtxt, svg, searching, currentSearchTerm, ignorecase, ignorecaseBtn;
+	function init(evt) {
+		details = document.getElementById("details").firstChild;
+		searchbtn = document.getElementById("search");
+		ignorecaseBtn = document.getElementById("ignorecase");
+		unzoombtn = document.getElementById("unzoom");
+		matchedtxt = document.getElementById("matched");
+		svg = document.getElementsByTagName("svg")[0];
+		searching = 0;
+		currentSearchTerm = null;
+
+		// use GET parameters to restore a flamegraphs state.
+		var params = get_params();
+		if (params.x && params.y)
+			zoom(find_group(document.querySelector('[x="' + params.x + '"][y="' + params.y + '"]')));
+                if (params.s) search(params.s);
+	}
+
+	// event listeners
+	window.addEventListener("click", function(e) {
+		var target = find_group(e.target);
+		if (target) {
+			if (target.nodeName == "a") {
+				if (e.ctrlKey === false) return;
+				e.preventDefault();
+			}
+			if (target.classList.contains("parent")) unzoom(true);
+			zoom(target);
+			if (!document.querySelector('.parent')) {
+				// we have basically done a clearzoom so clear the url
+				var params = get_params();
+				if (params.x) delete params.x;
+				if (params.y) delete params.y;
+				history.replaceState(null, null, parse_params(params));
+				unzoombtn.classList.add("hide");
+				return;
+			}
+
+			// set parameters for zoom state
+			var el = target.querySelector("rect");
+			if (el && el.attributes && el.attributes.y && el.attributes._orig_x) {
+				var params = get_params()
+				params.x = el.attributes._orig_x.value;
+				params.y = el.attributes.y.value;
+				history.replaceState(null, null, parse_params(params));
+			}
+		}
+		else if (e.target.id == "unzoom") clearzoom();
+		else if (e.target.id == "search") search_prompt();
+		else if (e.target.id == "ignorecase") toggle_ignorecase();
+	}, false)
+
+	// mouse-over for info
+	// show
+	window.addEventListener("mouseover", function(e) {
+		var target = find_group(e.target);
+		if (target) details.nodeValue = "Function: " + g_to_text(target);
+	}, false)
+
+	// clear
+	window.addEventListener("mouseout", function(e) {
+		var target = find_group(e.target);
+		if (target) details.nodeValue = ' ';
+	}, false)
+
+	// ctrl-F for search
+	// ctrl-I to toggle case-sensitive search
+	window.addEventListener("keydown",function (e) {
+		if (e.keyCode === 114 || (e.ctrlKey && e.keyCode === 70)) {
+			e.preventDefault();
+			search_prompt();
+		}
+		else if (e.ctrlKey && e.keyCode === 73) {
+			e.preventDefault();
+			toggle_ignorecase();
+		}
+	}, false)
+
+	// functions
+	function get_params() {
+		var params = {};
+		var paramsarr = window.location.search.substr(1).split('&');
+		for (var i = 0; i < paramsarr.length; ++i) {
+			var tmp = paramsarr[i].split("=");
+			if (!tmp[0] || !tmp[1]) continue;
+			params[tmp[0]]  = decodeURIComponent(tmp[1]);
+		}
+		return params;
+	}
+	function parse_params(params) {
+		var uri = "?";
+		for (var key in params) {
+			uri += key + '=' + encodeURIComponent(params[key]) + '&';
+		}
+		if (uri.slice(-1) == "&")
+			uri = uri.substring(0, uri.length - 1);
+		if (uri == '?')
+			uri = window.location.href.split('?')[0];
+		return uri;
+	}
+	function find_child(node, selector) {
+		var children = node.querySelectorAll(selector);
+		if (children.length) return children[0];
+	}
+	function find_group(node) {
+		var parent = node.parentElement;
+		if (!parent) return;
+		if (parent.id == "frames") return node;
+		return find_group(parent);
+	}
+	function orig_save(e, attr, val) {
+		if (e.attributes["_orig_" + attr] != undefined) return;
+		if (e.attributes[attr] == undefined) return;
+		if (val == undefined) val = e.attributes[attr].value;
+		e.setAttribute("_orig_" + attr, val);
+	}
+	function orig_load(e, attr) {
+		if (e.attributes["_orig_"+attr] == undefined) return;
+		e.attributes[attr].value = e.attributes["_orig_" + attr].value;
+		e.removeAttribute("_orig_"+attr);
+	}
+	function g_to_text(e) {
+		var text = find_child(e, "title").firstChild.nodeValue;
+		return (text)
+	}
+	function g_to_func(e) {
+		var func = g_to_text(e);
+		// if there's any manipulation we want to do to the function
+		// name before it's searched, do it here before returning.
+		return (func);
+	}
+	function update_text(e) {
+		var r = find_child(e, "rect");
+		var t = find_child(e, "text");
+		var w = parseFloat(r.attributes.width.value) -3;
+		var txt = find_child(e, "title").textContent.replace(/\([^(]*\)$/,"");
+		t.attributes.x.value = parseFloat(r.attributes.x.value) + 3;
+
+		// Smaller than this size won't fit anything
+		if (w < 2 * 12 * 0.59) {
+			t.textContent = "";
+			return;
+		}
+
+		t.textContent = txt;
+		var sl = t.getSubStringLength(0, txt.length);
+		// check if only whitespace or if we can fit the entire string into width w
+		if (/^ *$/.test(txt) || sl < w)
+			return;
+
+		// this isn't perfect, but gives a good starting point
+		// and avoids calling getSubStringLength too often
+		var start = Math.floor((w/sl) * txt.length);
+		for (var x = start; x > 0; x = x-2) {
+			if (t.getSubStringLength(0, x + 2) <= w) {
+				t.textContent = txt.substring(0, x) + "..";
+				return;
+			}
+		}
+		t.textContent = "";
+	}
+
+	// zoom
+	function zoom_reset(e) {
+		if (e.attributes != undefined) {
+			orig_load(e, "x");
+			orig_load(e, "width");
+		}
+		if (e.childNodes == undefined) return;
+		for (var i = 0, c = e.childNodes; i < c.length; i++) {
+			zoom_reset(c[i]);
+		}
+	}
+	function zoom_child(e, x, ratio) {
+		if (e.attributes != undefined) {
+			if (e.attributes.x != undefined) {
+				orig_save(e, "x");
+				e.attributes.x.value = (parseFloat(e.attributes.x.value) - x - 10) * ratio + 10;
+				if (e.tagName == "text")
+					e.attributes.x.value = find_child(e.parentNode, "rect[x]").attributes.x.value + 3;
+			}
+			if (e.attributes.width != undefined) {
+				orig_save(e, "width");
+				e.attributes.width.value = parseFloat(e.attributes.width.value) * ratio;
+			}
+		}
+
+		if (e.childNodes == undefined) return;
+		for (var i = 0, c = e.childNodes; i < c.length; i++) {
+			zoom_child(c[i], x - 10, ratio);
+		}
+	}
+	function zoom_parent(e) {
+		if (e.attributes) {
+			if (e.attributes.x != undefined) {
+				orig_save(e, "x");
+				e.attributes.x.value = 10;
+			}
+			if (e.attributes.width != undefined) {
+				orig_save(e, "width");
+				e.attributes.width.value = parseInt(svg.width.baseVal.value) - (10 * 2);
+			}
+		}
+		if (e.childNodes == undefined) return;
+		for (var i = 0, c = e.childNodes; i < c.length; i++) {
+			zoom_parent(c[i]);
+		}
+	}
+	function zoom(node) {
+		var attr = find_child(node, "rect").attributes;
+		var width = parseFloat(attr.width.value);
+		var xmin = parseFloat(attr.x.value);
+		var xmax = parseFloat(xmin + width);
+		var ymin = parseFloat(attr.y.value);
+		var ratio = (svg.width.baseVal.value - 2 * 10) / width;
+
+		// XXX: Workaround for JavaScript float issues (fix me)
+		var fudge = 0.0001;
+
+		unzoombtn.classList.remove("hide");
+
+		var el = document.getElementById("frames").children;
+		for (var i = 0; i < el.length; i++) {
+			var e = el[i];
+			var a = find_child(e, "rect").attributes;
+			var ex = parseFloat(a.x.value);
+			var ew = parseFloat(a.width.value);
+			var upstack;
+			// Is it an ancestor
+			if (0 == 0) {
+				upstack = parseFloat(a.y.value) > ymin;
+			} else {
+				upstack = parseFloat(a.y.value) < ymin;
+			}
+			if (upstack) {
+				// Direct ancestor
+				if (ex <= xmin && (ex+ew+fudge) >= xmax) {
+					e.classList.add("parent");
+					zoom_parent(e);
+					update_text(e);
+				}
+				// not in current path
+				else
+					e.classList.add("hide");
+			}
+			// Children maybe
+			else {
+				// no common path
+				if (ex < xmin || ex + fudge >= xmax) {
+					e.classList.add("hide");
+				}
+				else {
+					zoom_child(e, xmin, ratio);
+					update_text(e);
+				}
+			}
+		}
+		search();
+	}
+	function unzoom(dont_update_text) {
+		unzoombtn.classList.add("hide");
+		var el = document.getElementById("frames").children;
+		for(var i = 0; i < el.length; i++) {
+			el[i].classList.remove("parent");
+			el[i].classList.remove("hide");
+			zoom_reset(el[i]);
+			if(!dont_update_text) update_text(el[i]);
+		}
+		search();
+	}
+	function clearzoom() {
+		unzoom();
+
+		// remove zoom state
+		var params = get_params();
+		if (params.x) delete params.x;
+		if (params.y) delete params.y;
+		history.replaceState(null, null, parse_params(params));
+	}
+
+	// search
+	function toggle_ignorecase() {
+		ignorecase = !ignorecase;
+		if (ignorecase) {
+			ignorecaseBtn.classList.add("show");
+		} else {
+			ignorecaseBtn.classList.remove("show");
+		}
+		reset_search();
+		search();
+	}
+	function reset_search() {
+		var el = document.querySelectorAll("#frames rect");
+		for (var i = 0; i < el.length; i++) {
+			orig_load(el[i], "fill")
+		}
+		var params = get_params();
+		delete params.s;
+		history.replaceState(null, null, parse_params(params));
+	}
+	function search_prompt() {
+		if (!searching) {
+			var term = prompt("Enter a search term (regexp " +
+			    "allowed, eg: ^ext4_)"
+			    + (ignorecase ? ", ignoring case" : "")
+			    + "\nPress Ctrl-i to toggle case sensitivity", "");
+			if (term != null) search(term);
+		} else {
+			reset_search();
+			searching = 0;
+			currentSearchTerm = null;
+			searchbtn.classList.remove("show");
+			searchbtn.firstChild.nodeValue = "Search"
+			matchedtxt.classList.add("hide");
+			matchedtxt.firstChild.nodeValue = ""
+		}
+	}
+	function search(term) {
+		if (term) currentSearchTerm = term;
+		if (currentSearchTerm === null) return;
+
+		var re = new RegExp(currentSearchTerm, ignorecase ? 'i' : '');
+		var el = document.getElementById("frames").children;
+		var matches = new Object();
+		var maxwidth = 0;
+		for (var i = 0; i < el.length; i++) {
+			var e = el[i];
+			var func = g_to_func(e);
+			var rect = find_child(e, "rect");
+			if (func == null || rect == null)
+				continue;
+
+			// Save max width. Only works as we have a root frame
+			var w = parseFloat(rect.attributes.width.value);
+			if (w > maxwidth)
+				maxwidth = w;
+
+			if (func.match(re)) {
+				// highlight
+				var x = parseFloat(rect.attributes.x.value);
+				orig_save(rect, "fill");
+				rect.attributes.fill.value = "rgb(230,0,230)";
+
+				// remember matches
+				if (matches[x] == undefined) {
+					matches[x] = w;
+				} else {
+					if (w > matches[x]) {
+						// overwrite with parent
+						matches[x] = w;
+					}
+				}
+				searching = 1;
+			}
+		}
+		if (!searching)
+			return;
+		var params = get_params();
+		params.s = currentSearchTerm;
+		history.replaceState(null, null, parse_params(params));
+
+		searchbtn.classList.add("show");
+		searchbtn.firstChild.nodeValue = "Reset Search";
+
+		// calculate percent matched, excluding vertical overlap
+		var count = 0;
+		var lastx = -1;
+		var lastw = 0;
+		var keys = Array();
+		for (k in matches) {
+			if (matches.hasOwnProperty(k))
+				keys.push(k);
+		}
+		// sort the matched frames by their x location
+		// ascending, then width descending
+		keys.sort(function(a, b){
+			return a - b;
+		});
+		// Step through frames saving only the biggest bottom-up frames
+		// thanks to the sort order. This relies on the tree property
+		// where children are always smaller than their parents.
+		var fudge = 0.0001;	// JavaScript floating point
+		for (var k in keys) {
+			var x = parseFloat(keys[k]);
+			var w = matches[keys[k]];
+			if (x >= lastx + lastw - fudge) {
+				count += w;
+				lastx = x;
+				lastw = w;
+			}
+		}
+		// display matched percent
+		matchedtxt.classList.remove("hide");
+		var pct = 100 * count / maxwidth;
+		if (pct != 100) pct = pct.toFixed(1)
+		matchedtxt.firstChild.nodeValue = "Matched: " + pct + "%";
+	}
+]]>
+</script>
+<rect x="0.0" y="0" width="1200.0" height="518.0" fill="url(#background)"  />
+<text id="title" x="600.00" y="24" >fromchars 10000x10 big_int (x64 gcc14)</text>
+<text id="details" x="10.00" y="501" > </text>
+<text id="unzoom" x="10.00" y="24" class="hide">Reset Zoom</text>
+<text id="search" x="1090.00" y="24" >Search</text>
+<text id="ignorecase" x="1174.00" y="24" >ic</text>
+<text id="matched" x="1090.00" y="501" > </text>
+<g id="frames">
+<g >
+<title>from_chars (19,770,611 samples, 0.05%)</title><rect x="10.0" y="309" width="0.6" height="15.0" fill="rgb(216,50,12)" rx="2" ry="2" />
+<text  x="13.01" y="319.5" ></text>
+</g>
+<g >
+<title>subtract_unsigned_spans (47,202,214 samples, 0.11%)</title><rect x="610.5" y="53" width="1.3" height="15.0" fill="rgb(244,182,43)" rx="2" ry="2" />
+<text  x="613.47" y="63.5" ></text>
+</g>
+<g >
+<title>subtract_unsigned_spans_and_shift_right_n (23,607,096 samples, 0.06%)</title><rect x="1103.8" y="117" width="0.7" height="15.0" fill="rgb(243,177,42)" rx="2" ry="2" />
+<text  x="1106.83" y="127.5" ></text>
+</g>
+<g >
+<title>add_unsigned_spans (34,021,966 samples, 0.08%)</title><rect x="974.4" y="117" width="1.0" height="15.0" fill="rgb(209,19,4)" rx="2" ry="2" />
+<text  x="977.43" y="127.5" ></text>
+</g>
+<g >
+<title>limbs_to_digits (31,432,418 samples, 0.07%)</title><rect x="1189.1" y="309" width="0.9" height="15.0" fill="rgb(253,223,53)" rx="2" ry="2" />
+<text  x="1192.08" y="319.5" ></text>
+</g>
+<g >
+<title>std::__conditional::type std::ranges::__copy_or_move (18,259,670 samples, 0.04%)</title><rect x="550.2" y="213" width="0.5" height="15.0" fill="rgb(237,149,35)" rx="2" ry="2" />
+<text  x="553.20" y="223.5" ></text>
+</g>
+<g >
+<title>add_shifted (149,101,183 samples, 0.35%)</title><rect x="754.3" y="117" width="4.1" height="15.0" fill="rgb(231,122,29)" rx="2" ry="2" />
+<text  x="757.26" y="127.5" ></text>
+</g>
+<g >
+<title>unsigned long beman::big_int::detail::digits_to_limbs (19,770,611 samples, 0.05%)</title><rect x="10.0" y="277" width="0.6" height="15.0" fill="rgb(233,131,31)" rx="2" ry="2" />
+<text  x="13.01" y="287.5" ></text>
+</g>
+<g >
+<title>borrowing_sub (20,963,254 samples, 0.05%)</title><rect x="1185.1" y="85" width="0.6" height="15.0" fill="rgb(205,0,0)" rx="2" ry="2" />
+<text  x="1188.11" y="95.5" ></text>
+</g>
+<g >
+<title>_start (42,015,739,694 samples, 100.00%)</title><rect x="10.0" y="437" width="1180.0" height="15.0" fill="rgb(245,185,44)" rx="2" ry="2" />
+<text  x="13.00" y="447.5" >_start</text>
+</g>
+<g >
+<title>__memmove_evex_unaligned_erms (18,259,670 samples, 0.04%)</title><rect x="550.2" y="165" width="0.5" height="15.0" fill="rgb(226,100,24)" rx="2" ry="2" />
+<text  x="553.20" y="175.5" ></text>
+</g>
+<g >
+<title>beman_big_int_square_long_runtime_avx512_ifma (426,918,911 samples, 1.02%)</title><rect x="1121.6" y="85" width="11.9" height="15.0" fill="rgb(240,161,38)" rx="2" ry="2" />
+<text  x="1124.55" y="95.5" ></text>
+</g>
+<g >
+<title>subtract_unsigned_spans (128,523,974 samples, 0.31%)</title><rect x="1100.2" y="133" width="3.6" height="15.0" fill="rgb(244,182,43)" rx="2" ry="2" />
+<text  x="1103.22" y="143.5" ></text>
+</g>
+<g >
+<title>add_unsigned_spans (36,683,833 samples, 0.09%)</title><rect x="1120.5" y="85" width="1.1" height="15.0" fill="rgb(209,19,4)" rx="2" ry="2" />
+<text  x="1123.52" y="95.5" ></text>
+</g>
+<g >
+<title>add_unsigned_spans (83,881,264 samples, 0.20%)</title><rect x="728.9" y="133" width="2.4" height="15.0" fill="rgb(209,19,4)" rx="2" ry="2" />
+<text  x="731.94" y="143.5" ></text>
+</g>
+<g >
+<title>std::ranges::in_out_result std::ranges::__copy_fn::operator (18,200,441 samples, 0.04%)</title><rect x="564.3" y="213" width="0.5" height="15.0" fill="rgb(210,26,6)" rx="2" ry="2" />
+<text  x="567.26" y="223.5" ></text>
+</g>
+<g >
+<title>__gnu_cxx::__normal_iterator std::ranges::__fill_n_fn::operator (73,374,136 samples, 0.17%)</title><rect x="562.2" y="197" width="2.1" height="15.0" fill="rgb(218,61,14)" rx="2" ry="2" />
+<text  x="565.20" y="207.5" ></text>
+</g>
+<g >
+<title>operator (2,912,894,605 samples, 6.93%)</title><rect x="1106.6" y="149" width="81.8" height="15.0" fill="rgb(254,228,54)" rx="2" ry="2" />
+<text  x="1109.62" y="159.5" >operator</text>
+</g>
+<g >
+<title>beman_big_int_multiply_long_runtime_avx512_ifma (154,553,624 samples, 0.37%)</title><rect x="965.3" y="133" width="4.3" height="15.0" fill="rgb(246,189,45)" rx="2" ry="2" />
+<text  x="968.30" y="143.5" ></text>
+</g>
+<g >
+<title>add_unsigned_spans (26,111,731 samples, 0.06%)</title><rect x="1112.0" y="101" width="0.7" height="15.0" fill="rgb(209,19,4)" rx="2" ry="2" />
+<text  x="1114.99" y="111.5" ></text>
+</g>
+<g >
+<title>limbs_to_digits (31,432,418 samples, 0.07%)</title><rect x="1189.1" y="325" width="0.9" height="15.0" fill="rgb(253,223,53)" rx="2" ry="2" />
+<text  x="1192.08" y="335.5" ></text>
+</g>
+<g >
+<title>beman::big_int::detail::wide beman::big_int::detail::widening_mul (5,649,130,412 samples, 13.45%)</title><rect x="390.2" y="213" width="158.7" height="15.0" fill="rgb(222,78,18)" rx="2" ry="2" />
+<text  x="393.22" y="223.5" >beman::big_int::deta..</text>
+</g>
+<g >
+<title>void beman::big_int::detail::append_squared_power (2,967,637,853 samples, 7.06%)</title><rect x="1105.2" y="229" width="83.3" height="15.0" fill="rgb(251,211,50)" rx="2" ry="2" />
+<text  x="1108.16" y="239.5" >void bema..</text>
+</g>
+<g >
+<title>std::ranges::in_out_result std::ranges::__copy_fn::operator (18,259,670 samples, 0.04%)</title><rect x="550.2" y="229" width="0.5" height="15.0" fill="rgb(210,26,6)" rx="2" ry="2" />
+<text  x="553.20" y="239.5" ></text>
+</g>
+<g >
+<title>square_karatsuba (2,711,195,731 samples, 6.45%)</title><rect x="1109.6" y="117" width="76.1" height="15.0" fill="rgb(217,55,13)" rx="2" ry="2" />
+<text  x="1112.56" y="127.5" >square_k..</text>
+</g>
+<g >
+<title>std::__conditional::type std::ranges::__copy_or_move (18,200,441 samples, 0.04%)</title><rect x="564.3" y="181" width="0.5" height="15.0" fill="rgb(237,149,35)" rx="2" ry="2" />
+<text  x="567.26" y="191.5" ></text>
+</g>
+<g >
+<title>carrying_add (23,608,748 samples, 0.06%)</title><rect x="627.5" y="85" width="0.7" height="15.0" fill="rgb(206,6,1)" rx="2" ry="2" />
+<text  x="630.54" y="95.5" ></text>
+</g>
+<g >
+<title>divide_unsigned_short (65,479,024 samples, 0.16%)</title><rect x="619.8" y="133" width="1.9" height="15.0" fill="rgb(243,176,42)" rx="2" ry="2" />
+<text  x="622.82" y="143.5" ></text>
+</g>
+<g >
+<title>beman_big_int_square_long_runtime_avx512_ifma (28,651,660 samples, 0.07%)</title><rect x="1105.8" y="149" width="0.8" height="15.0" fill="rgb(240,161,38)" rx="2" ry="2" />
+<text  x="1108.82" y="159.5" ></text>
+</g>
+<g >
+<title>std::__conditional::type std::ranges::__copy_or_move (18,200,441 samples, 0.04%)</title><rect x="564.3" y="197" width="0.5" height="15.0" fill="rgb(237,149,35)" rx="2" ry="2" />
+<text  x="567.26" y="207.5" ></text>
+</g>
+<g >
+<title>div_2by1_preinv (70,822,440 samples, 0.17%)</title><rect x="970.1" y="117" width="2.0" height="15.0" fill="rgb(231,123,29)" rx="2" ry="2" />
+<text  x="973.09" y="127.5" ></text>
+</g>
+<g >
+<title>multiply_karatsuba (3,781,704,610 samples, 9.00%)</title><rect x="980.4" y="101" width="106.2" height="15.0" fill="rgb(223,83,20)" rx="2" ry="2" />
+<text  x="983.39" y="111.5" >multiply_kara..</text>
+</g>
+<g >
+<title>subtract_unsigned_spans (138,873,532 samples, 0.33%)</title><rect x="1173.7" y="69" width="3.9" height="15.0" fill="rgb(244,182,43)" rx="2" ry="2" />
+<text  x="1176.71" y="79.5" ></text>
+</g>
+<g >
+<title>multiply_karatsuba (8,377,094,024 samples, 19.94%)</title><rect x="726.2" y="149" width="235.3" height="15.0" fill="rgb(223,83,20)" rx="2" ry="2" />
+<text  x="729.21" y="159.5" >multiply_karatsuba</text>
+</g>
+<g >
+<title>std::__conditional::type&lt;decltype  (18,365,863 samples, 0.04%)</title><rect x="1105.2" y="213" width="0.5" height="15.0" fill="rgb(234,135,32)" rx="2" ry="2" />
+<text  x="1108.16" y="223.5" ></text>
+</g>
+<g >
+<title>multiply_sliced (5,732,943,671 samples, 13.64%)</title><rect x="564.9" y="181" width="161.0" height="15.0" fill="rgb(254,229,54)" rx="2" ry="2" />
+<text  x="567.92" y="191.5" >multiply_sliced</text>
+</g>
+<g >
+<title>from_int (28,862,895 samples, 0.07%)</title><rect x="971.3" y="85" width="0.8" height="15.0" fill="rgb(245,184,44)" rx="2" ry="2" />
+<text  x="974.26" y="95.5" ></text>
+</g>
+<g >
+<title>emit_digits (30,082,270 samples, 0.07%)</title><rect x="1189.1" y="293" width="0.9" height="15.0" fill="rgb(205,2,0)" rx="2" ry="2" />
+<text  x="1192.12" y="303.5" ></text>
+</g>
+<g >
+<title>construct_at (28,820,158 samples, 0.07%)</title><rect x="55.8" y="261" width="0.8" height="15.0" fill="rgb(233,130,31)" rx="2" ry="2" />
+<text  x="58.75" y="271.5" ></text>
+</g>
+<g >
+<title>add_many_into_tmp (18,332,795 samples, 0.04%)</title><rect x="566.7" y="69" width="0.5" height="15.0" fill="rgb(248,200,48)" rx="2" ry="2" />
+<text  x="569.68" y="79.5" ></text>
+</g>
+<g >
+<title>multiply_karatsuba (4,224,638,194 samples, 10.05%)</title><rect x="973.4" y="133" width="118.6" height="15.0" fill="rgb(223,83,20)" rx="2" ry="2" />
+<text  x="976.40" y="143.5" >multiply_karat..</text>
+</g>
+<g >
+<title>multiply_karatsuba (1,344,213,726 samples, 3.20%)</title><rect x="572.6" y="53" width="37.8" height="15.0" fill="rgb(223,83,20)" rx="2" ry="2" />
+<text  x="575.64" y="63.5" >mul..</text>
+</g>
+<g >
+<title>recompose (330,102,841 samples, 0.79%)</title><rect x="712.8" y="133" width="9.2" height="15.0" fill="rgb(228,106,25)" rx="2" ry="2" />
+<text  x="715.76" y="143.5" ></text>
+</g>
+<g >
+<title>std::ranges::in_out_result&lt;std::__conditional::type&lt;decltype  (18,259,670 samples, 0.04%)</title><rect x="550.2" y="245" width="0.5" height="15.0" fill="rgb(252,218,52)" rx="2" ry="2" />
+<text  x="553.20" y="255.5" ></text>
+</g>
+<g >
+<title>multiply_toom_cook_3 (5,110,588,133 samples, 12.16%)</title><rect x="961.5" y="149" width="143.5" height="15.0" fill="rgb(252,218,52)" rx="2" ry="2" />
+<text  x="964.48" y="159.5" >multiply_toom_cook_3</text>
+</g>
+<g >
+<title>subtract_unsigned_spans (18,371,201 samples, 0.04%)</title><rect x="725.4" y="117" width="0.5" height="15.0" fill="rgb(244,182,43)" rx="2" ry="2" />
+<text  x="728.41" y="127.5" ></text>
+</g>
+<g >
+<title>to_chars (31,432,418 samples, 0.07%)</title><rect x="1189.1" y="357" width="0.9" height="15.0" fill="rgb(216,51,12)" rx="2" ry="2" />
+<text  x="1192.08" y="367.5" ></text>
+</g>
+<g >
+<title>add_unsigned_spans (36,711,831 samples, 0.09%)</title><rect x="865.4" y="85" width="1.0" height="15.0" fill="rgb(209,19,4)" rx="2" ry="2" />
+<text  x="868.35" y="95.5" ></text>
+</g>
+<g >
+<title>__memset_evex_unaligned_erms (28,820,158 samples, 0.07%)</title><rect x="55.8" y="245" width="0.8" height="15.0" fill="rgb(218,60,14)" rx="2" ry="2" />
+<text  x="58.75" y="255.5" ></text>
+</g>
+<g >
+<title>borrowing_sub (20,994,684 samples, 0.05%)</title><rect x="1085.9" y="69" width="0.6" height="15.0" fill="rgb(205,0,0)" rx="2" ry="2" />
+<text  x="1088.93" y="79.5" ></text>
+</g>
+<g >
+<title>unsigned long beman::big_int::detail::digits_to_limbs (40,304,793,955 samples, 95.93%)</title><rect x="56.6" y="261" width="1131.9" height="15.0" fill="rgb(233,131,31)" rx="2" ry="2" />
+<text  x="59.56" y="271.5" >unsigned long beman::big_int::detail::digits_to_limbs</text>
+</g>
+<g >
+<title>run_ladder (13,503,263,278 samples, 32.14%)</title><rect x="725.9" y="181" width="379.3" height="15.0" fill="rgb(241,169,40)" rx="2" ry="2" />
+<text  x="728.92" y="191.5" >run_ladder</text>
+</g>
+<g >
+<title>digit_value_buffer (28,820,158 samples, 0.07%)</title><rect x="55.8" y="277" width="0.8" height="15.0" fill="rgb(228,108,25)" rx="2" ry="2" />
+<text  x="58.75" y="287.5" ></text>
+</g>
+<g >
+<title>widening_mul (28,862,895 samples, 0.07%)</title><rect x="971.3" y="101" width="0.8" height="15.0" fill="rgb(231,124,29)" rx="2" ry="2" />
+<text  x="974.26" y="111.5" ></text>
+</g>
+<g >
+<title>beman::big_int::detail::trimmed_size_span (36,695,917 samples, 0.09%)</title><rect x="548.9" y="245" width="1.0" height="15.0" fill="rgb(246,189,45)" rx="2" ry="2" />
+<text  x="551.87" y="255.5" ></text>
+</g>
+<g >
+<title>multiply_runtime_impl (19,238,831,345 samples, 45.79%)</title><rect x="564.8" y="197" width="540.4" height="15.0" fill="rgb(207,11,2)" rx="2" ry="2" />
+<text  x="567.84" y="207.5" >multiply_runtime_impl</text>
+</g>
+<g >
+<title>toom_ladder (3,849,053,180 samples, 9.16%)</title><rect x="617.8" y="165" width="108.1" height="15.0" fill="rgb(207,9,2)" rx="2" ry="2" />
+<text  x="620.83" y="175.5" >toom_ladder</text>
+</g>
+<g >
+<title>multiply_toom_cook_3 (1,818,550,313 samples, 4.33%)</title><rect x="566.7" y="85" width="51.1" height="15.0" fill="rgb(252,218,52)" rx="2" ry="2" />
+<text  x="569.68" y="95.5" >multi..</text>
+</g>
+<g >
+<title>add_many_into_tmp (81,128,504 samples, 0.19%)</title><rect x="961.5" y="133" width="2.3" height="15.0" fill="rgb(248,200,48)" rx="2" ry="2" />
+<text  x="964.48" y="143.5" ></text>
+</g>
+<g >
+<title>add_shifted (91,832,264 samples, 0.22%)</title><rect x="625.6" y="101" width="2.6" height="15.0" fill="rgb(231,122,29)" rx="2" ry="2" />
+<text  x="628.63" y="111.5" ></text>
+</g>
+<g >
+<title>operator (2,915,518,594 samples, 6.94%)</title><rect x="1106.6" y="165" width="81.9" height="15.0" fill="rgb(254,228,54)" rx="2" ry="2" />
+<text  x="1109.62" y="175.5" >operator</text>
+</g>
+<g >
+<title>subtract_unsigned_spans (167,701,453 samples, 0.40%)</title><rect x="705.3" y="101" width="4.7" height="15.0" fill="rgb(244,182,43)" rx="2" ry="2" />
+<text  x="708.32" y="111.5" ></text>
+</g>
+<g >
+<title>beman::big_int::detail::basecase_digits_to_limbs (17,529,702,967 samples, 41.72%)</title><rect x="56.6" y="245" width="492.3" height="15.0" fill="rgb(219,66,15)" rx="2" ry="2" />
+<text  x="59.56" y="255.5" >beman::big_int::detail::basecase_digits_to_limbs</text>
+</g>
+<g >
+<title>beman_big_int_square_long_runtime_avx512_ifma (60,083,260 samples, 0.14%)</title><rect x="1107.9" y="117" width="1.7" height="15.0" fill="rgb(240,161,38)" rx="2" ry="2" />
+<text  x="1110.87" y="127.5" ></text>
+</g>
+<g >
+<title>multiply_runtime_impl (1,818,550,313 samples, 4.33%)</title><rect x="566.7" y="133" width="51.1" height="15.0" fill="rgb(207,11,2)" rx="2" ry="2" />
+<text  x="569.68" y="143.5" >multi..</text>
+</g>
+<g >
+<title>time_round&lt;::run_fromchars (41,942,535,672 samples, 99.83%)</title><rect x="10.6" y="325" width="1177.9" height="15.0" fill="rgb(212,34,8)" rx="2" ry="2" />
+<text  x="13.57" y="335.5" >time_round&lt;::run_fromchars</text>
+</g>
+<g >
+<title>toom_ladder (13,487,682,157 samples, 32.10%)</title><rect x="726.2" y="165" width="378.8" height="15.0" fill="rgb(207,9,2)" rx="2" ry="2" />
+<text  x="729.21" y="175.5" >toom_ladder</text>
+</g>
+<g >
+<title>subtract_unsigned_spans_and_shift_right_one (26,213,007 samples, 0.06%)</title><rect x="724.5" y="133" width="0.8" height="15.0" fill="rgb(224,88,21)" rx="2" ry="2" />
+<text  x="727.52" y="143.5" ></text>
+</g>
+<g >
+<title>multiply_karatsuba (3,217,578,503 samples, 7.66%)</title><rect x="622.2" y="133" width="90.3" height="15.0" fill="rgb(223,83,20)" rx="2" ry="2" />
+<text  x="625.17" y="143.5" >multiply_k..</text>
+</g>
+<g >
+<title>__libc_start_call_main (42,014,774,759 samples, 100.00%)</title><rect x="10.0" y="405" width="1180.0" height="15.0" fill="rgb(210,26,6)" rx="2" ry="2" />
+<text  x="13.00" y="415.5" >__libc_start_call_main</text>
+</g>
+<g >
+<title>toom_ladder (1,818,550,313 samples, 4.33%)</title><rect x="566.7" y="101" width="51.1" height="15.0" fill="rgb(207,9,2)" rx="2" ry="2" />
+<text  x="569.68" y="111.5" >toom_..</text>
+</g>
+<g >
+<title>beman_big_int_multiply_long_runtime_avx512_ifma (1,572,062,437 samples, 3.74%)</title><rect x="818.0" y="101" width="44.1" height="15.0" fill="rgb(246,189,45)" rx="2" ry="2" />
+<text  x="820.97" y="111.5" >bema..</text>
+</g>
+<g >
+<title>add_shifted (36,521,062 samples, 0.09%)</title><rect x="973.4" y="117" width="1.0" height="15.0" fill="rgb(231,122,29)" rx="2" ry="2" />
+<text  x="976.40" y="127.5" ></text>
+</g>
+<g >
+<title>add_unsigned_spans (36,741,962 samples, 0.09%)</title><rect x="628.2" y="101" width="1.0" height="15.0" fill="rgb(209,19,4)" rx="2" ry="2" />
+<text  x="631.21" y="111.5" ></text>
+</g>
+<g >
+<title>add_unsigned_spans (78,733,747 samples, 0.19%)</title><rect x="983.5" y="85" width="2.2" height="15.0" fill="rgb(209,19,4)" rx="2" ry="2" />
+<text  x="986.48" y="95.5" ></text>
+</g>
+<g >
+<title>subtract_unsigned_spans (115,309,762 samples, 0.27%)</title><rect x="1086.7" y="101" width="3.2" height="15.0" fill="rgb(244,182,43)" rx="2" ry="2" />
+<text  x="1089.67" y="111.5" ></text>
+</g>
+<g >
+<title>digits_to_limbs (19,770,611 samples, 0.05%)</title><rect x="10.0" y="293" width="0.6" height="15.0" fill="rgb(253,223,53)" rx="2" ry="2" />
+<text  x="13.01" y="303.5" ></text>
+</g>
+<g >
+<title>subtract_unsigned_spans (88,970,505 samples, 0.21%)</title><rect x="722.0" y="133" width="2.5" height="15.0" fill="rgb(244,182,43)" rx="2" ry="2" />
+<text  x="725.03" y="143.5" ></text>
+</g>
+<g >
+<title>multiply_karatsuba (2,856,862,919 samples, 6.80%)</title><rect x="862.1" y="101" width="80.3" height="15.0" fill="rgb(223,83,20)" rx="2" ry="2" />
+<text  x="865.12" y="111.5" >multiply_..</text>
+</g>
+<g >
+<title>add_unsigned_spans (96,798,116 samples, 0.23%)</title><rect x="758.4" y="117" width="2.8" height="15.0" fill="rgb(209,19,4)" rx="2" ry="2" />
+<text  x="761.44" y="127.5" ></text>
+</g>
+<g >
+<title>borrowing_sub (31,463,382 samples, 0.07%)</title><rect x="709.1" y="85" width="0.9" height="15.0" fill="rgb(205,0,0)" rx="2" ry="2" />
+<text  x="712.15" y="95.5" ></text>
+</g>
+<g >
+<title>recompose (285,812,772 samples, 0.68%)</title><rect x="1092.2" y="133" width="8.0" height="15.0" fill="rgb(228,106,25)" rx="2" ry="2" />
+<text  x="1095.19" y="143.5" ></text>
+</g>
+<g >
+<title>digits_to_limbs (18,858,180 samples, 0.04%)</title><rect x="1188.6" y="309" width="0.5" height="15.0" fill="rgb(253,223,53)" rx="2" ry="2" />
+<text  x="1191.55" y="319.5" ></text>
+</g>
+<g >
+<title>multiply_karatsuba (4,077,996,288 samples, 9.71%)</title><rect x="975.4" y="117" width="114.5" height="15.0" fill="rgb(223,83,20)" rx="2" ry="2" />
+<text  x="978.38" y="127.5" >multiply_karat..</text>
+</g>
+<g >
+<title>std::__conditional::type std::ranges::__copy_or_move (18,259,670 samples, 0.04%)</title><rect x="550.2" y="181" width="0.5" height="15.0" fill="rgb(237,149,35)" rx="2" ry="2" />
+<text  x="553.20" y="191.5" ></text>
+</g>
+<g >
+<title>add_shifted (86,489,115 samples, 0.21%)</title><rect x="1109.6" y="101" width="2.4" height="15.0" fill="rgb(231,122,29)" rx="2" ry="2" />
+<text  x="1112.56" y="111.5" ></text>
+</g>
+<g >
+<title>multiply_runtime (1,818,550,313 samples, 4.33%)</title><rect x="566.7" y="149" width="51.1" height="15.0" fill="rgb(224,90,21)" rx="2" ry="2" />
+<text  x="569.68" y="159.5" >multi..</text>
+</g>
+<g >
+<title>shape_sweep (42,015,739,694 samples, 100.00%)</title><rect x="10.0" y="453" width="1180.0" height="15.0" fill="rgb(242,172,41)" rx="2" ry="2" />
+<text  x="13.00" y="463.5" >shape_sweep</text>
+</g>
+<g >
+<title>beman_big_int_square_long_runtime_avx512_ifma (1,289,282,020 samples, 3.07%)</title><rect x="1137.4" y="69" width="36.2" height="15.0" fill="rgb(240,161,38)" rx="2" ry="2" />
+<text  x="1140.43" y="79.5" >bem..</text>
+</g>
+<g >
+<title>carrying_add (39,169,331 samples, 0.09%)</title><rect x="816.9" y="85" width="1.1" height="15.0" fill="rgb(206,6,1)" rx="2" ry="2" />
+<text  x="819.87" y="95.5" ></text>
+</g>
+<g >
+<title>add_shifted (60,134,036 samples, 0.14%)</title><rect x="565.0" y="165" width="1.7" height="15.0" fill="rgb(231,122,29)" rx="2" ry="2" />
+<text  x="567.99" y="175.5" ></text>
+</g>
+<g >
+<title>subtract_unsigned_spans (225,127,300 samples, 0.54%)</title><rect x="948.5" y="117" width="6.3" height="15.0" fill="rgb(244,182,43)" rx="2" ry="2" />
+<text  x="951.46" y="127.5" ></text>
+</g>
+<g >
+<title>multiply_toom_cook_3 (3,849,053,180 samples, 9.16%)</title><rect x="617.8" y="149" width="108.1" height="15.0" fill="rgb(252,218,52)" rx="2" ry="2" />
+<text  x="620.83" y="159.5" >multiply_toom..</text>
+</g>
+<g >
+<title>subtract_unsigned_spans_signed (18,371,201 samples, 0.04%)</title><rect x="725.4" y="133" width="0.5" height="15.0" fill="rgb(235,140,33)" rx="2" ry="2" />
+<text  x="728.41" y="143.5" ></text>
+</g>
+<g >
+<title>borrowing_sub (20,983,396 samples, 0.05%)</title><rect x="941.6" y="69" width="0.6" height="15.0" fill="rgb(205,0,0)" rx="2" ry="2" />
+<text  x="944.62" y="79.5" ></text>
+</g>
+<g >
+<title>beman_big_int_multiply_long_runtime_avx512_ifma (2,698,652,922 samples, 6.42%)</title><rect x="629.2" y="101" width="75.8" height="15.0" fill="rgb(246,189,45)" rx="2" ry="2" />
+<text  x="632.24" y="111.5" >beman_bi..</text>
+</g>
+<g >
+<title>recompose (144,050,871 samples, 0.34%)</title><rect x="611.9" y="69" width="4.1" height="15.0" fill="rgb(228,106,25)" rx="2" ry="2" />
+<text  x="614.94" y="79.5" ></text>
+</g>
+<g >
+<title>add_shifted (115,226,247 samples, 0.27%)</title><rect x="1117.3" y="85" width="3.2" height="15.0" fill="rgb(231,122,29)" rx="2" ry="2" />
+<text  x="1120.28" y="95.5" ></text>
+</g>
+<g >
+<title>unsigned long beman::big_int::detail::square_into (2,949,271,990 samples, 7.02%)</title><rect x="1105.7" y="213" width="82.8" height="15.0" fill="rgb(230,117,28)" rx="2" ry="2" />
+<text  x="1108.67" y="223.5" >unsigned ..</text>
+</g>
+<g >
+<title>square_runtime (2,944,170,254 samples, 7.01%)</title><rect x="1105.8" y="181" width="82.7" height="15.0" fill="rgb(218,62,15)" rx="2" ry="2" />
+<text  x="1108.82" y="191.5" >square_ru..</text>
+</g>
+<g >
+<title>multiply_runtime_any (1,818,550,313 samples, 4.33%)</title><rect x="566.7" y="165" width="51.1" height="15.0" fill="rgb(242,171,40)" rx="2" ry="2" />
+<text  x="569.68" y="175.5" >multi..</text>
+</g>
+<g >
+<title>horner_eval_into_tmp (47,212,149 samples, 0.11%)</title><rect x="972.1" y="133" width="1.3" height="15.0" fill="rgb(226,98,23)" rx="2" ry="2" />
+<text  x="975.07" y="143.5" ></text>
+</g>
+<g >
+<title>borrowing_sub (55,104,637 samples, 0.13%)</title><rect x="1102.3" y="117" width="1.5" height="15.0" fill="rgb(205,0,0)" rx="2" ry="2" />
+<text  x="1105.28" y="127.5" ></text>
+</g>
+<g >
+<title>subtract_unsigned_spans (146,770,870 samples, 0.35%)</title><rect x="938.1" y="85" width="4.1" height="15.0" fill="rgb(244,182,43)" rx="2" ry="2" />
+<text  x="941.09" y="95.5" ></text>
+</g>
+<g >
+<title>__memset_evex_unaligned_erms (73,374,136 samples, 0.17%)</title><rect x="562.2" y="181" width="2.1" height="15.0" fill="rgb(218,60,14)" rx="2" ry="2" />
+<text  x="565.20" y="191.5" ></text>
+</g>
+<g >
+<title>borrowing_sub (18,370,406 samples, 0.04%)</title><rect x="712.0" y="101" width="0.5" height="15.0" fill="rgb(205,0,0)" rx="2" ry="2" />
+<text  x="715.02" y="111.5" ></text>
+</g>
+<g >
+<title>all (42,015,989,693 samples, 100%)</title><rect x="10.0" y="469" width="1180.0" height="15.0" fill="rgb(213,39,9)" rx="2" ry="2" />
+<text  x="13.00" y="479.5" ></text>
+</g>
+<g >
+<title>__memset_evex_unaligned_erms (18,365,863 samples, 0.04%)</title><rect x="1105.2" y="165" width="0.5" height="15.0" fill="rgb(218,60,14)" rx="2" ry="2" />
+<text  x="1108.16" y="175.5" ></text>
+</g>
+<g >
+<title>subtract_unsigned_spans_and_shift_right_one (23,607,096 samples, 0.06%)</title><rect x="1103.8" y="133" width="0.7" height="15.0" fill="rgb(224,88,21)" rx="2" ry="2" />
+<text  x="1106.83" y="143.5" ></text>
+</g>
+<g >
+<title>subtract_unsigned_spans (89,046,947 samples, 0.21%)</title><rect x="710.0" y="117" width="2.5" height="15.0" fill="rgb(244,182,43)" rx="2" ry="2" />
+<text  x="713.03" y="127.5" ></text>
+</g>
+<g >
+<title>square_karatsuba (1,561,552,471 samples, 3.72%)</title><rect x="1133.8" y="85" width="43.8" height="15.0" fill="rgb(217,55,13)" rx="2" ry="2" />
+<text  x="1136.76" y="95.5" >squa..</text>
+</g>
+<g >
+<title>square_karatsuba (2,313,124,047 samples, 5.51%)</title><rect x="1117.3" y="101" width="64.9" height="15.0" fill="rgb(217,55,13)" rx="2" ry="2" />
+<text  x="1120.28" y="111.5" >square_..</text>
+</g>
+<g >
+<title>add_unsigned_spans (31,492,033 samples, 0.07%)</title><rect x="574.8" y="37" width="0.9" height="15.0" fill="rgb(209,19,4)" rx="2" ry="2" />
+<text  x="577.78" y="47.5" ></text>
+</g>
+<g >
+<title>__gnu_cxx::__normal_iterator std::ranges::__fill_fn::operator (18,365,863 samples, 0.04%)</title><rect x="1105.2" y="197" width="0.5" height="15.0" fill="rgb(242,173,41)" rx="2" ry="2" />
+<text  x="1108.16" y="207.5" ></text>
+</g>
+<g >
+<title>beman::big_int::detail::trimmed_size_span (31,456,121 samples, 0.07%)</title><rect x="561.3" y="229" width="0.9" height="15.0" fill="rgb(246,189,45)" rx="2" ry="2" />
+<text  x="564.31" y="239.5" ></text>
+</g>
+<g >
+<title>beman_big_int_multiply_long_runtime_avx512_ifma (812,330,689 samples, 1.93%)</title><rect x="731.3" y="133" width="22.8" height="15.0" fill="rgb(246,189,45)" rx="2" ry="2" />
+<text  x="734.30" y="143.5" >b..</text>
+</g>
+<g >
+<title>beman::big_int::detail::basecase_digits_to_limbs (1,149,632,253 samples, 2.74%)</title><rect x="57.7" y="229" width="32.3" height="15.0" fill="rgb(219,66,15)" rx="2" ry="2" />
+<text  x="60.67" y="239.5" >be..</text>
+</g>
+<g >
+<title>subtract_unsigned_spans (94,413,431 samples, 0.22%)</title><rect x="1185.8" y="117" width="2.6" height="15.0" fill="rgb(244,182,43)" rx="2" ry="2" />
+<text  x="1188.78" y="127.5" ></text>
+</g>
+<g >
+<title>multiply_runtime (19,238,831,345 samples, 45.79%)</title><rect x="564.8" y="213" width="540.4" height="15.0" fill="rgb(224,90,21)" rx="2" ry="2" />
+<text  x="567.84" y="223.5" >multiply_runtime</text>
+</g>
+<g >
+<title>carrying_add (39,216,813 samples, 0.09%)</title><rect x="760.1" y="101" width="1.1" height="15.0" fill="rgb(206,6,1)" rx="2" ry="2" />
+<text  x="763.06" y="111.5" ></text>
+</g>
+<g >
+<title>add_shifted (152,041,316 samples, 0.36%)</title><rect x="810.8" y="101" width="4.2" height="15.0" fill="rgb(231,122,29)" rx="2" ry="2" />
+<text  x="813.76" y="111.5" ></text>
+</g>
+<g >
+<title>add_shifted (86,475,165 samples, 0.21%)</title><rect x="622.2" y="117" width="2.4" height="15.0" fill="rgb(231,122,29)" rx="2" ry="2" />
+<text  x="625.17" y="127.5" ></text>
+</g>
+<g >
+<title>run_ladder (1,818,550,313 samples, 4.33%)</title><rect x="566.7" y="117" width="51.1" height="15.0" fill="rgb(241,169,40)" rx="2" ry="2" />
+<text  x="569.68" y="127.5" >run_l..</text>
+</g>
+<g >
+<title>run_fromchars (42,014,774,759 samples, 100.00%)</title><rect x="10.0" y="373" width="1180.0" height="15.0" fill="rgb(213,37,9)" rx="2" ry="2" />
+<text  x="13.00" y="383.5" >run_fromchars</text>
+</g>
+<g >
+<title>__gnu_cxx::__normal_iterator std::ranges::__fill_n_fn::operator (18,365,863 samples, 0.04%)</title><rect x="1105.2" y="181" width="0.5" height="15.0" fill="rgb(218,61,14)" rx="2" ry="2" />
+<text  x="1108.16" y="191.5" ></text>
+</g>
+<g >
+<title>bit_cast (28,862,895 samples, 0.07%)</title><rect x="971.3" y="69" width="0.8" height="15.0" fill="rgb(230,118,28)" rx="2" ry="2" />
+<text  x="974.26" y="79.5" ></text>
+</g>
+<g >
+<title>unsigned long beman::big_int::detail::square_dispatch (2,944,170,254 samples, 7.01%)</title><rect x="1105.8" y="197" width="82.7" height="15.0" fill="rgb(207,12,3)" rx="2" ry="2" />
+<text  x="1108.82" y="207.5" >unsigned ..</text>
+</g>
+<g >
+<title>multiply_karatsuba (1,506,669,671 samples, 3.59%)</title><rect x="569.5" y="69" width="42.3" height="15.0" fill="rgb(223,83,20)" rx="2" ry="2" />
+<text  x="572.48" y="79.5" >mul..</text>
+</g>
+<g >
+<title>add_shifted (75,968,588 samples, 0.18%)</title><rect x="572.6" y="37" width="2.2" height="15.0" fill="rgb(231,122,29)" rx="2" ry="2" />
+<text  x="575.64" y="47.5" ></text>
+</g>
+<g >
+<title>__memmove_evex_unaligned_erms (18,200,441 samples, 0.04%)</title><rect x="564.3" y="149" width="0.5" height="15.0" fill="rgb(226,100,24)" rx="2" ry="2" />
+<text  x="567.26" y="159.5" ></text>
+</g>
+<g >
+<title>borrowing_sub (36,734,398 samples, 0.09%)</title><rect x="960.4" y="117" width="1.1" height="15.0" fill="rgb(205,0,0)" rx="2" ry="2" />
+<text  x="963.45" y="127.5" ></text>
+</g>
+<g >
+<title>beman_big_int_multiply_long_runtime_avx512_ifma (62,956,189 samples, 0.15%)</title><rect x="570.8" y="53" width="1.8" height="15.0" fill="rgb(246,189,45)" rx="2" ry="2" />
+<text  x="573.80" y="63.5" ></text>
+</g>
+<g >
+<title>digits_to_limbs (40,304,793,955 samples, 95.93%)</title><rect x="56.6" y="277" width="1131.9" height="15.0" fill="rgb(253,223,53)" rx="2" ry="2" />
+<text  x="59.56" y="287.5" >digits_to_limbs</text>
+</g>
+<g >
+<title>borrowing_sub (28,756,863 samples, 0.07%)</title><rect x="723.7" y="117" width="0.8" height="15.0" fill="rgb(205,0,0)" rx="2" ry="2" />
+<text  x="726.72" y="127.5" ></text>
+</g>
+<g >
+<title>subtract_unsigned_spans (68,224,445 samples, 0.16%)</title><rect x="1090.1" y="117" width="1.9" height="15.0" fill="rgb(244,182,43)" rx="2" ry="2" />
+<text  x="1093.13" y="127.5" ></text>
+</g>
+<g >
+<title>divide_unsigned_short (86,568,943 samples, 0.21%)</title><rect x="969.6" y="133" width="2.5" height="15.0" fill="rgb(243,176,42)" rx="2" ry="2" />
+<text  x="972.64" y="143.5" ></text>
+</g>
+<g >
+<title>beman::big_int::detail::wide::from_int (70,703,954 samples, 0.17%)</title><rect x="546.9" y="197" width="2.0" height="15.0" fill="rgb(246,190,45)" rx="2" ry="2" />
+<text  x="549.89" y="207.5" ></text>
+</g>
+<g >
+<title>shift_left_n_and_add_into_tmp (18,369,265 samples, 0.04%)</title><rect x="569.0" y="53" width="0.5" height="15.0" fill="rgb(227,101,24)" rx="2" ry="2" />
+<text  x="571.96" y="63.5" ></text>
+</g>
+<g >
+<title>_M_extent (20,993,143 samples, 0.05%)</title><rect x="721.4" y="101" width="0.6" height="15.0" fill="rgb(249,204,48)" rx="2" ry="2" />
+<text  x="724.44" y="111.5" ></text>
+</g>
+<g >
+<title>add_shifted (102,068,336 samples, 0.24%)</title><rect x="1133.8" y="69" width="2.8" height="15.0" fill="rgb(231,122,29)" rx="2" ry="2" />
+<text  x="1136.76" y="79.5" ></text>
+</g>
+<g >
+<title>add_unsigned_spans (36,629,560 samples, 0.09%)</title><rect x="624.6" y="117" width="1.0" height="15.0" fill="rgb(209,19,4)" rx="2" ry="2" />
+<text  x="627.60" y="127.5" ></text>
+</g>
+<g >
+<title>operator (20,687,701 samples, 0.05%)</title><rect x="1188.5" y="341" width="0.6" height="15.0" fill="rgb(254,228,54)" rx="2" ry="2" />
+<text  x="1191.50" y="351.5" ></text>
+</g>
+<g >
+<title>std::__conditional::type std::ranges::__copy_or_move (18,200,441 samples, 0.04%)</title><rect x="564.3" y="165" width="0.5" height="15.0" fill="rgb(237,149,35)" rx="2" ry="2" />
+<text  x="567.26" y="175.5" ></text>
+</g>
+<g >
+<title>to_chars_impl (31,432,418 samples, 0.07%)</title><rect x="1189.1" y="341" width="0.9" height="15.0" fill="rgb(248,201,48)" rx="2" ry="2" />
+<text  x="1192.08" y="351.5" ></text>
+</g>
+<g >
+<title>carrying_add (20,980,905 samples, 0.05%)</title><rect x="615.1" y="53" width="0.6" height="15.0" fill="rgb(206,6,1)" rx="2" ry="2" />
+<text  x="618.10" y="63.5" ></text>
+</g>
+<g >
+<title>multiply_karatsuba (7,145,307,712 samples, 17.01%)</title><rect x="754.1" y="133" width="200.7" height="15.0" fill="rgb(223,83,20)" rx="2" ry="2" />
+<text  x="757.11" y="143.5" >multiply_karatsuba</text>
+</g>
+<g >
+<title>carrying_add (18,374,244 samples, 0.04%)</title><rect x="985.2" y="69" width="0.5" height="15.0" fill="rgb(206,6,1)" rx="2" ry="2" />
+<text  x="988.18" y="79.5" ></text>
+</g>
+<g >
+<title>square_karatsuba (2,912,894,605 samples, 6.93%)</title><rect x="1106.6" y="133" width="81.8" height="15.0" fill="rgb(217,55,13)" rx="2" ry="2" />
+<text  x="1109.62" y="143.5" >square_ka..</text>
+</g>
+<g >
+<title>add_shifted (120,728,302 samples, 0.29%)</title><rect x="975.5" y="101" width="3.3" height="15.0" fill="rgb(231,122,29)" rx="2" ry="2" />
+<text  x="978.45" y="111.5" ></text>
+</g>
+<g >
+<title>beman_big_int_multiply_long_runtime_avx512_ifma (1,760,795,405 samples, 4.19%)</title><rect x="761.2" y="117" width="49.5" height="15.0" fill="rgb(246,189,45)" rx="2" ry="2" />
+<text  x="764.24" y="127.5" >bema..</text>
+</g>
+<g >
+<title>emit_digits (18,386,288 samples, 0.04%)</title><rect x="1189.4" y="261" width="0.6" height="15.0" fill="rgb(205,2,0)" rx="2" ry="2" />
+<text  x="1192.44" y="271.5" ></text>
+</g>
+<g >
+<title>unsigned long beman::big_int::detail::multiply_dispatch (19,241,456,000 samples, 45.80%)</title><rect x="564.8" y="229" width="540.4" height="15.0" fill="rgb(213,40,9)" rx="2" ry="2" />
+<text  x="567.77" y="239.5" >unsigned long beman::big_int::detail::multiply_dispatch</text>
+</g>
+<g >
+<title>subtract_unsigned_spans_signed (18,374,592 samples, 0.04%)</title><rect x="1104.5" y="133" width="0.5" height="15.0" fill="rgb(235,140,33)" rx="2" ry="2" />
+<text  x="1107.49" y="143.5" ></text>
+</g>
+<g >
+<title>__libc_start_main_impl (42,014,774,759 samples, 100.00%)</title><rect x="10.0" y="421" width="1180.0" height="15.0" fill="rgb(218,63,15)" rx="2" ry="2" />
+<text  x="13.00" y="431.5" >__libc_start_main_impl</text>
+</g>
+<g >
+<title>emit_digits (25,148,678 samples, 0.06%)</title><rect x="1189.2" y="277" width="0.8" height="15.0" fill="rgb(205,2,0)" rx="2" ry="2" />
+<text  x="1192.25" y="287.5" ></text>
+</g>
+<g >
+<title>subtract_unsigned_spans (41,935,706 samples, 0.10%)</title><rect x="616.0" y="69" width="1.2" height="15.0" fill="rgb(244,182,43)" rx="2" ry="2" />
+<text  x="618.99" y="79.5" ></text>
+</g>
+<g >
+<title>borrowing_sub (26,201,440 samples, 0.06%)</title><rect x="1176.9" y="53" width="0.7" height="15.0" fill="rgb(205,0,0)" rx="2" ry="2" />
+<text  x="1179.88" y="63.5" ></text>
+</g>
+<g >
+<title>from_chars (41,942,535,672 samples, 99.83%)</title><rect x="10.6" y="293" width="1177.9" height="15.0" fill="rgb(216,50,12)" rx="2" ry="2" />
+<text  x="13.57" y="303.5" >from_chars</text>
+</g>
+<g >
+<title>add_many_into_tmp (60,365,671 samples, 0.14%)</title><rect x="617.8" y="133" width="1.7" height="15.0" fill="rgb(248,200,48)" rx="2" ry="2" />
+<text  x="620.83" y="143.5" ></text>
+</g>
+<g >
+<title>horner_eval_into_tmp (20,993,666 samples, 0.05%)</title><rect x="568.9" y="69" width="0.6" height="15.0" fill="rgb(226,98,23)" rx="2" ry="2" />
+<text  x="571.89" y="79.5" ></text>
+</g>
+<g >
+<title>add_unsigned_spans (104,748,721 samples, 0.25%)</title><rect x="815.0" y="101" width="3.0" height="15.0" fill="rgb(209,19,4)" rx="2" ry="2" />
+<text  x="818.03" y="111.5" ></text>
+</g>
+<g >
+<title>operator (19,770,611 samples, 0.05%)</title><rect x="10.0" y="325" width="0.6" height="15.0" fill="rgb(254,228,54)" rx="2" ry="2" />
+<text  x="13.01" y="335.5" ></text>
+</g>
+<g >
+<title>carrying_add (18,356,214 samples, 0.04%)</title><rect x="757.9" y="101" width="0.5" height="15.0" fill="rgb(206,6,1)" rx="2" ry="2" />
+<text  x="760.93" y="111.5" ></text>
+</g>
+<g >
+<title>std::ranges::in_out_result&lt;std::__conditional::type&lt;decltype  (18,200,441 samples, 0.04%)</title><rect x="564.3" y="229" width="0.5" height="15.0" fill="rgb(252,218,52)" rx="2" ry="2" />
+<text  x="567.26" y="239.5" ></text>
+</g>
+<g >
+<title>void beman::big_int::detail::build_power_table_for_chunks (2,967,637,853 samples, 7.06%)</title><rect x="1105.2" y="245" width="83.3" height="15.0" fill="rgb(252,217,52)" rx="2" ry="2" />
+<text  x="1108.16" y="255.5" >void bema..</text>
+</g>
+<g >
+<title>add_shifted (97,041,808 samples, 0.23%)</title><rect x="726.2" y="133" width="2.7" height="15.0" fill="rgb(231,122,29)" rx="2" ry="2" />
+<text  x="729.21" y="143.5" ></text>
+</g>
+<g >
+<title>divide_unsigned_short (41,978,557 samples, 0.10%)</title><rect x="567.7" y="69" width="1.2" height="15.0" fill="rgb(243,176,42)" rx="2" ry="2" />
+<text  x="570.71" y="79.5" ></text>
+</g>
+<g >
+<title>subtract_unsigned_spans_and_shift_right_n (26,213,007 samples, 0.06%)</title><rect x="724.5" y="117" width="0.8" height="15.0" fill="rgb(243,177,42)" rx="2" ry="2" />
+<text  x="727.52" y="127.5" ></text>
+</g>
+<g >
+<title>beman::big_int::detail::add_unsigned_spans (377,515,870 samples, 0.90%)</title><rect x="550.7" y="229" width="10.6" height="15.0" fill="rgb(205,1,0)" rx="2" ry="2" />
+<text  x="553.71" y="239.5" ></text>
+</g>
+<g >
+<title>unsigned long beman::big_int::detail::digits_to_limbs (18,858,180 samples, 0.04%)</title><rect x="1188.6" y="293" width="0.5" height="15.0" fill="rgb(233,131,31)" rx="2" ry="2" />
+<text  x="1191.55" y="303.5" ></text>
+</g>
+<g >
+<title>add_unsigned_spans (28,705,418 samples, 0.07%)</title><rect x="1136.6" y="69" width="0.8" height="15.0" fill="rgb(209,19,4)" rx="2" ry="2" />
+<text  x="1139.62" y="79.5" ></text>
+</g>
+<g >
+<title>add_unsigned_spans (55,003,539 samples, 0.13%)</title><rect x="978.8" y="101" width="1.6" height="15.0" fill="rgb(209,19,4)" rx="2" ry="2" />
+<text  x="981.85" y="111.5" ></text>
+</g>
+<g >
+<title>size (20,993,143 samples, 0.05%)</title><rect x="721.4" y="117" width="0.6" height="15.0" fill="rgb(251,215,51)" rx="2" ry="2" />
+<text  x="724.44" y="127.5" ></text>
+</g>
+<g >
+<title>add_shifted (102,208,953 samples, 0.24%)</title><rect x="980.6" y="85" width="2.9" height="15.0" fill="rgb(231,122,29)" rx="2" ry="2" />
+<text  x="983.61" y="95.5" ></text>
+</g>
+<g >
+<title>time_row&lt;::run_fromchars (41,982,993,984 samples, 99.92%)</title><rect x="10.0" y="357" width="1179.1" height="15.0" fill="rgb(206,5,1)" rx="2" ry="2" />
+<text  x="13.01" y="367.5" >time_row&lt;::run_fromchars</text>
+</g>
+<g >
+<title>beman_big_int_multiply_long_runtime_avx512_ifma (3,372,719,411 samples, 8.03%)</title><rect x="985.7" y="85" width="94.7" height="15.0" fill="rgb(246,189,45)" rx="2" ry="2" />
+<text  x="988.69" y="95.5" >beman_big_i..</text>
+</g>
+<g >
+<title>carrying_add (23,581,596 samples, 0.06%)</title><rect x="730.6" y="117" width="0.7" height="15.0" fill="rgb(206,6,1)" rx="2" ry="2" />
+<text  x="733.63" y="127.5" ></text>
+</g>
+<g >
+<title>operator (41,942,535,672 samples, 99.83%)</title><rect x="10.6" y="309" width="1177.9" height="15.0" fill="rgb(254,228,54)" rx="2" ry="2" />
+<text  x="13.57" y="319.5" >operator</text>
+</g>
+<g >
+<title>std::__conditional::type&lt;decltype  (73,374,136 samples, 0.17%)</title><rect x="562.2" y="229" width="2.1" height="15.0" fill="rgb(234,135,32)" rx="2" ry="2" />
+<text  x="565.20" y="239.5" ></text>
+</g>
+<g >
+<title>beman_big_int_square_long_runtime (28,651,660 samples, 0.07%)</title><rect x="1105.8" y="165" width="0.8" height="15.0" fill="rgb(231,121,29)" rx="2" ry="2" />
+<text  x="1108.82" y="175.5" ></text>
+</g>
+<g >
+<title>add_unsigned_spans (41,841,643 samples, 0.10%)</title><rect x="964.1" y="117" width="1.2" height="15.0" fill="rgb(209,19,4)" rx="2" ry="2" />
+<text  x="967.13" y="127.5" ></text>
+</g>
+<g >
+<title>add_shifted (112,317,264 samples, 0.27%)</title><rect x="862.2" y="85" width="3.2" height="15.0" fill="rgb(231,122,29)" rx="2" ry="2" />
+<text  x="865.20" y="95.5" ></text>
+</g>
+<g >
+<title>subtract_unsigned_spans (123,070,799 samples, 0.29%)</title><rect x="1182.2" y="101" width="3.5" height="15.0" fill="rgb(244,182,43)" rx="2" ry="2" />
+<text  x="1185.25" y="111.5" ></text>
+</g>
+<g >
+<title>multiply_karatsuba (3,005,426,831 samples, 7.15%)</title><rect x="625.6" y="117" width="84.4" height="15.0" fill="rgb(223,83,20)" rx="2" ry="2" />
+<text  x="628.63" y="127.5" >multiply_..</text>
+</g>
+<g >
+<title>add_shifted (39,329,565 samples, 0.09%)</title><rect x="1106.6" y="117" width="1.1" height="15.0" fill="rgb(231,122,29)" rx="2" ry="2" />
+<text  x="1109.62" y="127.5" ></text>
+</g>
+<g >
+<title>borrowing_sub (39,362,552 samples, 0.09%)</title><rect x="947.0" y="85" width="1.1" height="15.0" fill="rgb(205,0,0)" rx="2" ry="2" />
+<text  x="949.99" y="95.5" ></text>
+</g>
+<g >
+<title>from_chars (20,687,701 samples, 0.05%)</title><rect x="1188.5" y="325" width="0.6" height="15.0" fill="rgb(216,50,12)" rx="2" ry="2" />
+<text  x="1191.50" y="335.5" ></text>
+</g>
+<g >
+<title>main (42,014,774,759 samples, 100.00%)</title><rect x="10.0" y="389" width="1180.0" height="15.0" fill="rgb(243,179,42)" rx="2" ry="2" />
+<text  x="13.00" y="399.5" >main</text>
+</g>
+<g >
+<title>subtract_unsigned_spans (198,911,888 samples, 0.47%)</title><rect x="942.5" y="101" width="5.6" height="15.0" fill="rgb(244,182,43)" rx="2" ry="2" />
+<text  x="945.51" y="111.5" ></text>
+</g>
+<g >
+<title>div_2by1_preinv (34,107,046 samples, 0.08%)</title><rect x="567.9" y="53" width="1.0" height="15.0" fill="rgb(231,123,29)" rx="2" ry="2" />
+<text  x="570.93" y="63.5" ></text>
+</g>
+<g >
+<title>div_2by1_preinv (62,854,380 samples, 0.15%)</title><rect x="619.9" y="117" width="1.8" height="15.0" fill="rgb(231,123,29)" rx="2" ry="2" />
+<text  x="622.89" y="127.5" ></text>
+</g>
+<g >
+<title>beman::big_int::detail::wide std::bit_cast (70,703,954 samples, 0.17%)</title><rect x="546.9" y="181" width="2.0" height="15.0" fill="rgb(237,148,35)" rx="2" ry="2" />
+<text  x="549.89" y="191.5" ></text>
+</g>
+<g >
+<title>beman_big_int_multiply_long_runtime_avx512_ifma (2,547,961,756 samples, 6.06%)</title><rect x="866.4" y="85" width="71.5" height="15.0" fill="rgb(246,189,45)" rx="2" ry="2" />
+<text  x="869.38" y="95.5" >beman_bi..</text>
+</g>
+<g >
+<title>beman::big_int::detail::mul_add_single_limb_in_place (16,340,727,131 samples, 38.89%)</title><rect x="90.0" y="229" width="458.9" height="15.0" fill="rgb(226,96,23)" rx="2" ry="2" />
+<text  x="92.95" y="239.5" >beman::big_int::detail::mul_add_single_limb_in_place</text>
+</g>
+<g >
+<title>carrying_add (33,999,201 samples, 0.08%)</title><rect x="720.5" y="117" width="0.9" height="15.0" fill="rgb(206,6,1)" rx="2" ry="2" />
+<text  x="723.48" y="127.5" ></text>
+</g>
+<g >
+<title>horner_eval_into_tmp (18,369,468 samples, 0.04%)</title><rect x="621.7" y="133" width="0.5" height="15.0" fill="rgb(226,98,23)" rx="2" ry="2" />
+<text  x="624.65" y="143.5" ></text>
+</g>
+<g >
+<title>unsigned long beman::big_int::detail::combine_level (19,742,002,568 samples, 46.99%)</title><rect x="550.7" y="245" width="554.5" height="15.0" fill="rgb(232,125,30)" rx="2" ry="2" />
+<text  x="553.71" y="255.5" >unsigned long beman::big_int::detail::combine_level</text>
+</g>
+<g >
+<title>std::__conditional::type std::ranges::__copy_or_move (18,259,670 samples, 0.04%)</title><rect x="550.2" y="197" width="0.5" height="15.0" fill="rgb(237,149,35)" rx="2" ry="2" />
+<text  x="553.20" y="207.5" ></text>
+</g>
+<g >
+<title>subtract_unsigned_spans (18,374,592 samples, 0.04%)</title><rect x="1104.5" y="117" width="0.5" height="15.0" fill="rgb(244,182,43)" rx="2" ry="2" />
+<text  x="1107.49" y="127.5" ></text>
+</g>
+<g >
+<title>measure&lt;::run_fromchars (41,962,306,283 samples, 99.87%)</title><rect x="10.0" y="341" width="1178.5" height="15.0" fill="rgb(205,2,0)" rx="2" ry="2" />
+<text  x="13.01" y="351.5" >measure&lt;::run_fromchars</text>
+</g>
+<g >
+<title>multiply_karatsuba (4,897,739,259 samples, 11.66%)</title><rect x="810.7" y="117" width="137.5" height="15.0" fill="rgb(223,83,20)" rx="2" ry="2" />
+<text  x="813.69" y="127.5" >multiply_karatsuba</text>
+</g>
+<g >
+<title>borrowing_sub (28,840,230 samples, 0.07%)</title><rect x="954.0" y="101" width="0.8" height="15.0" fill="rgb(205,0,0)" rx="2" ry="2" />
+<text  x="956.97" y="111.5" ></text>
+</g>
+<g >
+<title>shift_left_n_and_add_into_tmp (47,212,149 samples, 0.11%)</title><rect x="972.1" y="117" width="1.3" height="15.0" fill="rgb(227,101,24)" rx="2" ry="2" />
+<text  x="975.07" y="127.5" ></text>
+</g>
+<g >
+<title>subtract_unsigned_spans (162,375,783 samples, 0.39%)</title><rect x="1177.6" y="85" width="4.6" height="15.0" fill="rgb(244,182,43)" rx="2" ry="2" />
+<text  x="1180.61" y="95.5" ></text>
+</g>
+<g >
+<title>subtract_unsigned_spans (235,908,226 samples, 0.56%)</title><rect x="954.9" y="133" width="6.6" height="15.0" fill="rgb(244,182,43)" rx="2" ry="2" />
+<text  x="957.86" y="143.5" ></text>
+</g>
+<g >
+<title>add_unsigned_spans_no_carry (41,841,643 samples, 0.10%)</title><rect x="964.1" y="133" width="1.2" height="15.0" fill="rgb(233,131,31)" rx="2" ry="2" />
+<text  x="967.13" y="143.5" ></text>
+</g>
+<g >
+<title>carrying_add (26,239,976 samples, 0.06%)</title><rect x="1099.3" y="117" width="0.8" height="15.0" fill="rgb(206,6,1)" rx="2" ry="2" />
+<text  x="1102.34" y="127.5" ></text>
+</g>
+<g >
+<title>digit_value (838,365,503 samples, 2.00%)</title><rect x="32.2" y="277" width="23.6" height="15.0" fill="rgb(237,150,36)" rx="2" ry="2" />
+<text  x="35.21" y="287.5" >d..</text>
+</g>
+<g >
+<title>beman_big_int_multiply_long_runtime_avx512_ifma (1,163,331,698 samples, 2.77%)</title><rect x="575.7" y="37" width="32.6" height="15.0" fill="rgb(246,189,45)" rx="2" ry="2" />
+<text  x="578.66" y="47.5" >be..</text>
+</g>
+<g >
+<title>subtract_unsigned_spans (70,801,379 samples, 0.17%)</title><rect x="608.3" y="37" width="2.0" height="15.0" fill="rgb(244,182,43)" rx="2" ry="2" />
+<text  x="611.33" y="47.5" ></text>
+</g>
+<g >
+<title>add_unsigned_spans (28,700,466 samples, 0.07%)</title><rect x="569.9" y="53" width="0.8" height="15.0" fill="rgb(209,19,4)" rx="2" ry="2" />
+<text  x="572.92" y="63.5" ></text>
+</g>
+<g >
+<title>__gnu_cxx::__normal_iterator std::ranges::__fill_fn::operator (73,374,136 samples, 0.17%)</title><rect x="562.2" y="213" width="2.1" height="15.0" fill="rgb(242,173,41)" rx="2" ry="2" />
+<text  x="565.20" y="223.5" ></text>
+</g>
+<g >
+<title>subtract_unsigned_spans (201,798,228 samples, 0.48%)</title><rect x="1080.9" y="85" width="5.6" height="15.0" fill="rgb(244,182,43)" rx="2" ry="2" />
+<text  x="1083.86" y="95.5" ></text>
+</g>
+<g >
+<title>beman::big_int::detail::carry_result beman::big_int::detail::carrying_add (125,818,440 samples, 0.30%)</title><rect x="557.8" y="213" width="3.5" height="15.0" fill="rgb(223,82,19)" rx="2" ry="2" />
+<text  x="560.78" y="223.5" ></text>
+</g>
+<g >
+<title>beman_big_int_square_long_runtime_avx512_ifma (159,774,831 samples, 0.38%)</title><rect x="1112.7" y="101" width="4.5" height="15.0" fill="rgb(240,161,38)" rx="2" ry="2" />
+<text  x="1115.72" y="111.5" ></text>
+</g>
+</g>
+</svg>

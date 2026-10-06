@@ -1,0 +1,2574 @@
+<?xml version="1.0" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN" "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<svg version="1.1" width="1200" height="566" onload="init(evt)" viewBox="0 0 1200 566" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<!-- Flame graph stack visualization. See https://github.com/brendangregg/FlameGraph for latest version, and http://www.brendangregg.com/flamegraphs.html for examples. -->
+<!-- NOTES:  -->
+<defs>
+	<linearGradient id="background" y1="0" y2="1" x1="0" x2="0" >
+		<stop stop-color="#eeeeee" offset="5%" />
+		<stop stop-color="#eeeeb0" offset="95%" />
+	</linearGradient>
+</defs>
+<style type="text/css">
+	text { font-family:Verdana; font-size:12px; fill:rgb(0,0,0); }
+	#search, #ignorecase { opacity:0.1; cursor:pointer; }
+	#search:hover, #search.show, #ignorecase:hover, #ignorecase.show { opacity:1; }
+	#subtitle { text-anchor:middle; font-color:rgb(160,160,160); }
+	#title { text-anchor:middle; font-size:17px}
+	#unzoom { cursor:pointer; }
+	#frames > *:hover { stroke:black; stroke-width:0.5; cursor:pointer; }
+	.hide { display:none; }
+	.parent { opacity:0.5; }
+</style>
+<script type="text/ecmascript">
+<![CDATA[
+	"use strict";
+	var details, searchbtn, unzoombtn, matchedtxt, svg, searching, currentSearchTerm, ignorecase, ignorecaseBtn;
+	function init(evt) {
+		details = document.getElementById("details").firstChild;
+		searchbtn = document.getElementById("search");
+		ignorecaseBtn = document.getElementById("ignorecase");
+		unzoombtn = document.getElementById("unzoom");
+		matchedtxt = document.getElementById("matched");
+		svg = document.getElementsByTagName("svg")[0];
+		searching = 0;
+		currentSearchTerm = null;
+
+		// use GET parameters to restore a flamegraphs state.
+		var params = get_params();
+		if (params.x && params.y)
+			zoom(find_group(document.querySelector('[x="' + params.x + '"][y="' + params.y + '"]')));
+                if (params.s) search(params.s);
+	}
+
+	// event listeners
+	window.addEventListener("click", function(e) {
+		var target = find_group(e.target);
+		if (target) {
+			if (target.nodeName == "a") {
+				if (e.ctrlKey === false) return;
+				e.preventDefault();
+			}
+			if (target.classList.contains("parent")) unzoom(true);
+			zoom(target);
+			if (!document.querySelector('.parent')) {
+				// we have basically done a clearzoom so clear the url
+				var params = get_params();
+				if (params.x) delete params.x;
+				if (params.y) delete params.y;
+				history.replaceState(null, null, parse_params(params));
+				unzoombtn.classList.add("hide");
+				return;
+			}
+
+			// set parameters for zoom state
+			var el = target.querySelector("rect");
+			if (el && el.attributes && el.attributes.y && el.attributes._orig_x) {
+				var params = get_params()
+				params.x = el.attributes._orig_x.value;
+				params.y = el.attributes.y.value;
+				history.replaceState(null, null, parse_params(params));
+			}
+		}
+		else if (e.target.id == "unzoom") clearzoom();
+		else if (e.target.id == "search") search_prompt();
+		else if (e.target.id == "ignorecase") toggle_ignorecase();
+	}, false)
+
+	// mouse-over for info
+	// show
+	window.addEventListener("mouseover", function(e) {
+		var target = find_group(e.target);
+		if (target) details.nodeValue = "Function: " + g_to_text(target);
+	}, false)
+
+	// clear
+	window.addEventListener("mouseout", function(e) {
+		var target = find_group(e.target);
+		if (target) details.nodeValue = ' ';
+	}, false)
+
+	// ctrl-F for search
+	// ctrl-I to toggle case-sensitive search
+	window.addEventListener("keydown",function (e) {
+		if (e.keyCode === 114 || (e.ctrlKey && e.keyCode === 70)) {
+			e.preventDefault();
+			search_prompt();
+		}
+		else if (e.ctrlKey && e.keyCode === 73) {
+			e.preventDefault();
+			toggle_ignorecase();
+		}
+	}, false)
+
+	// functions
+	function get_params() {
+		var params = {};
+		var paramsarr = window.location.search.substr(1).split('&');
+		for (var i = 0; i < paramsarr.length; ++i) {
+			var tmp = paramsarr[i].split("=");
+			if (!tmp[0] || !tmp[1]) continue;
+			params[tmp[0]]  = decodeURIComponent(tmp[1]);
+		}
+		return params;
+	}
+	function parse_params(params) {
+		var uri = "?";
+		for (var key in params) {
+			uri += key + '=' + encodeURIComponent(params[key]) + '&';
+		}
+		if (uri.slice(-1) == "&")
+			uri = uri.substring(0, uri.length - 1);
+		if (uri == '?')
+			uri = window.location.href.split('?')[0];
+		return uri;
+	}
+	function find_child(node, selector) {
+		var children = node.querySelectorAll(selector);
+		if (children.length) return children[0];
+	}
+	function find_group(node) {
+		var parent = node.parentElement;
+		if (!parent) return;
+		if (parent.id == "frames") return node;
+		return find_group(parent);
+	}
+	function orig_save(e, attr, val) {
+		if (e.attributes["_orig_" + attr] != undefined) return;
+		if (e.attributes[attr] == undefined) return;
+		if (val == undefined) val = e.attributes[attr].value;
+		e.setAttribute("_orig_" + attr, val);
+	}
+	function orig_load(e, attr) {
+		if (e.attributes["_orig_"+attr] == undefined) return;
+		e.attributes[attr].value = e.attributes["_orig_" + attr].value;
+		e.removeAttribute("_orig_"+attr);
+	}
+	function g_to_text(e) {
+		var text = find_child(e, "title").firstChild.nodeValue;
+		return (text)
+	}
+	function g_to_func(e) {
+		var func = g_to_text(e);
+		// if there's any manipulation we want to do to the function
+		// name before it's searched, do it here before returning.
+		return (func);
+	}
+	function update_text(e) {
+		var r = find_child(e, "rect");
+		var t = find_child(e, "text");
+		var w = parseFloat(r.attributes.width.value) -3;
+		var txt = find_child(e, "title").textContent.replace(/\([^(]*\)$/,"");
+		t.attributes.x.value = parseFloat(r.attributes.x.value) + 3;
+
+		// Smaller than this size won't fit anything
+		if (w < 2 * 12 * 0.59) {
+			t.textContent = "";
+			return;
+		}
+
+		t.textContent = txt;
+		var sl = t.getSubStringLength(0, txt.length);
+		// check if only whitespace or if we can fit the entire string into width w
+		if (/^ *$/.test(txt) || sl < w)
+			return;
+
+		// this isn't perfect, but gives a good starting point
+		// and avoids calling getSubStringLength too often
+		var start = Math.floor((w/sl) * txt.length);
+		for (var x = start; x > 0; x = x-2) {
+			if (t.getSubStringLength(0, x + 2) <= w) {
+				t.textContent = txt.substring(0, x) + "..";
+				return;
+			}
+		}
+		t.textContent = "";
+	}
+
+	// zoom
+	function zoom_reset(e) {
+		if (e.attributes != undefined) {
+			orig_load(e, "x");
+			orig_load(e, "width");
+		}
+		if (e.childNodes == undefined) return;
+		for (var i = 0, c = e.childNodes; i < c.length; i++) {
+			zoom_reset(c[i]);
+		}
+	}
+	function zoom_child(e, x, ratio) {
+		if (e.attributes != undefined) {
+			if (e.attributes.x != undefined) {
+				orig_save(e, "x");
+				e.attributes.x.value = (parseFloat(e.attributes.x.value) - x - 10) * ratio + 10;
+				if (e.tagName == "text")
+					e.attributes.x.value = find_child(e.parentNode, "rect[x]").attributes.x.value + 3;
+			}
+			if (e.attributes.width != undefined) {
+				orig_save(e, "width");
+				e.attributes.width.value = parseFloat(e.attributes.width.value) * ratio;
+			}
+		}
+
+		if (e.childNodes == undefined) return;
+		for (var i = 0, c = e.childNodes; i < c.length; i++) {
+			zoom_child(c[i], x - 10, ratio);
+		}
+	}
+	function zoom_parent(e) {
+		if (e.attributes) {
+			if (e.attributes.x != undefined) {
+				orig_save(e, "x");
+				e.attributes.x.value = 10;
+			}
+			if (e.attributes.width != undefined) {
+				orig_save(e, "width");
+				e.attributes.width.value = parseInt(svg.width.baseVal.value) - (10 * 2);
+			}
+		}
+		if (e.childNodes == undefined) return;
+		for (var i = 0, c = e.childNodes; i < c.length; i++) {
+			zoom_parent(c[i]);
+		}
+	}
+	function zoom(node) {
+		var attr = find_child(node, "rect").attributes;
+		var width = parseFloat(attr.width.value);
+		var xmin = parseFloat(attr.x.value);
+		var xmax = parseFloat(xmin + width);
+		var ymin = parseFloat(attr.y.value);
+		var ratio = (svg.width.baseVal.value - 2 * 10) / width;
+
+		// XXX: Workaround for JavaScript float issues (fix me)
+		var fudge = 0.0001;
+
+		unzoombtn.classList.remove("hide");
+
+		var el = document.getElementById("frames").children;
+		for (var i = 0; i < el.length; i++) {
+			var e = el[i];
+			var a = find_child(e, "rect").attributes;
+			var ex = parseFloat(a.x.value);
+			var ew = parseFloat(a.width.value);
+			var upstack;
+			// Is it an ancestor
+			if (0 == 0) {
+				upstack = parseFloat(a.y.value) > ymin;
+			} else {
+				upstack = parseFloat(a.y.value) < ymin;
+			}
+			if (upstack) {
+				// Direct ancestor
+				if (ex <= xmin && (ex+ew+fudge) >= xmax) {
+					e.classList.add("parent");
+					zoom_parent(e);
+					update_text(e);
+				}
+				// not in current path
+				else
+					e.classList.add("hide");
+			}
+			// Children maybe
+			else {
+				// no common path
+				if (ex < xmin || ex + fudge >= xmax) {
+					e.classList.add("hide");
+				}
+				else {
+					zoom_child(e, xmin, ratio);
+					update_text(e);
+				}
+			}
+		}
+		search();
+	}
+	function unzoom(dont_update_text) {
+		unzoombtn.classList.add("hide");
+		var el = document.getElementById("frames").children;
+		for(var i = 0; i < el.length; i++) {
+			el[i].classList.remove("parent");
+			el[i].classList.remove("hide");
+			zoom_reset(el[i]);
+			if(!dont_update_text) update_text(el[i]);
+		}
+		search();
+	}
+	function clearzoom() {
+		unzoom();
+
+		// remove zoom state
+		var params = get_params();
+		if (params.x) delete params.x;
+		if (params.y) delete params.y;
+		history.replaceState(null, null, parse_params(params));
+	}
+
+	// search
+	function toggle_ignorecase() {
+		ignorecase = !ignorecase;
+		if (ignorecase) {
+			ignorecaseBtn.classList.add("show");
+		} else {
+			ignorecaseBtn.classList.remove("show");
+		}
+		reset_search();
+		search();
+	}
+	function reset_search() {
+		var el = document.querySelectorAll("#frames rect");
+		for (var i = 0; i < el.length; i++) {
+			orig_load(el[i], "fill")
+		}
+		var params = get_params();
+		delete params.s;
+		history.replaceState(null, null, parse_params(params));
+	}
+	function search_prompt() {
+		if (!searching) {
+			var term = prompt("Enter a search term (regexp " +
+			    "allowed, eg: ^ext4_)"
+			    + (ignorecase ? ", ignoring case" : "")
+			    + "\nPress Ctrl-i to toggle case sensitivity", "");
+			if (term != null) search(term);
+		} else {
+			reset_search();
+			searching = 0;
+			currentSearchTerm = null;
+			searchbtn.classList.remove("show");
+			searchbtn.firstChild.nodeValue = "Search"
+			matchedtxt.classList.add("hide");
+			matchedtxt.firstChild.nodeValue = ""
+		}
+	}
+	function search(term) {
+		if (term) currentSearchTerm = term;
+		if (currentSearchTerm === null) return;
+
+		var re = new RegExp(currentSearchTerm, ignorecase ? 'i' : '');
+		var el = document.getElementById("frames").children;
+		var matches = new Object();
+		var maxwidth = 0;
+		for (var i = 0; i < el.length; i++) {
+			var e = el[i];
+			var func = g_to_func(e);
+			var rect = find_child(e, "rect");
+			if (func == null || rect == null)
+				continue;
+
+			// Save max width. Only works as we have a root frame
+			var w = parseFloat(rect.attributes.width.value);
+			if (w > maxwidth)
+				maxwidth = w;
+
+			if (func.match(re)) {
+				// highlight
+				var x = parseFloat(rect.attributes.x.value);
+				orig_save(rect, "fill");
+				rect.attributes.fill.value = "rgb(230,0,230)";
+
+				// remember matches
+				if (matches[x] == undefined) {
+					matches[x] = w;
+				} else {
+					if (w > matches[x]) {
+						// overwrite with parent
+						matches[x] = w;
+					}
+				}
+				searching = 1;
+			}
+		}
+		if (!searching)
+			return;
+		var params = get_params();
+		params.s = currentSearchTerm;
+		history.replaceState(null, null, parse_params(params));
+
+		searchbtn.classList.add("show");
+		searchbtn.firstChild.nodeValue = "Reset Search";
+
+		// calculate percent matched, excluding vertical overlap
+		var count = 0;
+		var lastx = -1;
+		var lastw = 0;
+		var keys = Array();
+		for (k in matches) {
+			if (matches.hasOwnProperty(k))
+				keys.push(k);
+		}
+		// sort the matched frames by their x location
+		// ascending, then width descending
+		keys.sort(function(a, b){
+			return a - b;
+		});
+		// Step through frames saving only the biggest bottom-up frames
+		// thanks to the sort order. This relies on the tree property
+		// where children are always smaller than their parents.
+		var fudge = 0.0001;	// JavaScript floating point
+		for (var k in keys) {
+			var x = parseFloat(keys[k]);
+			var w = matches[keys[k]];
+			if (x >= lastx + lastw - fudge) {
+				count += w;
+				lastx = x;
+				lastw = w;
+			}
+		}
+		// display matched percent
+		matchedtxt.classList.remove("hide");
+		var pct = 100 * count / maxwidth;
+		if (pct != 100) pct = pct.toFixed(1)
+		matchedtxt.firstChild.nodeValue = "Matched: " + pct + "%";
+	}
+]]>
+</script>
+<rect x="0.0" y="0" width="1200.0" height="566.0" fill="url(#background)"  />
+<text id="title" x="600.00" y="24" >tochars 10000x10 big_int (x64 gcc14)</text>
+<text id="details" x="10.00" y="549" > </text>
+<text id="unzoom" x="10.00" y="24" class="hide">Reset Zoom</text>
+<text id="search" x="1090.00" y="24" >Search</text>
+<text id="ignorecase" x="1174.00" y="24" >ic</text>
+<text id="matched" x="1090.00" y="549" > </text>
+<g id="frames">
+<g >
+<title>run_ladder (1,894,575,538 samples, 3.00%)</title><rect x="441.5" y="149" width="35.5" height="15.0" fill="rgb(241,169,40)" rx="2" ry="2" />
+<text  x="444.55" y="159.5" >run..</text>
+</g>
+<g >
+<title>run_ladder (203,681,475 samples, 0.32%)</title><rect x="420.8" y="117" width="3.8" height="15.0" fill="rgb(241,169,40)" rx="2" ry="2" />
+<text  x="423.78" y="127.5" ></text>
+</g>
+<g >
+<title>divide_dc_basecase (277,357,392 samples, 0.44%)</title><rect x="557.6" y="117" width="5.2" height="15.0" fill="rgb(220,73,17)" rx="2" ry="2" />
+<text  x="560.61" y="127.5" ></text>
+</g>
+<g >
+<title>divide_dc_2n1n (162,265,517 samples, 0.26%)</title><rect x="75.1" y="197" width="3.0" height="15.0" fill="rgb(226,99,23)" rx="2" ry="2" />
+<text  x="78.05" y="207.5" ></text>
+</g>
+<g >
+<title>multiply_runtime (687,911,516 samples, 1.09%)</title><rect x="362.5" y="149" width="12.9" height="15.0" fill="rgb(224,90,21)" rx="2" ry="2" />
+<text  x="365.50" y="159.5" ></text>
+</g>
+<g >
+<title>divide_unsigned (510,439,023 samples, 0.81%)</title><rect x="719.8" y="101" width="9.6" height="15.0" fill="rgb(224,90,21)" rx="2" ry="2" />
+<text  x="722.85" y="111.5" ></text>
+</g>
+<g >
+<title>divide_dc_3n2n (280,033,723 samples, 0.44%)</title><rect x="337.7" y="133" width="5.2" height="15.0" fill="rgb(213,40,9)" rx="2" ry="2" />
+<text  x="340.67" y="143.5" ></text>
+</g>
+<g >
+<title>divide_dc_2n1n (387,436,587 samples, 0.61%)</title><rect x="696.5" y="133" width="7.2" height="15.0" fill="rgb(226,99,23)" rx="2" ry="2" />
+<text  x="699.48" y="143.5" ></text>
+</g>
+<g >
+<title>divide_dc_2n1n (1,243,261,486 samples, 1.97%)</title><rect x="376.3" y="181" width="23.3" height="15.0" fill="rgb(226,99,23)" rx="2" ry="2" />
+<text  x="379.31" y="191.5" >d..</text>
+</g>
+<g >
+<title>divide_dc_2n1n (672,466,479 samples, 1.07%)</title><rect x="776.5" y="133" width="12.5" height="15.0" fill="rgb(226,99,23)" rx="2" ry="2" />
+<text  x="779.46" y="143.5" ></text>
+</g>
+<g >
+<title>divide_unsigned (300,771,780 samples, 0.48%)</title><rect x="600.4" y="117" width="5.6" height="15.0" fill="rgb(224,90,21)" rx="2" ry="2" />
+<text  x="603.35" y="127.5" ></text>
+</g>
+<g >
+<title>beman_big_int_multiply_long_runtime (232,991,130 samples, 0.37%)</title><rect x="714.8" y="85" width="4.3" height="15.0" fill="rgb(237,149,35)" rx="2" ry="2" />
+<text  x="717.76" y="95.5" ></text>
+</g>
+<g >
+<title>divide_dc_basecase (549,576,944 samples, 0.87%)</title><rect x="789.1" y="117" width="10.3" height="15.0" fill="rgb(220,73,17)" rx="2" ry="2" />
+<text  x="792.14" y="127.5" ></text>
+</g>
+<g >
+<title>_start (63,059,036,451 samples, 100.00%)</title><rect x="10.0" y="485" width="1180.0" height="15.0" fill="rgb(245,185,44)" rx="2" ry="2" />
+<text  x="13.00" y="495.5" >_start</text>
+</g>
+<g >
+<title>multiply_runtime_impl (687,911,516 samples, 1.09%)</title><rect x="362.5" y="133" width="12.9" height="15.0" fill="rgb(207,11,2)" rx="2" ry="2" />
+<text  x="365.50" y="143.5" ></text>
+</g>
+<g >
+<title>time_row&lt;::run_tochars (63,007,770,188 samples, 99.92%)</title><rect x="10.4" y="405" width="1179.0" height="15.0" fill="rgb(206,6,1)" rx="2" ry="2" />
+<text  x="13.36" y="415.5" >time_row&lt;::run_tochars</text>
+</g>
+<g >
+<title>divide_dc_2n1n (790,106,996 samples, 1.25%)</title><rect x="651.0" y="149" width="14.8" height="15.0" fill="rgb(226,99,23)" rx="2" ry="2" />
+<text  x="653.99" y="159.5" ></text>
+</g>
+<g >
+<title>toom_ladder (1,891,955,304 samples, 3.00%)</title><rect x="441.6" y="133" width="35.4" height="15.0" fill="rgb(207,9,2)" rx="2" ry="2" />
+<text  x="444.59" y="143.5" >too..</text>
+</g>
+<g >
+<title>multiply_runtime (554,729,993 samples, 0.88%)</title><rect x="684.6" y="133" width="10.4" height="15.0" fill="rgb(224,90,21)" rx="2" ry="2" />
+<text  x="687.59" y="143.5" ></text>
+</g>
+<g >
+<title>beman_big_int_multiply_long_runtime_avx512_ifma (496,895,622 samples, 0.79%)</title><rect x="365.1" y="53" width="9.2" height="15.0" fill="rgb(246,189,45)" rx="2" ry="2" />
+<text  x="368.05" y="63.5" ></text>
+</g>
+<g >
+<title>write_chunk_digits (3,154,765,351 samples, 5.00%)</title><rect x="1108.0" y="101" width="59.1" height="15.0" fill="rgb(221,77,18)" rx="2" ry="2" />
+<text  x="1111.05" y="111.5" >write_..</text>
+</g>
+<g >
+<title>divide_dc_3n2n (3,865,888,021 samples, 6.13%)</title><rect x="115.1" y="213" width="72.3" height="15.0" fill="rgb(213,40,9)" rx="2" ry="2" />
+<text  x="118.11" y="223.5" >divide_d..</text>
+</g>
+<g >
+<title>divide_dc_2n1n (193,546,247 samples, 0.31%)</title><rect x="486.6" y="117" width="3.6" height="15.0" fill="rgb(226,99,23)" rx="2" ry="2" />
+<text  x="489.59" y="127.5" ></text>
+</g>
+<g >
+<title>to_chars_impl (62,943,801,104 samples, 99.82%)</title><rect x="10.9" y="325" width="1177.9" height="15.0" fill="rgb(248,201,48)" rx="2" ry="2" />
+<text  x="13.94" y="335.5" >to_chars_impl</text>
+</g>
+<g >
+<title>multiply_runtime (387,170,401 samples, 0.61%)</title><rect x="273.1" y="133" width="7.3" height="15.0" fill="rgb(224,90,21)" rx="2" ry="2" />
+<text  x="276.13" y="143.5" ></text>
+</g>
+<g >
+<title>divide_dc_3n2n (180,673,796 samples, 0.29%)</title><rect x="280.9" y="117" width="3.4" height="15.0" fill="rgb(213,40,9)" rx="2" ry="2" />
+<text  x="283.92" y="127.5" ></text>
+</g>
+<g >
+<title>divide_dc_3n2n (4,190,365,260 samples, 6.65%)</title><rect x="696.3" y="181" width="78.4" height="15.0" fill="rgb(213,40,9)" rx="2" ry="2" />
+<text  x="699.29" y="191.5" >divide_dc..</text>
+</g>
+<g >
+<title>divide_dc_basecase (324,592,870 samples, 0.51%)</title><rect x="696.5" y="101" width="6.1" height="15.0" fill="rgb(220,73,17)" rx="2" ry="2" />
+<text  x="699.48" y="111.5" ></text>
+</g>
+<g >
+<title>toom_ladder (314,287,467 samples, 0.50%)</title><rect x="100.8" y="101" width="5.9" height="15.0" fill="rgb(207,9,2)" rx="2" ry="2" />
+<text  x="103.81" y="111.5" ></text>
+</g>
+<g >
+<title>beman_big_int_multiply_long_runtime_avx512_ifma (164,938,907 samples, 0.26%)</title><rect x="497.7" y="37" width="3.0" height="15.0" fill="rgb(246,189,45)" rx="2" ry="2" />
+<text  x="500.66" y="47.5" ></text>
+</g>
+<g >
+<title>toom_ladder (725,423,555 samples, 1.15%)</title><rect x="426.1" y="117" width="13.6" height="15.0" fill="rgb(207,9,2)" rx="2" ry="2" />
+<text  x="429.11" y="127.5" ></text>
+</g>
+<g >
+<title>multiply_runtime_impl (232,991,130 samples, 0.37%)</title><rect x="714.8" y="101" width="4.3" height="15.0" fill="rgb(207,11,2)" rx="2" ry="2" />
+<text  x="717.76" y="111.5" ></text>
+</g>
+<g >
+<title>unsigned long beman::big_int::detail::square_dispatch (2,790,251,860 samples, 4.42%)</title><rect x="22.8" y="229" width="52.2" height="15.0" fill="rgb(207,12,3)" rx="2" ry="2" />
+<text  x="25.79" y="239.5" >unsig..</text>
+</g>
+<g >
+<title>recompose (232,976,561 samples, 0.37%)</title><rect x="236.5" y="117" width="4.4" height="15.0" fill="rgb(228,106,25)" rx="2" ry="2" />
+<text  x="239.54" y="127.5" ></text>
+</g>
+<g >
+<title>multiply_runtime (804,024,489 samples, 1.28%)</title><rect x="424.6" y="165" width="15.1" height="15.0" fill="rgb(224,90,21)" rx="2" ry="2" />
+<text  x="427.64" y="175.5" ></text>
+</g>
+<g >
+<title>beman_big_int_multiply_long_runtime_avx512_ifma (426,464,004 samples, 0.68%)</title><rect x="615.0" y="69" width="8.0" height="15.0" fill="rgb(246,189,45)" rx="2" ry="2" />
+<text  x="617.99" y="79.5" ></text>
+</g>
+<g >
+<title>beman_big_int_multiply_long_runtime_avx512_ifma (863,709,728 samples, 1.37%)</title><rect x="169.0" y="69" width="16.2" height="15.0" fill="rgb(246,189,45)" rx="2" ry="2" />
+<text  x="172.03" y="79.5" ></text>
+</g>
+<g >
+<title>divide_dc_2n1n (831,913,479 samples, 1.32%)</title><rect x="579.1" y="165" width="15.6" height="15.0" fill="rgb(226,99,23)" rx="2" ry="2" />
+<text  x="582.11" y="175.5" ></text>
+</g>
+<g >
+<title>multiply_karatsuba (272,259,064 samples, 0.43%)</title><rect x="394.3" y="69" width="5.1" height="15.0" fill="rgb(223,83,20)" rx="2" ry="2" />
+<text  x="397.28" y="79.5" ></text>
+</g>
+<g >
+<title>multiply_runtime_impl (358,390,241 samples, 0.57%)</title><rect x="299.6" y="133" width="6.7" height="15.0" fill="rgb(207,11,2)" rx="2" ry="2" />
+<text  x="302.58" y="143.5" ></text>
+</g>
+<g >
+<title>multiply_karatsuba (653,865,436 samples, 1.04%)</title><rect x="363.1" y="85" width="12.3" height="15.0" fill="rgb(223,83,20)" rx="2" ry="2" />
+<text  x="366.14" y="95.5" ></text>
+</g>
+<g >
+<title>divide_dc_3n2n (2,385,991,980 samples, 3.78%)</title><rect x="579.1" y="181" width="44.7" height="15.0" fill="rgb(213,40,9)" rx="2" ry="2" />
+<text  x="582.11" y="191.5" >divi..</text>
+</g>
+<g >
+<title>multiply_runtime (1,293,518,601 samples, 2.05%)</title><rect x="623.8" y="165" width="24.2" height="15.0" fill="rgb(224,90,21)" rx="2" ry="2" />
+<text  x="626.76" y="175.5" >m..</text>
+</g>
+<g >
+<title>divide_dc_2n1n (3,205,736,124 samples, 5.08%)</title><rect x="479.6" y="197" width="60.0" height="15.0" fill="rgb(226,99,23)" rx="2" ry="2" />
+<text  x="482.59" y="207.5" >divide..</text>
+</g>
+<g >
+<title>divide_dc_3n2n (193,782,843 samples, 0.31%)</title><rect x="78.1" y="197" width="3.6" height="15.0" fill="rgb(213,40,9)" rx="2" ry="2" />
+<text  x="81.09" y="207.5" ></text>
+</g>
+<g >
+<title>multiply_runtime (2,984,744,979 samples, 4.73%)</title><rect x="187.4" y="197" width="55.9" height="15.0" fill="rgb(224,90,21)" rx="2" ry="2" />
+<text  x="190.45" y="207.5" >multi..</text>
+</g>
+<g >
+<title>borrowing_sub (855,879,637 samples, 1.36%)</title><rect x="975.7" y="133" width="16.0" height="15.0" fill="rgb(205,0,0)" rx="2" ry="2" />
+<text  x="978.68" y="143.5" ></text>
+</g>
+<g >
+<title>multiply_karatsuba (465,742,206 samples, 0.74%)</title><rect x="614.6" y="85" width="8.7" height="15.0" fill="rgb(223,83,20)" rx="2" ry="2" />
+<text  x="617.60" y="95.5" ></text>
+</g>
+<g >
+<title>run_ladder (274,822,677 samples, 0.44%)</title><rect x="161.4" y="133" width="5.1" height="15.0" fill="rgb(241,169,40)" rx="2" ry="2" />
+<text  x="164.39" y="143.5" ></text>
+</g>
+<g >
+<title>toom_ladder (831,877,939 samples, 1.32%)</title><rect x="758.4" y="101" width="15.6" height="15.0" fill="rgb(207,9,2)" rx="2" ry="2" />
+<text  x="761.40" y="111.5" ></text>
+</g>
+<g >
+<title>submul_single_limb (293,156,718 samples, 0.46%)</title><rect x="697.0" y="69" width="5.5" height="15.0" fill="rgb(236,144,34)" rx="2" ry="2" />
+<text  x="699.97" y="79.5" ></text>
+</g>
+<g >
+<title>divide_unsigned (261,557,057 samples, 0.41%)</title><rect x="665.9" y="85" width="4.9" height="15.0" fill="rgb(224,90,21)" rx="2" ry="2" />
+<text  x="668.88" y="95.5" ></text>
+</g>
+<g >
+<title>divide_unsigned (172,754,333 samples, 0.27%)</title><rect x="566.9" y="133" width="3.2" height="15.0" fill="rgb(224,90,21)" rx="2" ry="2" />
+<text  x="569.86" y="143.5" ></text>
+</g>
+<g >
+<title>run_ladder (504,994,498 samples, 0.80%)</title><rect x="685.5" y="101" width="9.5" height="15.0" fill="rgb(241,169,40)" rx="2" ry="2" />
+<text  x="688.52" y="111.5" ></text>
+</g>
+<g >
+<title>divide_burnikel_ziegler (6,681,357,185 samples, 10.60%)</title><rect x="650.9" y="197" width="125.0" height="15.0" fill="rgb(246,191,45)" rx="2" ry="2" />
+<text  x="653.90" y="207.5" >divide_burnikel..</text>
+</g>
+<g >
+<title>divide_dc_2n1n (418,883,140 samples, 0.66%)</title><rect x="376.3" y="149" width="7.8" height="15.0" fill="rgb(226,99,23)" rx="2" ry="2" />
+<text  x="379.31" y="159.5" ></text>
+</g>
+<g >
+<title>div_3by2_preinv (183,140,994 samples, 0.29%)</title><rect x="1168.9" y="101" width="3.5" height="15.0" fill="rgb(218,64,15)" rx="2" ry="2" />
+<text  x="1171.94" y="111.5" ></text>
+</g>
+<g >
+<title>divide_dc_3n2n (518,497,629 samples, 0.82%)</title><rect x="115.1" y="149" width="9.7" height="15.0" fill="rgb(213,40,9)" rx="2" ry="2" />
+<text  x="118.11" y="159.5" ></text>
+</g>
+<g >
+<title>multiply_runtime (240,960,744 samples, 0.38%)</title><rect x="357.7" y="133" width="4.5" height="15.0" fill="rgb(224,90,21)" rx="2" ry="2" />
+<text  x="360.65" y="143.5" ></text>
+</g>
+<g >
+<title>divide_dc_2n1n (596,699,242 samples, 0.95%)</title><rect x="719.7" y="149" width="11.2" height="15.0" fill="rgb(226,99,23)" rx="2" ry="2" />
+<text  x="722.70" y="159.5" ></text>
+</g>
+<g >
+<title>div_2by1_preinv (248,716,837 samples, 0.39%)</title><rect x="1007.2" y="117" width="4.7" height="15.0" fill="rgb(231,123,29)" rx="2" ry="2" />
+<text  x="1010.22" y="127.5" ></text>
+</g>
+<g >
+<title>beman_big_int_multiply_long_runtime_avx512_ifma (292,813,655 samples, 0.46%)</title><rect x="932.4" y="69" width="5.5" height="15.0" fill="rgb(246,189,45)" rx="2" ry="2" />
+<text  x="935.40" y="79.5" ></text>
+</g>
+<g >
+<title>divide_dc_3n2n (549,833,782 samples, 0.87%)</title><rect x="730.9" y="149" width="10.3" height="15.0" fill="rgb(213,40,9)" rx="2" ry="2" />
+<text  x="733.87" y="159.5" ></text>
+</g>
+<g >
+<title>run_ladder (653,865,436 samples, 1.04%)</title><rect x="363.1" y="117" width="12.3" height="15.0" fill="rgb(241,169,40)" rx="2" ry="2" />
+<text  x="366.14" y="127.5" ></text>
+</g>
+<g >
+<title>multiply_runtime (272,010,839 samples, 0.43%)</title><rect x="516.5" y="133" width="5.1" height="15.0" fill="rgb(224,90,21)" rx="2" ry="2" />
+<text  x="519.47" y="143.5" ></text>
+</g>
+<g >
+<title>divide_dc_2n1n (1,515,681,813 samples, 2.40%)</title><rect x="115.1" y="197" width="28.4" height="15.0" fill="rgb(226,99,23)" rx="2" ry="2" />
+<text  x="118.11" y="207.5" >di..</text>
+</g>
+<g >
+<title>basecase_limbs_to_digits (1,169,692,682 samples, 1.85%)</title><rect x="1005.3" y="149" width="21.8" height="15.0" fill="rgb(223,84,20)" rx="2" ry="2" />
+<text  x="1008.26" y="159.5" >b..</text>
+</g>
+<g >
+<title>submul_single_limb (688,360,334 samples, 1.09%)</title><rect x="1067.2" y="117" width="12.9" height="15.0" fill="rgb(236,144,34)" rx="2" ry="2" />
+<text  x="1070.25" y="127.5" ></text>
+</g>
+<g >
+<title>divide_dc_2n1n (201,614,420 samples, 0.32%)</title><rect x="143.5" y="149" width="3.7" height="15.0" fill="rgb(226,99,23)" rx="2" ry="2" />
+<text  x="146.47" y="159.5" ></text>
+</g>
+<g >
+<title>divide_unsigned (3,106,534,459 samples, 4.93%)</title><rect x="947.1" y="165" width="58.1" height="15.0" fill="rgb(224,90,21)" rx="2" ry="2" />
+<text  x="950.08" y="175.5" >divide..</text>
+</g>
+<g >
+<title>toom_ladder (274,822,677 samples, 0.44%)</title><rect x="161.4" y="117" width="5.1" height="15.0" fill="rgb(207,9,2)" rx="2" ry="2" />
+<text  x="164.39" y="127.5" ></text>
+</g>
+<g >
+<title>submul_single_limb (204,071,187 samples, 0.32%)</title><rect x="672.0" y="85" width="3.9" height="15.0" fill="rgb(236,144,34)" rx="2" ry="2" />
+<text  x="675.05" y="95.5" ></text>
+</g>
+<g >
+<title>operator (2,756,192,085 samples, 4.37%)</title><rect x="23.4" y="197" width="51.6" height="15.0" fill="rgb(254,228,54)" rx="2" ry="2" />
+<text  x="26.43" y="207.5" >opera..</text>
+</g>
+<g >
+<title>toom_ladder (398,065,213 samples, 0.63%)</title><rect x="135.6" y="101" width="7.5" height="15.0" fill="rgb(207,9,2)" rx="2" ry="2" />
+<text  x="138.63" y="111.5" ></text>
+</g>
+<g >
+<title>divide_dc_2n1n (1,238,298,073 samples, 1.96%)</title><rect x="696.4" y="165" width="23.2" height="15.0" fill="rgb(226,99,23)" rx="2" ry="2" />
+<text  x="699.43" y="175.5" >d..</text>
+</g>
+<g >
+<title>divide_unsigned (1,088,566,472 samples, 1.73%)</title><rect x="827.6" y="117" width="20.4" height="15.0" fill="rgb(224,90,21)" rx="2" ry="2" />
+<text  x="830.62" y="127.5" ></text>
+</g>
+<g >
+<title>run_ladder (185,894,255 samples, 0.29%)</title><rect x="497.5" y="85" width="3.4" height="15.0" fill="rgb(241,169,40)" rx="2" ry="2" />
+<text  x="500.46" y="95.5" ></text>
+</g>
+<g >
+<title>time_round&lt;::run_tochars (62,943,801,104 samples, 99.82%)</title><rect x="10.9" y="373" width="1177.9" height="15.0" fill="rgb(212,35,8)" rx="2" ry="2" />
+<text  x="13.94" y="383.5" >time_round&lt;::run_tochars</text>
+</g>
+<g >
+<title>divide_unsigned (873,659,910 samples, 1.39%)</title><rect x="808.7" y="101" width="16.4" height="15.0" fill="rgb(224,90,21)" rx="2" ry="2" />
+<text  x="811.72" y="111.5" ></text>
+</g>
+<g >
+<title>emit_digits (28,658,155,266 samples, 45.45%)</title><rect x="650.8" y="229" width="536.3" height="15.0" fill="rgb(205,2,0)" rx="2" ry="2" />
+<text  x="653.80" y="239.5" >emit_digits</text>
+</g>
+<g >
+<title>divide_dc_basecase (1,836,957,929 samples, 2.91%)</title><rect x="898.0" y="133" width="34.4" height="15.0" fill="rgb(220,73,17)" rx="2" ry="2" />
+<text  x="901.02" y="143.5" >di..</text>
+</g>
+<g >
+<title>operator (62,943,801,104 samples, 99.82%)</title><rect x="10.9" y="357" width="1177.9" height="15.0" fill="rgb(254,228,54)" rx="2" ry="2" />
+<text  x="13.94" y="367.5" >operator</text>
+</g>
+<g >
+<title>divide_dc_3n2n (308,655,498 samples, 0.49%)</title><rect x="665.9" y="117" width="5.8" height="15.0" fill="rgb(213,40,9)" rx="2" ry="2" />
+<text  x="668.88" y="127.5" ></text>
+</g>
+<g >
+<title>divide_dc_3n2n (327,081,257 samples, 0.52%)</title><rect x="656.3" y="117" width="6.1" height="15.0" fill="rgb(213,40,9)" rx="2" ry="2" />
+<text  x="659.28" y="127.5" ></text>
+</g>
+<g >
+<title>multiply_runtime_any (279,867,287 samples, 0.44%)</title><rect x="516.5" y="149" width="5.2" height="15.0" fill="rgb(242,171,40)" rx="2" ry="2" />
+<text  x="519.47" y="159.5" ></text>
+</g>
+<g >
+<title>divide_unsigned (279,981,500 samples, 0.44%)</title><rect x="579.1" y="85" width="5.2" height="15.0" fill="rgb(224,90,21)" rx="2" ry="2" />
+<text  x="582.11" y="95.5" ></text>
+</g>
+<g >
+<title>div_3by2_preinv (185,869,043 samples, 0.29%)</title><rect x="1062.8" y="117" width="3.5" height="15.0" fill="rgb(218,64,15)" rx="2" ry="2" />
+<text  x="1065.79" y="127.5" ></text>
+</g>
+<g >
+<title>divide_dc_3n2n (816,133,821 samples, 1.29%)</title><rect x="594.7" y="165" width="15.2" height="15.0" fill="rgb(213,40,9)" rx="2" ry="2" />
+<text  x="597.67" y="175.5" ></text>
+</g>
+<g >
+<title>borrowing_sub (167,594,070 samples, 0.27%)</title><rect x="751.5" y="117" width="3.2" height="15.0" fill="rgb(205,0,0)" rx="2" ry="2" />
+<text  x="754.55" y="127.5" ></text>
+</g>
+<g >
+<title>beman_big_int_multiply_long_runtime_avx512_ifma (259,163,471 samples, 0.41%)</title><rect x="394.4" y="53" width="4.8" height="15.0" fill="rgb(246,189,45)" rx="2" ry="2" />
+<text  x="397.38" y="63.5" ></text>
+</g>
+<g >
+<title>divide_dc_3n2n (2,859,407,509 samples, 4.53%)</title><rect x="808.4" y="165" width="53.5" height="15.0" fill="rgb(213,40,9)" rx="2" ry="2" />
+<text  x="811.38" y="175.5" >divid..</text>
+</g>
+<g >
+<title>submul_single_limb (243,529,839 samples, 0.39%)</title><rect x="552.1" y="69" width="4.5" height="15.0" fill="rgb(236,144,34)" rx="2" ry="2" />
+<text  x="555.07" y="79.5" ></text>
+</g>
+<g >
+<title>submul_single_limb (1,443,976,477 samples, 2.29%)</title><rect x="1034.0" y="133" width="27.0" height="15.0" fill="rgb(236,144,34)" rx="2" ry="2" />
+<text  x="1037.01" y="143.5" >s..</text>
+</g>
+<g >
+<title>toom_ladder (272,259,064 samples, 0.43%)</title><rect x="394.3" y="85" width="5.1" height="15.0" fill="rgb(207,9,2)" rx="2" ry="2" />
+<text  x="397.28" y="95.5" ></text>
+</g>
+<g >
+<title>divide_dc_2n1n (1,708,770,490 samples, 2.71%)</title><rect x="83.1" y="213" width="32.0" height="15.0" fill="rgb(226,99,23)" rx="2" ry="2" />
+<text  x="86.13" y="223.5" >di..</text>
+</g>
+<g >
+<title>div_2by1_preinv (908,354,299 samples, 1.44%)</title><rect x="1090.3" y="85" width="17.0" height="15.0" fill="rgb(231,123,29)" rx="2" ry="2" />
+<text  x="1093.32" y="95.5" ></text>
+</g>
+<g >
+<title>toom_ladder (368,821,547 samples, 0.58%)</title><rect x="273.5" y="85" width="6.9" height="15.0" fill="rgb(207,9,2)" rx="2" ry="2" />
+<text  x="276.48" y="95.5" ></text>
+</g>
+<g >
+<title>multiply_karatsuba (332,185,966 samples, 0.53%)</title><rect x="300.1" y="85" width="6.2" height="15.0" fill="rgb(223,83,20)" rx="2" ry="2" />
+<text  x="303.07" y="95.5" ></text>
+</g>
+<g >
+<title>divide_dc_3n2n (193,735,094 samples, 0.31%)</title><rect x="119.1" y="133" width="3.6" height="15.0" fill="rgb(213,40,9)" rx="2" ry="2" />
+<text  x="122.08" y="143.5" ></text>
+</g>
+<g >
+<title>multiply_runtime (235,096,155 samples, 0.37%)</title><rect x="420.2" y="149" width="4.4" height="15.0" fill="rgb(224,90,21)" rx="2" ry="2" />
+<text  x="423.19" y="159.5" ></text>
+</g>
+<g >
+<title>divide_dc_2n1n (539,134,304 samples, 0.85%)</title><rect x="143.5" y="181" width="10.1" height="15.0" fill="rgb(226,99,23)" rx="2" ry="2" />
+<text  x="146.47" y="191.5" ></text>
+</g>
+<g >
+<title>divide_dc_3n2n (1,164,657,612 samples, 1.85%)</title><rect x="85.0" y="181" width="21.8" height="15.0" fill="rgb(213,40,9)" rx="2" ry="2" />
+<text  x="88.04" y="191.5" >d..</text>
+</g>
+<g >
+<title>divide_dc_basecase (450,436,441 samples, 0.71%)</title><rect x="731.1" y="133" width="8.4" height="15.0" fill="rgb(220,73,17)" rx="2" ry="2" />
+<text  x="734.07" y="143.5" ></text>
+</g>
+<g >
+<title>multiply_runtime (491,919,302 samples, 0.78%)</title><rect x="851.8" y="133" width="9.2" height="15.0" fill="rgb(224,90,21)" rx="2" ry="2" />
+<text  x="854.75" y="143.5" ></text>
+</g>
+<g >
+<title>divide_dc_2n1n (2,425,639,504 samples, 3.85%)</title><rect x="650.9" y="181" width="45.4" height="15.0" fill="rgb(226,99,23)" rx="2" ry="2" />
+<text  x="653.90" y="191.5" >divi..</text>
+</g>
+<g >
+<title>run_ladder (837,116,459 samples, 1.33%)</title><rect x="758.3" y="117" width="15.7" height="15.0" fill="rgb(241,169,40)" rx="2" ry="2" />
+<text  x="761.35" y="127.5" ></text>
+</g>
+<g >
+<title>divide_dc_3n2n (649,110,282 samples, 1.03%)</title><rect x="789.0" y="133" width="12.2" height="15.0" fill="rgb(213,40,9)" rx="2" ry="2" />
+<text  x="792.04" y="143.5" ></text>
+</g>
+<g >
+<title>multiply_runtime_any (371,493,468 samples, 0.59%)</title><rect x="299.6" y="165" width="6.9" height="15.0" fill="rgb(242,171,40)" rx="2" ry="2" />
+<text  x="302.58" y="175.5" ></text>
+</g>
+<g >
+<title>divide_dc_2n1n (230,412,243 samples, 0.37%)</title><rect x="85.0" y="165" width="4.4" height="15.0" fill="rgb(226,99,23)" rx="2" ry="2" />
+<text  x="88.04" y="175.5" ></text>
+</g>
+<g >
+<title>run_ladder (2,984,744,979 samples, 4.73%)</title><rect x="187.4" y="165" width="55.9" height="15.0" fill="rgb(241,169,40)" rx="2" ry="2" />
+<text  x="190.45" y="175.5" >run_l..</text>
+</g>
+<g >
+<title>divide_dc_3n2n (337,778,685 samples, 0.54%)</title><rect x="551.3" y="117" width="6.3" height="15.0" fill="rgb(213,40,9)" rx="2" ry="2" />
+<text  x="554.29" y="127.5" ></text>
+</g>
+<g >
+<title>multiply_toom_cook_3 (2,984,744,979 samples, 4.73%)</title><rect x="187.4" y="133" width="55.9" height="15.0" fill="rgb(252,218,52)" rx="2" ry="2" />
+<text  x="190.45" y="143.5" >multi..</text>
+</g>
+<g >
+<title>divide_dc_2n1n (1,716,435,382 samples, 2.72%)</title><rect x="776.3" y="165" width="32.1" height="15.0" fill="rgb(226,99,23)" rx="2" ry="2" />
+<text  x="779.26" y="175.5" >di..</text>
+</g>
+<g >
+<title>toom_ladder (2,984,744,979 samples, 4.73%)</title><rect x="187.4" y="149" width="55.9" height="15.0" fill="rgb(207,9,2)" rx="2" ry="2" />
+<text  x="190.45" y="159.5" >toom_..</text>
+</g>
+<g >
+<title>divide_dc_3n2n (756,217,542 samples, 1.20%)</title><rect x="665.8" y="149" width="14.1" height="15.0" fill="rgb(213,40,9)" rx="2" ry="2" />
+<text  x="668.78" y="159.5" ></text>
+</g>
+<g >
+<title>run_ladder (1,191,377,260 samples, 1.89%)</title><rect x="625.7" y="133" width="22.3" height="15.0" fill="rgb(241,169,40)" rx="2" ry="2" />
+<text  x="628.67" y="143.5" >r..</text>
+</g>
+<g >
+<title>submul_single_limb (886,962,746 samples, 1.41%)</title><rect x="877.6" y="85" width="16.6" height="15.0" fill="rgb(236,144,34)" rx="2" ry="2" />
+<text  x="880.61" y="95.5" ></text>
+</g>
+<g >
+<title>beman_big_int_multiply_long_runtime_avx512_ifma (324,754,897 samples, 0.51%)</title><rect x="136.3" y="53" width="6.1" height="15.0" fill="rgb(246,189,45)" rx="2" ry="2" />
+<text  x="139.32" y="63.5" ></text>
+</g>
+<g >
+<title>divide_dc_basecase (259,063,629 samples, 0.41%)</title><rect x="594.7" y="117" width="4.8" height="15.0" fill="rgb(220,73,17)" rx="2" ry="2" />
+<text  x="597.67" y="127.5" ></text>
+</g>
+<g >
+<title>divide_dc_3n2n (212,152,481 samples, 0.34%)</title><rect x="115.1" y="117" width="4.0" height="15.0" fill="rgb(213,40,9)" rx="2" ry="2" />
+<text  x="118.11" y="127.5" ></text>
+</g>
+<g >
+<title>multiply_runtime_impl (491,919,302 samples, 0.78%)</title><rect x="851.8" y="117" width="9.2" height="15.0" fill="rgb(207,11,2)" rx="2" ry="2" />
+<text  x="854.75" y="127.5" ></text>
+</g>
+<g >
+<title>multiply_runtime (444,934,851 samples, 0.71%)</title><rect x="570.1" y="133" width="8.3" height="15.0" fill="rgb(224,90,21)" rx="2" ry="2" />
+<text  x="573.10" y="143.5" ></text>
+</g>
+<g >
+<title>divide_dc_2n1n (209,440,827 samples, 0.33%)</title><rect x="408.1" y="149" width="4.0" height="15.0" fill="rgb(226,99,23)" rx="2" ry="2" />
+<text  x="411.14" y="159.5" ></text>
+</g>
+<g >
+<title>multiply_runtime_any (235,610,804 samples, 0.37%)</title><rect x="714.8" y="133" width="4.4" height="15.0" fill="rgb(242,171,40)" rx="2" ry="2" />
+<text  x="717.76" y="143.5" ></text>
+</g>
+<g >
+<title>submul_single_limb (261,643,913 samples, 0.41%)</title><rect x="585.9" y="85" width="4.9" height="15.0" fill="rgb(236,144,34)" rx="2" ry="2" />
+<text  x="588.91" y="95.5" ></text>
+</g>
+<g >
+<title>multiply_runtime_any (314,287,467 samples, 0.50%)</title><rect x="100.8" y="165" width="5.9" height="15.0" fill="rgb(242,171,40)" rx="2" ry="2" />
+<text  x="103.81" y="175.5" ></text>
+</g>
+<g >
+<title>multiply_karatsuba (1,191,377,260 samples, 1.89%)</title><rect x="625.7" y="101" width="22.3" height="15.0" fill="rgb(223,83,20)" rx="2" ry="2" />
+<text  x="628.67" y="111.5" >m..</text>
+</g>
+<g >
+<title>divide_dc_2n1n (235,645,889 samples, 0.37%)</title><rect x="247.5" y="117" width="4.4" height="15.0" fill="rgb(226,99,23)" rx="2" ry="2" />
+<text  x="250.52" y="127.5" ></text>
+</g>
+<g >
+<title>multiply_runtime_any (274,822,677 samples, 0.44%)</title><rect x="161.4" y="181" width="5.1" height="15.0" fill="rgb(242,171,40)" rx="2" ry="2" />
+<text  x="164.39" y="191.5" ></text>
+</g>
+<g >
+<title>divide_unsigned (233,051,729 samples, 0.37%)</title><rect x="543.6" y="85" width="4.4" height="15.0" fill="rgb(224,90,21)" rx="2" ry="2" />
+<text  x="546.60" y="95.5" ></text>
+</g>
+<g >
+<title>divide_unsigned (293,065,949 samples, 0.46%)</title><rect x="585.3" y="101" width="5.5" height="15.0" fill="rgb(224,90,21)" rx="2" ry="2" />
+<text  x="588.33" y="111.5" ></text>
+</g>
+<g >
+<title>multiply_runtime_impl (497,182,230 samples, 0.79%)</title><rect x="614.0" y="133" width="9.3" height="15.0" fill="rgb(207,11,2)" rx="2" ry="2" />
+<text  x="617.01" y="143.5" ></text>
+</g>
+<g >
+<title>submul_single_limb (214,663,529 samples, 0.34%)</title><rect x="651.4" y="53" width="4.0" height="15.0" fill="rgb(236,144,34)" rx="2" ry="2" />
+<text  x="654.39" y="63.5" ></text>
+</g>
+<g >
+<title>divide_dc_2n1n (431,867,036 samples, 0.68%)</title><rect x="75.1" y="229" width="8.0" height="15.0" fill="rgb(226,99,23)" rx="2" ry="2" />
+<text  x="78.05" y="239.5" ></text>
+</g>
+<g >
+<title>multiply_runtime_impl (889,341,401 samples, 1.41%)</title><rect x="757.4" y="133" width="16.6" height="15.0" fill="rgb(207,11,2)" rx="2" ry="2" />
+<text  x="760.37" y="143.5" ></text>
+</g>
+<g >
+<title>divide_dc_3n2n (685,590,360 samples, 1.09%)</title><rect x="260.3" y="149" width="12.8" height="15.0" fill="rgb(213,40,9)" rx="2" ry="2" />
+<text  x="263.30" y="159.5" ></text>
+</g>
+<g >
+<title>widening_mul (342,751,550 samples, 0.54%)</title><rect x="1054.6" y="117" width="6.4" height="15.0" fill="rgb(231,124,29)" rx="2" ry="2" />
+<text  x="1057.61" y="127.5" ></text>
+</g>
+<g >
+<title>divide_dc_3n2n (1,708,770,490 samples, 2.71%)</title><rect x="83.1" y="197" width="32.0" height="15.0" fill="rgb(213,40,9)" rx="2" ry="2" />
+<text  x="86.13" y="207.5" >di..</text>
+</g>
+<g >
+<title>divide_burnikel_ziegler (12,425,793,374 samples, 19.70%)</title><rect x="247.0" y="229" width="232.5" height="15.0" fill="rgb(246,191,45)" rx="2" ry="2" />
+<text  x="250.03" y="239.5" >divide_burnikel_ziegler</text>
+</g>
+<g >
+<title>divide_dc_2n1n (507,748,479 samples, 0.81%)</title><rect x="280.9" y="165" width="9.5" height="15.0" fill="rgb(226,99,23)" rx="2" ry="2" />
+<text  x="283.92" y="175.5" ></text>
+</g>
+<g >
+<title>div_3by2_preinv (175,374,664 samples, 0.28%)</title><rect x="1029.1" y="133" width="3.2" height="15.0" fill="rgb(218,64,15)" rx="2" ry="2" />
+<text  x="1032.06" y="143.5" ></text>
+</g>
+<g >
+<title>multiply_runtime_any (392,412,157 samples, 0.62%)</title><rect x="273.1" y="149" width="7.4" height="15.0" fill="rgb(242,171,40)" rx="2" ry="2" />
+<text  x="276.13" y="159.5" ></text>
+</g>
+<g >
+<title>multiply_karatsuba (313,848,297 samples, 0.50%)</title><rect x="300.3" y="69" width="5.8" height="15.0" fill="rgb(223,83,20)" rx="2" ry="2" />
+<text  x="303.26" y="79.5" ></text>
+</g>
+<g >
+<title>submul_single_limb (313,962,833 samples, 0.50%)</title><rect x="941.2" y="165" width="5.9" height="15.0" fill="rgb(236,144,34)" rx="2" ry="2" />
+<text  x="944.21" y="175.5" ></text>
+</g>
+<g >
+<title>divide_dc_2n1n (308,655,498 samples, 0.49%)</title><rect x="665.9" y="133" width="5.8" height="15.0" fill="rgb(226,99,23)" rx="2" ry="2" />
+<text  x="668.88" y="143.5" ></text>
+</g>
+<g >
+<title>multiply_karatsuba (368,821,547 samples, 0.58%)</title><rect x="273.5" y="69" width="6.9" height="15.0" fill="rgb(223,83,20)" rx="2" ry="2" />
+<text  x="276.48" y="79.5" ></text>
+</g>
+<g >
+<title>submul_single_limb (999,501,713 samples, 1.59%)</title><rect x="829.3" y="101" width="18.7" height="15.0" fill="rgb(236,144,34)" rx="2" ry="2" />
+<text  x="832.28" y="111.5" ></text>
+</g>
+<g >
+<title>emit_digits (12,754,178,408 samples, 20.23%)</title><rect x="947.1" y="181" width="238.6" height="15.0" fill="rgb(205,2,0)" rx="2" ry="2" />
+<text  x="950.08" y="191.5" >emit_digits</text>
+</g>
+<g >
+<title>divide_dc_3n2n (578,202,691 samples, 0.92%)</title><rect x="124.8" y="165" width="10.8" height="15.0" fill="rgb(213,40,9)" rx="2" ry="2" />
+<text  x="127.81" y="175.5" ></text>
+</g>
+<g >
+<title>beman_big_int_multiply_long_runtime_avx512_ifma (1,379,284,811 samples, 2.19%)</title><rect x="447.9" y="69" width="25.8" height="15.0" fill="rgb(246,189,45)" rx="2" ry="2" />
+<text  x="450.87" y="79.5" >b..</text>
+</g>
+<g >
+<title>submul_single_limb (212,095,523 samples, 0.34%)</title><rect x="544.0" y="69" width="4.0" height="15.0" fill="rgb(236,144,34)" rx="2" ry="2" />
+<text  x="546.99" y="79.5" ></text>
+</g>
+<g >
+<title>beman_big_int_multiply_long_runtime_avx512_ifma (1,004,625,675 samples, 1.59%)</title><rect x="311.0" y="53" width="18.8" height="15.0" fill="rgb(246,189,45)" rx="2" ry="2" />
+<text  x="313.99" y="63.5" ></text>
+</g>
+<g >
+<title>build_power_table_for_value (2,816,450,931 samples, 4.47%)</title><rect x="22.3" y="277" width="52.7" height="15.0" fill="rgb(233,131,31)" rx="2" ry="2" />
+<text  x="25.30" y="287.5" >build..</text>
+</g>
+<g >
+<title>divide_dc_2n1n (2,062,504,805 samples, 3.27%)</title><rect x="540.5" y="181" width="38.6" height="15.0" fill="rgb(226,99,23)" rx="2" ry="2" />
+<text  x="543.51" y="191.5" >div..</text>
+</g>
+<g >
+<title>limbs_to_digits (62,334,130,100 samples, 98.85%)</title><rect x="22.3" y="293" width="1166.4" height="15.0" fill="rgb(253,223,53)" rx="2" ry="2" />
+<text  x="25.25" y="303.5" >limbs_to_digits</text>
+</g>
+<g >
+<title>divide_unsigned (672,512,653 samples, 1.07%)</title><rect x="863.1" y="197" width="12.5" height="15.0" fill="rgb(224,90,21)" rx="2" ry="2" />
+<text  x="866.06" y="207.5" ></text>
+</g>
+<g >
+<title>divide_dc_2n1n (1,187,999,381 samples, 1.88%)</title><rect x="479.6" y="165" width="22.3" height="15.0" fill="rgb(226,99,23)" rx="2" ry="2" />
+<text  x="482.64" y="175.5" >d..</text>
+</g>
+<g >
+<title>multiply_sliced (415,884,408 samples, 0.66%)</title><rect x="106.8" y="133" width="7.8" height="15.0" fill="rgb(254,229,54)" rx="2" ry="2" />
+<text  x="109.84" y="143.5" ></text>
+</g>
+<g >
+<title>multiply_runtime_any (243,571,835 samples, 0.39%)</title><rect x="357.7" y="149" width="4.5" height="15.0" fill="rgb(242,171,40)" rx="2" ry="2" />
+<text  x="360.65" y="159.5" ></text>
+</g>
+<g >
+<title>multiply_runtime_any (804,024,489 samples, 1.28%)</title><rect x="424.6" y="181" width="15.1" height="15.0" fill="rgb(242,171,40)" rx="2" ry="2" />
+<text  x="427.64" y="191.5" ></text>
+</g>
+<g >
+<title>toom_ladder (653,865,436 samples, 1.04%)</title><rect x="363.1" y="101" width="12.3" height="15.0" fill="rgb(207,9,2)" rx="2" ry="2" />
+<text  x="366.14" y="111.5" ></text>
+</g>
+<g >
+<title>run_ladder (368,821,547 samples, 0.58%)</title><rect x="273.5" y="101" width="6.9" height="15.0" fill="rgb(241,169,40)" rx="2" ry="2" />
+<text  x="276.48" y="111.5" ></text>
+</g>
+<g >
+<title>submul_single_limb (1,666,698,731 samples, 2.64%)</title><rect x="901.2" y="101" width="31.1" height="15.0" fill="rgb(236,144,34)" rx="2" ry="2" />
+<text  x="904.16" y="111.5" >su..</text>
+</g>
+<g >
+<title>operator (2,750,952,006 samples, 4.36%)</title><rect x="23.4" y="181" width="51.5" height="15.0" fill="rgb(254,228,54)" rx="2" ry="2" />
+<text  x="26.43" y="191.5" >opera..</text>
+</g>
+<g >
+<title>divide_dc_basecase (264,177,478 samples, 0.42%)</title><rect x="665.9" y="101" width="4.9" height="15.0" fill="rgb(220,73,17)" rx="2" ry="2" />
+<text  x="668.88" y="111.5" ></text>
+</g>
+<g >
+<title>divide_dc_basecase (970,781,107 samples, 1.54%)</title><rect x="876.2" y="117" width="18.2" height="15.0" fill="rgb(220,73,17)" rx="2" ry="2" />
+<text  x="879.19" y="127.5" ></text>
+</g>
+<g >
+<title>run_ladder (728,043,659 samples, 1.15%)</title><rect x="426.1" y="133" width="13.6" height="15.0" fill="rgb(241,169,40)" rx="2" ry="2" />
+<text  x="429.06" y="143.5" ></text>
+</g>
+<g >
+<title>divide_dc_3n2n (162,158,098 samples, 0.26%)</title><rect x="156.7" y="165" width="3.1" height="15.0" fill="rgb(213,40,9)" rx="2" ry="2" />
+<text  x="159.74" y="175.5" ></text>
+</g>
+<g >
+<title>multiply_karatsuba (1,125,077,380 samples, 1.78%)</title><rect x="309.6" y="69" width="21.1" height="15.0" fill="rgb(223,83,20)" rx="2" ry="2" />
+<text  x="312.62" y="79.5" ></text>
+</g>
+<g >
+<title>submul_single_limb (609,845,555 samples, 0.97%)</title><rect x="864.2" y="181" width="11.4" height="15.0" fill="rgb(236,144,34)" rx="2" ry="2" />
+<text  x="867.24" y="191.5" ></text>
+</g>
+<g >
+<title>divide_dc_2n1n (219,897,973 samples, 0.35%)</title><rect x="124.8" y="149" width="4.1" height="15.0" fill="rgb(226,99,23)" rx="2" ry="2" />
+<text  x="127.81" y="159.5" ></text>
+</g>
+<g >
+<title>divide_unsigned (528,656,316 samples, 0.84%)</title><rect x="747.4" y="149" width="9.9" height="15.0" fill="rgb(224,90,21)" rx="2" ry="2" />
+<text  x="750.38" y="159.5" ></text>
+</g>
+<g >
+<title>submul_single_limb (408,540,852 samples, 0.65%)</title><rect x="731.8" y="101" width="7.6" height="15.0" fill="rgb(236,144,34)" rx="2" ry="2" />
+<text  x="734.80" y="111.5" ></text>
+</g>
+<g >
+<title>divide_dc_2n1n (570,707,225 samples, 0.91%)</title><rect x="540.6" y="149" width="10.6" height="15.0" fill="rgb(226,99,23)" rx="2" ry="2" />
+<text  x="543.56" y="159.5" ></text>
+</g>
+<g >
+<title>beman_big_int_multiply_long_runtime (491,919,302 samples, 0.78%)</title><rect x="851.8" y="101" width="9.2" height="15.0" fill="rgb(237,149,35)" rx="2" ry="2" />
+<text  x="854.75" y="111.5" ></text>
+</g>
+<g >
+<title>toom_ladder (502,405,999 samples, 0.80%)</title><rect x="685.6" y="85" width="9.4" height="15.0" fill="rgb(207,9,2)" rx="2" ry="2" />
+<text  x="688.56" y="95.5" ></text>
+</g>
+<g >
+<title>divide_unsigned (285,405,500 samples, 0.45%)</title><rect x="551.3" y="85" width="5.3" height="15.0" fill="rgb(224,90,21)" rx="2" ry="2" />
+<text  x="554.29" y="95.5" ></text>
+</g>
+<g >
+<title>divide_burnikel_ziegler (3,396,051,950 samples, 5.39%)</title><rect x="875.8" y="181" width="63.6" height="15.0" fill="rgb(246,191,45)" rx="2" ry="2" />
+<text  x="878.84" y="191.5" >divide..</text>
+</g>
+<g >
+<title>divide_dc_3n2n (209,440,827 samples, 0.33%)</title><rect x="408.1" y="133" width="4.0" height="15.0" fill="rgb(213,40,9)" rx="2" ry="2" />
+<text  x="411.14" y="143.5" ></text>
+</g>
+<g >
+<title>multiply_karatsuba (398,065,213 samples, 0.63%)</title><rect x="135.6" y="85" width="7.5" height="15.0" fill="rgb(223,83,20)" rx="2" ry="2" />
+<text  x="138.63" y="95.5" ></text>
+</g>
+<g >
+<title>divide_dc_3n2n (332,293,770 samples, 0.53%)</title><rect x="579.1" y="117" width="6.2" height="15.0" fill="rgb(213,40,9)" rx="2" ry="2" />
+<text  x="582.11" y="127.5" ></text>
+</g>
+<g >
+<title>divide_dc_3n2n (596,699,242 samples, 0.95%)</title><rect x="719.7" y="133" width="11.2" height="15.0" fill="rgb(213,40,9)" rx="2" ry="2" />
+<text  x="722.70" y="143.5" ></text>
+</g>
+<g >
+<title>beman_big_int_multiply_long_runtime_avx512_ifma (329,521,061 samples, 0.52%)</title><rect x="273.7" y="37" width="6.2" height="15.0" fill="rgb(246,189,45)" rx="2" ry="2" />
+<text  x="276.72" y="47.5" ></text>
+</g>
+<g >
+<title>multiply_runtime_impl (1,293,518,601 samples, 2.05%)</title><rect x="623.8" y="149" width="24.2" height="15.0" fill="rgb(207,11,2)" rx="2" ry="2" />
+<text  x="626.76" y="159.5" >m..</text>
+</g>
+<g >
+<title>beman_big_int_multiply_long_runtime_avx512_ifma (1,877,248,117 samples, 2.98%)</title><rect x="195.9" y="69" width="35.2" height="15.0" fill="rgb(246,189,45)" rx="2" ry="2" />
+<text  x="198.92" y="79.5" >be..</text>
+</g>
+<g >
+<title>multiply_karatsuba (274,822,677 samples, 0.44%)</title><rect x="161.4" y="101" width="5.1" height="15.0" fill="rgb(223,83,20)" rx="2" ry="2" />
+<text  x="164.39" y="111.5" ></text>
+</g>
+<g >
+<title>submul_single_limb (172,772,674 samples, 0.27%)</title><rect x="408.3" y="85" width="3.3" height="15.0" fill="rgb(236,144,34)" rx="2" ry="2" />
+<text  x="411.34" y="95.5" ></text>
+</g>
+<g >
+<title>divide_dc_3n2n (170,095,291 samples, 0.27%)</title><rect x="387.2" y="133" width="3.2" height="15.0" fill="rgb(213,40,9)" rx="2" ry="2" />
+<text  x="390.18" y="143.5" ></text>
+</g>
+<g >
+<title>multiply_runtime (1,960,089,701 samples, 3.11%)</title><rect x="440.3" y="181" width="36.7" height="15.0" fill="rgb(224,90,21)" rx="2" ry="2" />
+<text  x="443.32" y="191.5" >mul..</text>
+</g>
+<g >
+<title>submul_single_limb (395,250,809 samples, 0.63%)</title><rect x="1174.4" y="101" width="7.4" height="15.0" fill="rgb(236,144,34)" rx="2" ry="2" />
+<text  x="1177.38" y="111.5" ></text>
+</g>
+<g >
+<title>beman_big_int_square_long_runtime_avx512_ifma (452,957,141 samples, 0.72%)</title><rect x="33.4" y="117" width="8.4" height="15.0" fill="rgb(240,161,38)" rx="2" ry="2" />
+<text  x="36.37" y="127.5" ></text>
+</g>
+<g >
+<title>divide_dc_3n2n (162,265,517 samples, 0.26%)</title><rect x="75.1" y="181" width="3.0" height="15.0" fill="rgb(213,40,9)" rx="2" ry="2" />
+<text  x="78.05" y="191.5" ></text>
+</g>
+<g >
+<title>divide_burnikel_ziegler (9,151,830,958 samples, 14.51%)</title><rect x="479.5" y="229" width="171.3" height="15.0" fill="rgb(246,191,45)" rx="2" ry="2" />
+<text  x="482.54" y="239.5" >divide_burnikel_ziegler</text>
+</g>
+<g >
+<title>multiply_runtime_any (1,293,518,601 samples, 2.05%)</title><rect x="623.8" y="181" width="24.2" height="15.0" fill="rgb(242,171,40)" rx="2" ry="2" />
+<text  x="626.76" y="191.5" >m..</text>
+</g>
+<g >
+<title>multiply_runtime (306,354,794 samples, 0.49%)</title><rect x="741.2" y="133" width="5.7" height="15.0" fill="rgb(224,90,21)" rx="2" ry="2" />
+<text  x="744.16" y="143.5" ></text>
+</g>
+<g >
+<title>multiply_runtime_any (175,177,174 samples, 0.28%)</title><rect x="848.0" y="133" width="3.3" height="15.0" fill="rgb(242,171,40)" rx="2" ry="2" />
+<text  x="851.04" y="143.5" ></text>
+</g>
+<g >
+<title>multiply_runtime_any (169,927,786 samples, 0.27%)</title><rect x="662.4" y="117" width="3.2" height="15.0" fill="rgb(242,171,40)" rx="2" ry="2" />
+<text  x="665.40" y="127.5" ></text>
+</g>
+<g >
+<title>multiply_runtime_impl (274,822,677 samples, 0.44%)</title><rect x="161.4" y="149" width="5.1" height="15.0" fill="rgb(207,11,2)" rx="2" ry="2" />
+<text  x="164.39" y="159.5" ></text>
+</g>
+<g >
+<title>multiply_karatsuba (254,051,936 samples, 0.40%)</title><rect x="101.8" y="69" width="4.8" height="15.0" fill="rgb(223,83,20)" rx="2" ry="2" />
+<text  x="104.84" y="79.5" ></text>
+</g>
+<g >
+<title>square_runtime (2,790,251,860 samples, 4.42%)</title><rect x="22.8" y="213" width="52.2" height="15.0" fill="rgb(218,62,15)" rx="2" ry="2" />
+<text  x="25.79" y="223.5" >squar..</text>
+</g>
+<g >
+<title>divide_dc_basecase (227,627,773 samples, 0.36%)</title><rect x="671.7" y="117" width="4.2" height="15.0" fill="rgb(220,73,17)" rx="2" ry="2" />
+<text  x="674.65" y="127.5" ></text>
+</g>
+<g >
+<title>divide_dc_3n2n (358,295,465 samples, 0.57%)</title><rect x="600.4" y="149" width="6.7" height="15.0" fill="rgb(213,40,9)" rx="2" ry="2" />
+<text  x="603.35" y="159.5" ></text>
+</g>
+<g >
+<title>emit_digits (6,599,514,312 samples, 10.47%)</title><rect x="1061.0" y="149" width="123.5" height="15.0" fill="rgb(205,2,0)" rx="2" ry="2" />
+<text  x="1064.03" y="159.5" >emit_digits</text>
+</g>
+<g >
+<title>beman_big_int_square_long_runtime_avx512_ifma (1,211,666,237 samples, 1.92%)</title><rect x="43.7" y="101" width="22.6" height="15.0" fill="rgb(240,161,38)" rx="2" ry="2" />
+<text  x="46.66" y="111.5" >b..</text>
+</g>
+<g >
+<title>submul_single_limb (274,578,048 samples, 0.44%)</title><rect x="600.8" y="101" width="5.2" height="15.0" fill="rgb(236,144,34)" rx="2" ry="2" />
+<text  x="603.84" y="111.5" ></text>
+</g>
+<g >
+<title>divide_dc_3n2n (392,531,674 samples, 0.62%)</title><rect x="384.1" y="149" width="7.4" height="15.0" fill="rgb(213,40,9)" rx="2" ry="2" />
+<text  x="387.15" y="159.5" ></text>
+</g>
+<g >
+<title>to_chars (62,943,801,104 samples, 99.82%)</title><rect x="10.9" y="341" width="1177.9" height="15.0" fill="rgb(216,51,12)" rx="2" ry="2" />
+<text  x="13.94" y="351.5" >to_chars</text>
+</g>
+<g >
+<title>multiply_runtime_any (687,911,516 samples, 1.09%)</title><rect x="362.5" y="165" width="12.9" height="15.0" fill="rgb(242,171,40)" rx="2" ry="2" />
+<text  x="365.50" y="175.5" ></text>
+</g>
+<g >
+<title>divide_dc_3n2n (170,181,597 samples, 0.27%)</title><rect x="153.6" y="149" width="3.1" height="15.0" fill="rgb(213,40,9)" rx="2" ry="2" />
+<text  x="156.56" y="159.5" ></text>
+</g>
+<g >
+<title>divide_unsigned (1,834,337,969 samples, 2.91%)</title><rect x="898.0" y="117" width="34.3" height="15.0" fill="rgb(224,90,21)" rx="2" ry="2" />
+<text  x="901.02" y="127.5" >di..</text>
+</g>
+<g >
+<title>beman_big_int_multiply_long_runtime_avx512_ifma (230,109,925 samples, 0.36%)</title><rect x="517.0" y="53" width="4.3" height="15.0" fill="rgb(246,189,45)" rx="2" ry="2" />
+<text  x="519.96" y="63.5" ></text>
+</g>
+<g >
+<title>multiply_runtime_any (298,353,930 samples, 0.47%)</title><rect x="393.8" y="149" width="5.6" height="15.0" fill="rgb(242,171,40)" rx="2" ry="2" />
+<text  x="396.79" y="159.5" ></text>
+</g>
+<g >
+<title>toom_ladder (332,185,966 samples, 0.53%)</title><rect x="300.1" y="101" width="6.2" height="15.0" fill="rgb(207,9,2)" rx="2" ry="2" />
+<text  x="303.07" y="111.5" ></text>
+</g>
+<g >
+<title>divide_dc_2n1n (1,001,820,634 samples, 1.59%)</title><rect x="808.7" y="149" width="18.8" height="15.0" fill="rgb(226,99,23)" rx="2" ry="2" />
+<text  x="811.72" y="159.5" ></text>
+</g>
+<g >
+<title>multiply_karatsuba (2,309,253,426 samples, 3.66%)</title><rect x="192.3" y="101" width="43.2" height="15.0" fill="rgb(223,83,20)" rx="2" ry="2" />
+<text  x="195.30" y="111.5" >mult..</text>
+</g>
+<g >
+<title>multiply_runtime (497,182,230 samples, 0.79%)</title><rect x="614.0" y="149" width="9.3" height="15.0" fill="rgb(224,90,21)" rx="2" ry="2" />
+<text  x="617.01" y="159.5" ></text>
+</g>
+<g >
+<title>beman_big_int_multiply_long_runtime_avx512_ifma (199,001,791 samples, 0.32%)</title><rect x="570.1" y="85" width="3.7" height="15.0" fill="rgb(246,189,45)" rx="2" ry="2" />
+<text  x="573.10" y="95.5" ></text>
+</g>
+<g >
+<title>__libc_start_main_impl (63,057,935,286 samples, 100.00%)</title><rect x="10.0" y="469" width="1180.0" height="15.0" fill="rgb(218,63,15)" rx="2" ry="2" />
+<text  x="13.00" y="479.5" >__libc_start_main_impl</text>
+</g>
+<g >
+<title>toom_ladder (1,191,377,260 samples, 1.89%)</title><rect x="625.7" y="117" width="22.3" height="15.0" fill="rgb(207,9,2)" rx="2" ry="2" />
+<text  x="628.67" y="127.5" >t..</text>
+</g>
+<g >
+<title>divide_dc_3n2n (452,716,039 samples, 0.72%)</title><rect x="399.6" y="149" width="8.5" height="15.0" fill="rgb(213,40,9)" rx="2" ry="2" />
+<text  x="402.62" y="159.5" ></text>
+</g>
+<g >
+<title>multiply_runtime (232,991,130 samples, 0.37%)</title><rect x="714.8" y="117" width="4.3" height="15.0" fill="rgb(224,90,21)" rx="2" ry="2" />
+<text  x="717.76" y="127.5" ></text>
+</g>
+<g >
+<title>divide_unsigned (183,245,065 samples, 0.29%)</title><rect x="408.1" y="101" width="3.5" height="15.0" fill="rgb(224,90,21)" rx="2" ry="2" />
+<text  x="411.14" y="111.5" ></text>
+</g>
+<g >
+<title>toom_ladder (256,286,436 samples, 0.41%)</title><rect x="516.8" y="85" width="4.8" height="15.0" fill="rgb(207,9,2)" rx="2" ry="2" />
+<text  x="519.76" y="95.5" ></text>
+</g>
+<g >
+<title>divide_dc_2n1n (212,152,481 samples, 0.34%)</title><rect x="115.1" y="133" width="4.0" height="15.0" fill="rgb(226,99,23)" rx="2" ry="2" />
+<text  x="118.11" y="143.5" ></text>
+</g>
+<g >
+<title>divide_unsigned (777,300,115 samples, 1.23%)</title><rect x="1167.2" y="117" width="14.6" height="15.0" fill="rgb(224,90,21)" rx="2" ry="2" />
+<text  x="1170.23" y="127.5" ></text>
+</g>
+<g >
+<title>widening_mul (235,591,719 samples, 0.37%)</title><rect x="889.8" y="69" width="4.4" height="15.0" fill="rgb(231,124,29)" rx="2" ry="2" />
+<text  x="892.80" y="79.5" ></text>
+</g>
+<g >
+<title>divide_dc_3n2n (539,134,304 samples, 0.85%)</title><rect x="143.5" y="165" width="10.1" height="15.0" fill="rgb(213,40,9)" rx="2" ry="2" />
+<text  x="146.47" y="175.5" ></text>
+</g>
+<g >
+<title>multiply_karatsuba (1,083,512,371 samples, 1.72%)</title><rect x="166.8" y="117" width="20.3" height="15.0" fill="rgb(223,83,20)" rx="2" ry="2" />
+<text  x="169.83" y="127.5" ></text>
+</g>
+<g >
+<title>divide_dc_3n2n (3,460,015,792 samples, 5.49%)</title><rect x="375.6" y="197" width="64.7" height="15.0" fill="rgb(213,40,9)" rx="2" ry="2" />
+<text  x="378.57" y="207.5" >divide_..</text>
+</g>
+<g >
+<title>divide_dc_3n2n (219,897,973 samples, 0.35%)</title><rect x="124.8" y="133" width="4.1" height="15.0" fill="rgb(213,40,9)" rx="2" ry="2" />
+<text  x="127.81" y="143.5" ></text>
+</g>
+<g >
+<title>emit_digits (21,935,060,048 samples, 34.78%)</title><rect x="776.1" y="213" width="410.4" height="15.0" fill="rgb(205,2,0)" rx="2" ry="2" />
+<text  x="779.07" y="223.5" >emit_digits</text>
+</g>
+<g >
+<title>submul_single_limb (201,524,079 samples, 0.32%)</title><rect x="610.2" y="133" width="3.8" height="15.0" fill="rgb(236,144,34)" rx="2" ry="2" />
+<text  x="613.24" y="143.5" ></text>
+</g>
+<g >
+<title>multiply_runtime (292,813,655 samples, 0.46%)</title><rect x="932.4" y="117" width="5.5" height="15.0" fill="rgb(224,90,21)" rx="2" ry="2" />
+<text  x="935.40" y="127.5" ></text>
+</g>
+<g >
+<title>divide_dc_3n2n (431,867,036 samples, 0.68%)</title><rect x="75.1" y="213" width="8.0" height="15.0" fill="rgb(213,40,9)" rx="2" ry="2" />
+<text  x="78.05" y="223.5" ></text>
+</g>
+<g >
+<title>write_chunk_digits (803,180,346 samples, 1.27%)</title><rect x="1012.1" y="133" width="15.0" height="15.0" fill="rgb(221,77,18)" rx="2" ry="2" />
+<text  x="1015.12" y="143.5" ></text>
+</g>
+<g >
+<title>divide_dc_3n2n (463,025,575 samples, 0.73%)</title><rect x="486.6" y="133" width="8.7" height="15.0" fill="rgb(213,40,9)" rx="2" ry="2" />
+<text  x="489.59" y="143.5" ></text>
+</g>
+<g >
+<title>divide_unsigned (447,816,828 samples, 0.71%)</title><rect x="731.1" y="117" width="8.3" height="15.0" fill="rgb(224,90,21)" rx="2" ry="2" />
+<text  x="734.07" y="127.5" ></text>
+</g>
+<g >
+<title>square_karatsuba (2,517,905,743 samples, 3.99%)</title><rect x="26.5" y="149" width="47.1" height="15.0" fill="rgb(217,55,13)" rx="2" ry="2" />
+<text  x="29.47" y="159.5" >squa..</text>
+</g>
+<g >
+<title>multiply_runtime_impl (314,287,467 samples, 0.50%)</title><rect x="100.8" y="133" width="5.9" height="15.0" fill="rgb(207,11,2)" rx="2" ry="2" />
+<text  x="103.81" y="143.5" ></text>
+</g>
+<g >
+<title>multiply_runtime (850,662,117 samples, 1.35%)</title><rect x="522.2" y="149" width="16.0" height="15.0" fill="rgb(224,90,21)" rx="2" ry="2" />
+<text  x="525.24" y="159.5" ></text>
+</g>
+<g >
+<title>multiply_karatsuba (366,677,288 samples, 0.58%)</title><rect x="135.8" y="69" width="6.9" height="15.0" fill="rgb(223,83,20)" rx="2" ry="2" />
+<text  x="138.83" y="79.5" ></text>
+</g>
+<g >
+<title>divide_dc_3n2n (2,062,504,805 samples, 3.27%)</title><rect x="540.5" y="165" width="38.6" height="15.0" fill="rgb(213,40,9)" rx="2" ry="2" />
+<text  x="543.51" y="175.5" >div..</text>
+</g>
+<g >
+<title>run_ladder (332,185,966 samples, 0.53%)</title><rect x="300.1" y="117" width="6.2" height="15.0" fill="rgb(241,169,40)" rx="2" ry="2" />
+<text  x="303.07" y="127.5" ></text>
+</g>
+<g >
+<title>multiply_runtime_any (2,997,844,114 samples, 4.75%)</title><rect x="187.4" y="213" width="56.1" height="15.0" fill="rgb(242,171,40)" rx="2" ry="2" />
+<text  x="190.45" y="223.5" >multi..</text>
+</g>
+<g >
+<title>divide_dc_3n2n (3,205,736,124 samples, 5.08%)</title><rect x="479.6" y="181" width="60.0" height="15.0" fill="rgb(213,40,9)" rx="2" ry="2" />
+<text  x="482.59" y="191.5" >divide..</text>
+</g>
+<g >
+<title>divide_dc_3n2n (589,079,590 samples, 0.93%)</title><rect x="703.7" y="133" width="11.1" height="15.0" fill="rgb(213,40,9)" rx="2" ry="2" />
+<text  x="706.73" y="143.5" ></text>
+</g>
+<g >
+<title>divide_dc_2n1n (170,181,597 samples, 0.27%)</title><rect x="153.6" y="165" width="3.1" height="15.0" fill="rgb(226,99,23)" rx="2" ry="2" />
+<text  x="156.56" y="175.5" ></text>
+</g>
+<g >
+<title>divide_dc_3n2n (507,748,479 samples, 0.81%)</title><rect x="280.9" y="149" width="9.5" height="15.0" fill="rgb(213,40,9)" rx="2" ry="2" />
+<text  x="283.92" y="159.5" ></text>
+</g>
+<g >
+<title>divide_dc_basecase (533,894,179 samples, 0.85%)</title><rect x="747.4" y="165" width="10.0" height="15.0" fill="rgb(220,73,17)" rx="2" ry="2" />
+<text  x="750.38" y="175.5" ></text>
+</g>
+<g >
+<title>divide_dc_3n2n (1,515,681,813 samples, 2.40%)</title><rect x="115.1" y="181" width="28.4" height="15.0" fill="rgb(213,40,9)" rx="2" ry="2" />
+<text  x="118.11" y="191.5" >di..</text>
+</g>
+<g >
+<title>divide_unsigned (227,627,773 samples, 0.36%)</title><rect x="671.7" y="101" width="4.2" height="15.0" fill="rgb(224,90,21)" rx="2" ry="2" />
+<text  x="674.65" y="111.5" ></text>
+</g>
+<g >
+<title>divide_dc_basecase (293,065,949 samples, 0.46%)</title><rect x="585.3" y="117" width="5.5" height="15.0" fill="rgb(220,73,17)" rx="2" ry="2" />
+<text  x="588.33" y="127.5" ></text>
+</g>
+<g >
+<title>multiply_runtime_any (891,960,754 samples, 1.41%)</title><rect x="757.4" y="165" width="16.7" height="15.0" fill="rgb(242,171,40)" rx="2" ry="2" />
+<text  x="760.37" y="175.5" ></text>
+</g>
+<g >
+<title>submul_single_limb (447,778,070 samples, 0.71%)</title><rect x="704.7" y="85" width="8.3" height="15.0" fill="rgb(236,144,34)" rx="2" ry="2" />
+<text  x="707.66" y="95.5" ></text>
+</g>
+<g >
+<title>divide_unsigned (246,122,019 samples, 0.39%)</title><rect x="679.9" y="133" width="4.6" height="15.0" fill="rgb(224,90,21)" rx="2" ry="2" />
+<text  x="682.93" y="143.5" ></text>
+</g>
+<g >
+<title>divide_dc_3n2n (1,716,435,382 samples, 2.72%)</title><rect x="776.3" y="149" width="32.1" height="15.0" fill="rgb(213,40,9)" rx="2" ry="2" />
+<text  x="779.26" y="159.5" >di..</text>
+</g>
+<g >
+<title>emit_digits (59,515,058,308 samples, 94.38%)</title><rect x="75.0" y="277" width="1113.7" height="15.0" fill="rgb(205,2,0)" rx="2" ry="2" />
+<text  x="78.00" y="287.5" >emit_digits</text>
+</g>
+<g >
+<title>beman_big_int_multiply_long_runtime_avx512_ifma (491,919,302 samples, 0.78%)</title><rect x="851.8" y="85" width="9.2" height="15.0" fill="rgb(246,189,45)" rx="2" ry="2" />
+<text  x="854.75" y="95.5" ></text>
+</g>
+<g >
+<title>divide_dc_3n2n (214,698,378 samples, 0.34%)</title><rect x="128.9" y="149" width="4.0" height="15.0" fill="rgb(213,40,9)" rx="2" ry="2" />
+<text  x="131.93" y="159.5" ></text>
+</g>
+<g >
+<title>run_ladder (468,362,533 samples, 0.74%)</title><rect x="614.6" y="117" width="8.7" height="15.0" fill="rgb(241,169,40)" rx="2" ry="2" />
+<text  x="617.55" y="127.5" ></text>
+</g>
+<g >
+<title>multiply_runtime_any (209,475,279 samples, 0.33%)</title><rect x="497.2" y="133" width="3.9" height="15.0" fill="rgb(242,171,40)" rx="2" ry="2" />
+<text  x="500.17" y="143.5" ></text>
+</g>
+<g >
+<title>divide_dc_3n2n (177,967,447 samples, 0.28%)</title><rect x="293.1" y="149" width="3.3" height="15.0" fill="rgb(213,40,9)" rx="2" ry="2" />
+<text  x="296.11" y="159.5" ></text>
+</g>
+<g >
+<title>submul_single_limb (217,300,373 samples, 0.34%)</title><rect x="680.5" y="117" width="4.0" height="15.0" fill="rgb(236,144,34)" rx="2" ry="2" />
+<text  x="683.47" y="127.5" ></text>
+</g>
+<g >
+<title>divide_dc_2n1n (243,147,023 samples, 0.39%)</title><rect x="89.4" y="149" width="4.5" height="15.0" fill="rgb(226,99,23)" rx="2" ry="2" />
+<text  x="92.35" y="159.5" ></text>
+</g>
+<g >
+<title>submul_single_limb (232,807,829 samples, 0.37%)</title><rect x="657.0" y="69" width="4.3" height="15.0" fill="rgb(236,144,34)" rx="2" ry="2" />
+<text  x="659.97" y="79.5" ></text>
+</g>
+<g >
+<title>borrowing_sub (198,943,883 samples, 0.32%)</title><rect x="1072.6" y="101" width="3.8" height="15.0" fill="rgb(205,0,0)" rx="2" ry="2" />
+<text  x="1075.64" y="111.5" ></text>
+</g>
+<g >
+<title>multiply_runtime_any (345,087,081 samples, 0.55%)</title><rect x="801.2" y="133" width="6.4" height="15.0" fill="rgb(242,171,40)" rx="2" ry="2" />
+<text  x="804.19" y="143.5" ></text>
+</g>
+<g >
+<title>divide_dc_3n2n (303,522,378 samples, 0.48%)</title><rect x="594.7" y="133" width="5.7" height="15.0" fill="rgb(213,40,9)" rx="2" ry="2" />
+<text  x="597.67" y="143.5" ></text>
+</g>
+<g >
+<title>divide_dc_basecase (248,741,568 samples, 0.39%)</title><rect x="679.9" y="149" width="4.7" height="15.0" fill="rgb(220,73,17)" rx="2" ry="2" />
+<text  x="682.93" y="159.5" ></text>
+</g>
+<g >
+<title>run_ladder (793,018,644 samples, 1.26%)</title><rect x="523.3" y="117" width="14.9" height="15.0" fill="rgb(241,169,40)" rx="2" ry="2" />
+<text  x="526.32" y="127.5" ></text>
+</g>
+<g >
+<title>multiply_karatsuba (2,426,959,292 samples, 3.85%)</title><rect x="191.0" y="117" width="45.4" height="15.0" fill="rgb(223,83,20)" rx="2" ry="2" />
+<text  x="194.03" y="127.5" >mult..</text>
+</g>
+<g >
+<title>divide_short_preinv_in_place (311,569,725 samples, 0.49%)</title><rect x="1006.0" y="133" width="5.9" height="15.0" fill="rgb(235,141,33)" rx="2" ry="2" />
+<text  x="1009.05" y="143.5" ></text>
+</g>
+<g >
+<title>run_ladder (314,287,467 samples, 0.50%)</title><rect x="100.8" y="117" width="5.9" height="15.0" fill="rgb(241,169,40)" rx="2" ry="2" />
+<text  x="103.81" y="127.5" ></text>
+</g>
+<g >
+<title>multiply_karatsuba (1,520,287,218 samples, 2.41%)</title><rect x="446.4" y="85" width="28.4" height="15.0" fill="rgb(223,83,20)" rx="2" ry="2" />
+<text  x="449.40" y="95.5" >mu..</text>
+</g>
+<g >
+<title>submul_single_limb (479,005,728 samples, 0.76%)</title><rect x="720.4" y="85" width="9.0" height="15.0" fill="rgb(236,144,34)" rx="2" ry="2" />
+<text  x="723.44" y="95.5" ></text>
+</g>
+<g >
+<title>divide_dc_2n1n (180,673,796 samples, 0.29%)</title><rect x="280.9" y="133" width="3.4" height="15.0" fill="rgb(226,99,23)" rx="2" ry="2" />
+<text  x="283.92" y="143.5" ></text>
+</g>
+<g >
+<title>divide_dc_3n2n (201,614,420 samples, 0.32%)</title><rect x="143.5" y="133" width="3.7" height="15.0" fill="rgb(213,40,9)" rx="2" ry="2" />
+<text  x="146.47" y="143.5" ></text>
+</g>
+<g >
+<title>divide_dc_2n1n (337,778,685 samples, 0.54%)</title><rect x="551.3" y="133" width="6.3" height="15.0" fill="rgb(226,99,23)" rx="2" ry="2" />
+<text  x="554.29" y="143.5" ></text>
+</g>
+<g >
+<title>multiply_karatsuba (185,894,255 samples, 0.29%)</title><rect x="497.5" y="53" width="3.4" height="15.0" fill="rgb(223,83,20)" rx="2" ry="2" />
+<text  x="500.46" y="63.5" ></text>
+</g>
+<g >
+<title>divide_burnikel_ziegler (9,192,914,073 samples, 14.58%)</title><rect x="75.0" y="261" width="172.0" height="15.0" fill="rgb(246,191,45)" rx="2" ry="2" />
+<text  x="78.00" y="271.5" >divide_burnikel_ziegler</text>
+</g>
+<g >
+<title>beman_big_int_multiply_long_runtime_avx512_ifma (175,177,174 samples, 0.28%)</title><rect x="848.0" y="69" width="3.3" height="15.0" fill="rgb(246,189,45)" rx="2" ry="2" />
+<text  x="851.04" y="79.5" ></text>
+</g>
+<g >
+<title>divide_dc_3n2n (834,813,064 samples, 1.32%)</title><rect x="551.2" y="149" width="15.7" height="15.0" fill="rgb(213,40,9)" rx="2" ry="2" />
+<text  x="554.24" y="159.5" ></text>
+</g>
+<g >
+<title>divide_dc_3n2n (1,088,529,385 samples, 1.73%)</title><rect x="501.9" y="165" width="20.3" height="15.0" fill="rgb(213,40,9)" rx="2" ry="2" />
+<text  x="504.87" y="175.5" ></text>
+</g>
+<g >
+<title>divide_dc_3n2n (418,672,836 samples, 0.66%)</title><rect x="153.6" y="181" width="7.8" height="15.0" fill="rgb(213,40,9)" rx="2" ry="2" />
+<text  x="156.56" y="191.5" ></text>
+</g>
+<g >
+<title>beman_big_int_multiply_long_runtime (306,354,794 samples, 0.49%)</title><rect x="741.2" y="101" width="5.7" height="15.0" fill="rgb(237,149,35)" rx="2" ry="2" />
+<text  x="744.16" y="111.5" ></text>
+</g>
+<g >
+<title>multiply_runtime_any (866,342,013 samples, 1.37%)</title><rect x="522.2" y="165" width="16.3" height="15.0" fill="rgb(242,171,40)" rx="2" ry="2" />
+<text  x="525.24" y="175.5" ></text>
+</g>
+<g >
+<title>divide_dc_3n2n (185,983,844 samples, 0.29%)</title><rect x="379.2" y="117" width="3.5" height="15.0" fill="rgb(213,40,9)" rx="2" ry="2" />
+<text  x="382.25" y="127.5" ></text>
+</g>
+<g >
+<title>divide_dc_3n2n (196,247,932 samples, 0.31%)</title><rect x="147.2" y="149" width="3.7" height="15.0" fill="rgb(213,40,9)" rx="2" ry="2" />
+<text  x="150.24" y="159.5" ></text>
+</g>
+<g >
+<title>toom_ladder (274,639,139 samples, 0.44%)</title><rect x="109.5" y="117" width="5.1" height="15.0" fill="rgb(207,9,2)" rx="2" ry="2" />
+<text  x="112.48" y="127.5" ></text>
+</g>
+<g >
+<title>divide_dc_3n2n (2,274,051,497 samples, 3.61%)</title><rect x="333.0" y="181" width="42.6" height="15.0" fill="rgb(213,40,9)" rx="2" ry="2" />
+<text  x="336.02" y="191.5" >divi..</text>
+</g>
+<g >
+<title>divide_dc_3n2n (418,883,140 samples, 0.66%)</title><rect x="376.3" y="133" width="7.8" height="15.0" fill="rgb(213,40,9)" rx="2" ry="2" />
+<text  x="379.31" y="143.5" ></text>
+</g>
+<g >
+<title>multiply_karatsuba (256,286,436 samples, 0.41%)</title><rect x="516.8" y="69" width="4.8" height="15.0" fill="rgb(223,83,20)" rx="2" ry="2" />
+<text  x="519.76" y="79.5" ></text>
+</g>
+<g >
+<title>divide_dc_2n1n (4,592,901,541 samples, 7.28%)</title><rect x="247.0" y="213" width="86.0" height="15.0" fill="rgb(226,99,23)" rx="2" ry="2" />
+<text  x="250.03" y="223.5" >divide_dc_..</text>
+</g>
+<g >
+<title>divide_dc_3n2n (230,412,243 samples, 0.37%)</title><rect x="85.0" y="149" width="4.4" height="15.0" fill="rgb(213,40,9)" rx="2" ry="2" />
+<text  x="88.04" y="159.5" ></text>
+</g>
+<g >
+<title>multiply_runtime (298,353,930 samples, 0.47%)</title><rect x="393.8" y="133" width="5.6" height="15.0" fill="rgb(224,90,21)" rx="2" ry="2" />
+<text  x="396.79" y="143.5" ></text>
+</g>
+<g >
+<title>divide_dc_3n2n (2,425,639,504 samples, 3.85%)</title><rect x="650.9" y="165" width="45.4" height="15.0" fill="rgb(213,40,9)" rx="2" ry="2" />
+<text  x="653.90" y="175.5" >divi..</text>
+</g>
+<g >
+<title>divide_dc_basecase (235,618,248 samples, 0.37%)</title><rect x="651.0" y="85" width="4.4" height="15.0" fill="rgb(220,73,17)" rx="2" ry="2" />
+<text  x="653.99" y="95.5" ></text>
+</g>
+<g >
+<title>divide_dc_3n2n (5,838,742,055 samples, 9.26%)</title><rect x="539.6" y="197" width="109.2" height="15.0" fill="rgb(213,40,9)" rx="2" ry="2" />
+<text  x="542.58" y="207.5" >divide_dc_3n2n</text>
+</g>
+<g >
+<title>submul_single_limb (245,977,996 samples, 0.39%)</title><rect x="594.9" y="85" width="4.6" height="15.0" fill="rgb(236,144,34)" rx="2" ry="2" />
+<text  x="597.92" y="95.5" ></text>
+</g>
+<g >
+<title>divide_unsigned (319,352,850 samples, 0.51%)</title><rect x="696.5" y="85" width="6.0" height="15.0" fill="rgb(224,90,21)" rx="2" ry="2" />
+<text  x="699.48" y="95.5" ></text>
+</g>
+<g >
+<title>multiply_karatsuba (1,023,246,681 samples, 1.62%)</title><rect x="167.2" y="101" width="19.2" height="15.0" fill="rgb(223,83,20)" rx="2" ry="2" />
+<text  x="170.22" y="111.5" ></text>
+</g>
+<g >
+<title>shape_sweep (63,059,036,451 samples, 100.00%)</title><rect x="10.0" y="501" width="1180.0" height="15.0" fill="rgb(242,172,41)" rx="2" ry="2" />
+<text  x="13.00" y="511.5" >shape_sweep</text>
+</g>
+<g >
+<title>divide_dc_3n2n (612,097,902 samples, 0.97%)</title><rect x="89.4" y="165" width="11.4" height="15.0" fill="rgb(213,40,9)" rx="2" ry="2" />
+<text  x="92.35" y="175.5" ></text>
+</g>
+<g >
+<title>multiply_karatsuba (233,099,520 samples, 0.37%)</title><rect x="357.8" y="69" width="4.4" height="15.0" fill="rgb(223,83,20)" rx="2" ry="2" />
+<text  x="360.80" y="79.5" ></text>
+</g>
+<g >
+<title>divide_dc_3n2n (243,147,023 samples, 0.39%)</title><rect x="89.4" y="133" width="4.5" height="15.0" fill="rgb(213,40,9)" rx="2" ry="2" />
+<text  x="92.35" y="143.5" ></text>
+</g>
+<g >
+<title>divide_dc_3n2n (1,339,474,077 samples, 2.12%)</title><rect x="399.6" y="181" width="25.0" height="15.0" fill="rgb(213,40,9)" rx="2" ry="2" />
+<text  x="402.57" y="191.5" >d..</text>
+</g>
+<g >
+<title>multiply_runtime_impl (235,096,155 samples, 0.37%)</title><rect x="420.2" y="133" width="4.4" height="15.0" fill="rgb(207,11,2)" rx="2" ry="2" />
+<text  x="423.19" y="143.5" ></text>
+</g>
+<g >
+<title>multiply_runtime_any (1,331,957,626 samples, 2.11%)</title><rect x="307.2" y="181" width="24.9" height="15.0" fill="rgb(242,171,40)" rx="2" ry="2" />
+<text  x="310.17" y="191.5" >m..</text>
+</g>
+<g >
+<title>multiply_runtime_impl (306,354,794 samples, 0.49%)</title><rect x="741.2" y="117" width="5.7" height="15.0" fill="rgb(207,11,2)" rx="2" ry="2" />
+<text  x="744.16" y="127.5" ></text>
+</g>
+<g >
+<title>multiply_runtime (274,822,677 samples, 0.44%)</title><rect x="161.4" y="165" width="5.1" height="15.0" fill="rgb(224,90,21)" rx="2" ry="2" />
+<text  x="164.39" y="175.5" ></text>
+</g>
+<g >
+<title>divide_dc_3n2n (672,466,479 samples, 1.07%)</title><rect x="776.5" y="117" width="12.5" height="15.0" fill="rgb(213,40,9)" rx="2" ry="2" />
+<text  x="779.46" y="127.5" ></text>
+</g>
+<g >
+<title>divide_burnikel_ziegler (9,149,211,315 samples, 14.51%)</title><rect x="479.6" y="213" width="171.2" height="15.0" fill="rgb(246,191,45)" rx="2" ry="2" />
+<text  x="482.59" y="223.5" >divide_burnikel_ziegler</text>
+</g>
+<g >
+<title>all (63,059,286,450 samples, 100%)</title><rect x="10.0" y="517" width="1180.0" height="15.0" fill="rgb(213,39,9)" rx="2" ry="2" />
+<text  x="13.00" y="527.5" ></text>
+</g>
+<g >
+<title>toom_ladder (468,362,533 samples, 0.74%)</title><rect x="614.6" y="101" width="8.7" height="15.0" fill="rgb(207,9,2)" rx="2" ry="2" />
+<text  x="617.55" y="111.5" ></text>
+</g>
+<g >
+<title>multiply_runtime_any (444,934,851 samples, 0.71%)</title><rect x="570.1" y="149" width="8.3" height="15.0" fill="rgb(242,171,40)" rx="2" ry="2" />
+<text  x="573.10" y="159.5" ></text>
+</g>
+<g >
+<title>beman_big_int_multiply_long_runtime_avx512_ifma (204,286,608 samples, 0.32%)</title><rect x="358.0" y="53" width="3.8" height="15.0" fill="rgb(246,189,45)" rx="2" ry="2" />
+<text  x="361.00" y="63.5" ></text>
+</g>
+<g >
+<title>toom_ladder (203,681,475 samples, 0.32%)</title><rect x="420.8" y="101" width="3.8" height="15.0" fill="rgb(207,9,2)" rx="2" ry="2" />
+<text  x="423.78" y="111.5" ></text>
+</g>
+<g >
+<title>divide_dc_basecase (183,245,065 samples, 0.29%)</title><rect x="408.1" y="117" width="3.5" height="15.0" fill="rgb(220,73,17)" rx="2" ry="2" />
+<text  x="411.14" y="127.5" ></text>
+</g>
+<g >
+<title>borrowing_sub (324,539,098 samples, 0.51%)</title><rect x="836.8" y="85" width="6.0" height="15.0" fill="rgb(205,0,0)" rx="2" ry="2" />
+<text  x="839.77" y="95.5" ></text>
+</g>
+<g >
+<title>square_karatsuba (1,442,076,764 samples, 2.29%)</title><rect x="41.8" y="117" width="27.0" height="15.0" fill="rgb(217,55,13)" rx="2" ry="2" />
+<text  x="44.85" y="127.5" >s..</text>
+</g>
+<g >
+<title>multiply_karatsuba (1,316,237,262 samples, 2.09%)</title><rect x="307.2" y="101" width="24.6" height="15.0" fill="rgb(223,83,20)" rx="2" ry="2" />
+<text  x="310.17" y="111.5" >m..</text>
+</g>
+<g >
+<title>divide_dc_basecase (1,093,805,415 samples, 1.73%)</title><rect x="827.6" y="133" width="20.4" height="15.0" fill="rgb(220,73,17)" rx="2" ry="2" />
+<text  x="830.57" y="143.5" ></text>
+</g>
+<g >
+<title>multiply_karatsuba (1,190,511,106 samples, 1.89%)</title><rect x="308.8" y="85" width="22.3" height="15.0" fill="rgb(223,83,20)" rx="2" ry="2" />
+<text  x="311.78" y="95.5" >m..</text>
+</g>
+<g >
+<title>multiply_runtime_any (491,919,302 samples, 0.78%)</title><rect x="851.8" y="149" width="9.2" height="15.0" fill="rgb(242,171,40)" rx="2" ry="2" />
+<text  x="854.75" y="159.5" ></text>
+</g>
+<g >
+<title>widening_mul (274,703,915 samples, 0.44%)</title><rect x="842.8" y="85" width="5.2" height="15.0" fill="rgb(231,124,29)" rx="2" ry="2" />
+<text  x="845.85" y="95.5" ></text>
+</g>
+<g >
+<title>divide_dc_3n2n (1,784,889,944 samples, 2.83%)</title><rect x="247.5" y="165" width="33.4" height="15.0" fill="rgb(213,40,9)" rx="2" ry="2" />
+<text  x="250.52" y="175.5" >di..</text>
+</g>
+<g >
+<title>divide_dc_3n2n (520,681,413 samples, 0.83%)</title><rect x="408.1" y="165" width="9.7" height="15.0" fill="rgb(213,40,9)" rx="2" ry="2" />
+<text  x="411.09" y="175.5" ></text>
+</g>
+<g >
+<title>beman_big_int_multiply_long_runtime (199,001,791 samples, 0.32%)</title><rect x="570.1" y="101" width="3.7" height="15.0" fill="rgb(237,149,35)" rx="2" ry="2" />
+<text  x="573.10" y="111.5" ></text>
+</g>
+<g >
+<title>divide_dc_3n2n (1,248,352,156 samples, 1.98%)</title><rect x="143.5" y="197" width="23.3" height="15.0" fill="rgb(213,40,9)" rx="2" ry="2" />
+<text  x="146.47" y="207.5" >d..</text>
+</g>
+<g >
+<title>submul_single_limb (253,855,570 samples, 0.40%)</title><rect x="558.0" y="85" width="4.8" height="15.0" fill="rgb(236,144,34)" rx="2" ry="2" />
+<text  x="561.00" y="95.5" ></text>
+</g>
+<g >
+<title>divide_unsigned (570,579,239 samples, 0.90%)</title><rect x="776.5" y="85" width="10.6" height="15.0" fill="rgb(224,90,21)" rx="2" ry="2" />
+<text  x="779.46" y="95.5" ></text>
+</g>
+<g >
+<title>divide_dc_2n1n (371,527,052 samples, 0.59%)</title><rect x="479.6" y="133" width="7.0" height="15.0" fill="rgb(226,99,23)" rx="2" ry="2" />
+<text  x="482.64" y="143.5" ></text>
+</g>
+<g >
+<title>divide_burnikel_ziegler (3,385,676,271 samples, 5.37%)</title><rect x="875.9" y="165" width="63.4" height="15.0" fill="rgb(246,191,45)" rx="2" ry="2" />
+<text  x="878.94" y="175.5" >divide..</text>
+</g>
+<g >
+<title>emit_digits (16,589,903,075 samples, 26.31%)</title><rect x="875.6" y="197" width="310.5" height="15.0" fill="rgb(205,2,0)" rx="2" ry="2" />
+<text  x="878.65" y="207.5" >emit_digits</text>
+</g>
+<g >
+<title>multiply_runtime_impl (415,884,408 samples, 0.66%)</title><rect x="106.8" y="149" width="7.8" height="15.0" fill="rgb(207,11,2)" rx="2" ry="2" />
+<text  x="109.84" y="159.5" ></text>
+</g>
+<g >
+<title>submul_single_limb (512,914,973 samples, 0.81%)</title><rect x="789.7" y="85" width="9.6" height="15.0" fill="rgb(236,144,34)" rx="2" ry="2" />
+<text  x="792.68" y="95.5" ></text>
+</g>
+<g >
+<title>divide_dc_basecase (873,659,910 samples, 1.39%)</title><rect x="808.7" y="117" width="16.4" height="15.0" fill="rgb(220,73,17)" rx="2" ry="2" />
+<text  x="811.72" y="127.5" ></text>
+</g>
+<g >
+<title>beman_big_int_multiply_long_runtime_avx512_ifma (209,194,462 samples, 0.33%)</title><rect x="110.0" y="69" width="3.9" height="15.0" fill="rgb(246,189,45)" rx="2" ry="2" />
+<text  x="113.02" y="79.5" ></text>
+</g>
+<g >
+<title>divide_unsigned (1,010,417,629 samples, 1.60%)</title><rect x="1061.3" y="133" width="18.9" height="15.0" fill="rgb(224,90,21)" rx="2" ry="2" />
+<text  x="1064.27" y="143.5" ></text>
+</g>
+<g >
+<title>multiply_runtime_impl (398,065,213 samples, 0.63%)</title><rect x="135.6" y="133" width="7.5" height="15.0" fill="rgb(207,11,2)" rx="2" ry="2" />
+<text  x="138.63" y="143.5" ></text>
+</g>
+<g >
+<title>multiply_runtime_any (306,354,794 samples, 0.49%)</title><rect x="741.2" y="149" width="5.7" height="15.0" fill="rgb(242,171,40)" rx="2" ry="2" />
+<text  x="744.16" y="159.5" ></text>
+</g>
+<g >
+<title>divide_dc_3n2n (1,243,261,486 samples, 1.97%)</title><rect x="376.3" y="165" width="23.3" height="15.0" fill="rgb(213,40,9)" rx="2" ry="2" />
+<text  x="379.31" y="175.5" >d..</text>
+</g>
+<g >
+<title>multiply_runtime (339,847,860 samples, 0.54%)</title><rect x="801.2" y="117" width="6.3" height="15.0" fill="rgb(224,90,21)" rx="2" ry="2" />
+<text  x="804.19" y="127.5" ></text>
+</g>
+<g >
+<title>beman_big_int_multiply_long_runtime_avx512_ifma (274,645,855 samples, 0.44%)</title><rect x="300.4" y="53" width="5.2" height="15.0" fill="rgb(246,189,45)" rx="2" ry="2" />
+<text  x="303.41" y="63.5" ></text>
+</g>
+<g >
+<title>multiply_runtime_any (575,562,810 samples, 0.91%)</title><rect x="684.6" y="149" width="10.8" height="15.0" fill="rgb(242,171,40)" rx="2" ry="2" />
+<text  x="687.59" y="159.5" ></text>
+</g>
+<g >
+<title>divide_dc_3n2n (8,627,530,556 samples, 13.68%)</title><rect x="83.1" y="229" width="161.5" height="15.0" fill="rgb(213,40,9)" rx="2" ry="2" />
+<text  x="86.13" y="239.5" >divide_dc_3n2n</text>
+</g>
+<g >
+<title>limbs_to_digits (62,334,130,100 samples, 98.85%)</title><rect x="22.3" y="309" width="1166.4" height="15.0" fill="rgb(253,223,53)" rx="2" ry="2" />
+<text  x="25.25" y="319.5" >limbs_to_digits</text>
+</g>
+<g >
+<title>divide_dc_2n1n (282,619,970 samples, 0.45%)</title><rect x="651.0" y="117" width="5.3" height="15.0" fill="rgb(226,99,23)" rx="2" ry="2" />
+<text  x="653.99" y="127.5" ></text>
+</g>
+<g >
+<title>submul_single_limb (510,352,153 samples, 0.81%)</title><rect x="777.6" y="69" width="9.5" height="15.0" fill="rgb(236,144,34)" rx="2" ry="2" />
+<text  x="780.59" y="79.5" ></text>
+</g>
+<g >
+<title>multiply_runtime_any (1,083,512,371 samples, 1.72%)</title><rect x="166.8" y="197" width="20.3" height="15.0" fill="rgb(242,171,40)" rx="2" ry="2" />
+<text  x="169.83" y="207.5" ></text>
+</g>
+<g >
+<title>multiply_karatsuba (2,133,796,018 samples, 3.38%)</title><rect x="193.8" y="85" width="39.9" height="15.0" fill="rgb(223,83,20)" rx="2" ry="2" />
+<text  x="196.77" y="95.5" >mul..</text>
+</g>
+<g >
+<title>divide_dc_3n2n (887,359,991 samples, 1.41%)</title><rect x="345.9" y="165" width="16.6" height="15.0" fill="rgb(213,40,9)" rx="2" ry="2" />
+<text  x="348.90" y="175.5" ></text>
+</g>
+<g >
+<title>divide_burnikel_ziegler (9,190,292,964 samples, 14.57%)</title><rect x="75.1" y="245" width="171.9" height="15.0" fill="rgb(246,191,45)" rx="2" ry="2" />
+<text  x="78.05" y="255.5" >divide_burnikel_ziegler</text>
+</g>
+<g >
+<title>multiply_runtime_impl (1,083,512,371 samples, 1.72%)</title><rect x="166.8" y="165" width="20.3" height="15.0" fill="rgb(207,11,2)" rx="2" ry="2" />
+<text  x="169.83" y="175.5" ></text>
+</g>
+<g >
+<title>multiply_runtime_impl (850,662,117 samples, 1.35%)</title><rect x="522.2" y="133" width="16.0" height="15.0" fill="rgb(207,11,2)" rx="2" ry="2" />
+<text  x="525.24" y="143.5" ></text>
+</g>
+<g >
+<title>unsigned long beman::big_int::detail::square_into (2,790,251,860 samples, 4.42%)</title><rect x="22.8" y="245" width="52.2" height="15.0" fill="rgb(230,117,28)" rx="2" ry="2" />
+<text  x="25.79" y="255.5" >unsig..</text>
+</g>
+<g >
+<title>multiply_runtime (314,287,467 samples, 0.50%)</title><rect x="100.8" y="149" width="5.9" height="15.0" fill="rgb(224,90,21)" rx="2" ry="2" />
+<text  x="103.81" y="159.5" ></text>
+</g>
+<g >
+<title>divide_dc_3n2n (7,754,411,344 samples, 12.30%)</title><rect x="333.0" y="213" width="145.1" height="15.0" fill="rgb(213,40,9)" rx="2" ry="2" />
+<text  x="335.97" y="223.5" >divide_dc_3n2n</text>
+</g>
+<g >
+<title>divide_dc_3n2n (277,574,277 samples, 0.44%)</title><rect x="543.5" y="117" width="5.2" height="15.0" fill="rgb(213,40,9)" rx="2" ry="2" />
+<text  x="546.55" y="127.5" ></text>
+</g>
+<g >
+<title>submul_single_limb (240,694,140 samples, 0.38%)</title><rect x="666.3" y="69" width="4.5" height="15.0" fill="rgb(236,144,34)" rx="2" ry="2" />
+<text  x="669.27" y="79.5" ></text>
+</g>
+<g >
+<title>toom_ladder (245,933,060 samples, 0.39%)</title><rect x="573.8" y="85" width="4.6" height="15.0" fill="rgb(207,9,2)" rx="2" ry="2" />
+<text  x="576.82" y="95.5" ></text>
+</g>
+<g >
+<title>divide_dc_2n1n (452,716,039 samples, 0.72%)</title><rect x="399.6" y="165" width="8.5" height="15.0" fill="rgb(226,99,23)" rx="2" ry="2" />
+<text  x="402.62" y="175.5" ></text>
+</g>
+<g >
+<title>divide_dc_basecase (279,981,500 samples, 0.44%)</title><rect x="579.1" y="101" width="5.2" height="15.0" fill="rgb(220,73,17)" rx="2" ry="2" />
+<text  x="582.11" y="111.5" ></text>
+</g>
+<g >
+<title>divide_dc_3n2n (790,106,996 samples, 1.25%)</title><rect x="651.0" y="133" width="14.8" height="15.0" fill="rgb(213,40,9)" rx="2" ry="2" />
+<text  x="653.99" y="143.5" ></text>
+</g>
+<g >
+<title>__libc_start_call_main (63,057,935,286 samples, 100.00%)</title><rect x="10.0" y="453" width="1180.0" height="15.0" fill="rgb(210,26,6)" rx="2" ry="2" />
+<text  x="13.00" y="463.5" >__libc_start_call_main</text>
+</g>
+<g >
+<title>divide_dc_3n2n (217,087,507 samples, 0.34%)</title><rect x="260.4" y="117" width="4.0" height="15.0" fill="rgb(213,40,9)" rx="2" ry="2" />
+<text  x="263.35" y="127.5" ></text>
+</g>
+<g >
+<title>divide_dc_3n2n (290,467,385 samples, 0.46%)</title><rect x="671.7" y="133" width="5.4" height="15.0" fill="rgb(213,40,9)" rx="2" ry="2" />
+<text  x="674.65" y="143.5" ></text>
+</g>
+<g >
+<title>toom_ladder (793,018,644 samples, 1.26%)</title><rect x="523.3" y="101" width="14.9" height="15.0" fill="rgb(207,9,2)" rx="2" ry="2" />
+<text  x="526.32" y="111.5" ></text>
+</g>
+<g >
+<title>divide_dc_basecase (288,025,708 samples, 0.46%)</title><rect x="551.3" y="101" width="5.4" height="15.0" fill="rgb(220,73,17)" rx="2" ry="2" />
+<text  x="554.29" y="111.5" ></text>
+</g>
+<g >
+<title>toom_ladder (1,316,237,262 samples, 2.09%)</title><rect x="307.2" y="117" width="24.6" height="15.0" fill="rgb(207,9,2)" rx="2" ry="2" />
+<text  x="310.17" y="127.5" >t..</text>
+</g>
+<g >
+<title>multiply_karatsuba (245,933,060 samples, 0.39%)</title><rect x="573.8" y="69" width="4.6" height="15.0" fill="rgb(223,83,20)" rx="2" ry="2" />
+<text  x="576.82" y="79.5" ></text>
+</g>
+<g >
+<title>multiply_karatsuba (274,639,139 samples, 0.44%)</title><rect x="109.5" y="101" width="5.1" height="15.0" fill="rgb(223,83,20)" rx="2" ry="2" />
+<text  x="112.48" y="111.5" ></text>
+</g>
+<g >
+<title>multiply_karatsuba (502,405,999 samples, 0.80%)</title><rect x="685.6" y="69" width="9.4" height="15.0" fill="rgb(223,83,20)" rx="2" ry="2" />
+<text  x="688.56" y="79.5" ></text>
+</g>
+<g >
+<title>multiply_runtime (889,341,401 samples, 1.41%)</title><rect x="757.4" y="149" width="16.6" height="15.0" fill="rgb(224,90,21)" rx="2" ry="2" />
+<text  x="760.37" y="159.5" ></text>
+</g>
+<g >
+<title>run_ladder (398,065,213 samples, 0.63%)</title><rect x="135.6" y="117" width="7.5" height="15.0" fill="rgb(241,169,40)" rx="2" ry="2" />
+<text  x="138.63" y="127.5" ></text>
+</g>
+<g >
+<title>multiply_runtime_impl (240,960,744 samples, 0.38%)</title><rect x="357.7" y="117" width="4.5" height="15.0" fill="rgb(207,11,2)" rx="2" ry="2" />
+<text  x="360.65" y="127.5" ></text>
+</g>
+<g >
+<title>divide_dc_3n2n (193,569,010 samples, 0.31%)</title><rect x="490.2" y="117" width="3.6" height="15.0" fill="rgb(213,40,9)" rx="2" ry="2" />
+<text  x="493.22" y="127.5" ></text>
+</g>
+<g >
+<title>divide_dc_3n2n (290,480,729 samples, 0.46%)</title><rect x="351.0" y="149" width="5.5" height="15.0" fill="rgb(213,40,9)" rx="2" ry="2" />
+<text  x="354.04" y="159.5" ></text>
+</g>
+<g >
+<title>run_ladder (1,316,237,262 samples, 2.09%)</title><rect x="307.2" y="133" width="24.6" height="15.0" fill="rgb(241,169,40)" rx="2" ry="2" />
+<text  x="310.17" y="143.5" >r..</text>
+</g>
+<g >
+<title>divide_burnikel_ziegler (4,636,077,734 samples, 7.35%)</title><rect x="776.3" y="181" width="86.7" height="15.0" fill="rgb(246,191,45)" rx="2" ry="2" />
+<text  x="779.26" y="191.5" >divide_bur..</text>
+</g>
+<g >
+<title>multiply_karatsuba (793,018,644 samples, 1.26%)</title><rect x="523.3" y="85" width="14.9" height="15.0" fill="rgb(223,83,20)" rx="2" ry="2" />
+<text  x="526.32" y="95.5" ></text>
+</g>
+<g >
+<title>multiply_karatsuba (686,145,746 samples, 1.09%)</title><rect x="426.5" y="85" width="12.8" height="15.0" fill="rgb(223,83,20)" rx="2" ry="2" />
+<text  x="429.50" y="95.5" ></text>
+</g>
+<g >
+<title>submul_single_limb (486,746,247 samples, 0.77%)</title><rect x="748.2" y="133" width="9.1" height="15.0" fill="rgb(236,144,34)" rx="2" ry="2" />
+<text  x="751.16" y="143.5" ></text>
+</g>
+<g >
+<title>multiply_runtime_impl (554,729,993 samples, 0.88%)</title><rect x="684.6" y="117" width="10.4" height="15.0" fill="rgb(207,11,2)" rx="2" ry="2" />
+<text  x="687.59" y="127.5" ></text>
+</g>
+<g >
+<title>divide_dc_3n2n (316,399,390 samples, 0.50%)</title><rect x="502.0" y="133" width="5.9" height="15.0" fill="rgb(213,40,9)" rx="2" ry="2" />
+<text  x="504.97" y="143.5" ></text>
+</g>
+<g >
+<title>multiply_runtime_impl (201,620,369 samples, 0.32%)</title><rect x="497.2" y="101" width="3.7" height="15.0" fill="rgb(207,11,2)" rx="2" ry="2" />
+<text  x="500.17" y="111.5" ></text>
+</g>
+<g >
+<title>divide_dc_basecase (476,562,970 samples, 0.76%)</title><rect x="704.1" y="117" width="8.9" height="15.0" fill="rgb(220,73,17)" rx="2" ry="2" />
+<text  x="707.12" y="127.5" ></text>
+</g>
+<g >
+<title>toom_ladder (1,083,512,371 samples, 1.72%)</title><rect x="166.8" y="133" width="20.3" height="15.0" fill="rgb(207,9,2)" rx="2" ry="2" />
+<text  x="169.83" y="143.5" ></text>
+</g>
+<g >
+<title>emit_digits (9,616,211,491 samples, 15.25%)</title><rect x="1005.2" y="165" width="180.0" height="15.0" fill="rgb(205,2,0)" rx="2" ry="2" />
+<text  x="1008.21" y="175.5" >emit_digits</text>
+</g>
+<g >
+<title>run_ladder (256,286,436 samples, 0.41%)</title><rect x="516.8" y="101" width="4.8" height="15.0" fill="rgb(241,169,40)" rx="2" ry="2" />
+<text  x="519.76" y="111.5" ></text>
+</g>
+<g >
+<title>divide_dc_3n2n (193,659,631 samples, 0.31%)</title><rect x="412.1" y="149" width="3.6" height="15.0" fill="rgb(213,40,9)" rx="2" ry="2" />
+<text  x="415.06" y="159.5" ></text>
+</g>
+<g >
+<title>divide_dc_2n1n (2,274,051,497 samples, 3.61%)</title><rect x="333.0" y="197" width="42.6" height="15.0" fill="rgb(226,99,23)" rx="2" ry="2" />
+<text  x="336.02" y="207.5" >divi..</text>
+</g>
+<g >
+<title>divide_dc_3n2n (175,489,599 samples, 0.28%)</title><rect x="403.3" y="133" width="3.3" height="15.0" fill="rgb(213,40,9)" rx="2" ry="2" />
+<text  x="406.29" y="143.5" ></text>
+</g>
+<g >
+<title>beman_big_int_multiply_long_runtime_avx512_ifma (243,395,770 samples, 0.39%)</title><rect x="161.8" y="69" width="4.5" height="15.0" fill="rgb(246,189,45)" rx="2" ry="2" />
+<text  x="164.79" y="79.5" ></text>
+</g>
+<g >
+<title>beman_big_int_multiply_long_runtime_avx512_ifma (615,417,420 samples, 0.98%)</title><rect x="427.3" y="69" width="11.6" height="15.0" fill="rgb(246,189,45)" rx="2" ry="2" />
+<text  x="430.33" y="79.5" ></text>
+</g>
+<g >
+<title>multiply_runtime_any (1,960,089,701 samples, 3.11%)</title><rect x="440.3" y="197" width="36.7" height="15.0" fill="rgb(242,171,40)" rx="2" ry="2" />
+<text  x="443.32" y="207.5" >mul..</text>
+</g>
+<g >
+<title>multiply_karatsuba (251,110,919 samples, 0.40%)</title><rect x="109.7" y="85" width="4.7" height="15.0" fill="rgb(223,83,20)" rx="2" ry="2" />
+<text  x="112.68" y="95.5" ></text>
+</g>
+<g >
+<title>multiply_runtime (1,316,237,262 samples, 2.09%)</title><rect x="307.2" y="165" width="24.6" height="15.0" fill="rgb(224,90,21)" rx="2" ry="2" />
+<text  x="310.17" y="175.5" >m..</text>
+</g>
+<g >
+<title>run_ladder (245,933,060 samples, 0.39%)</title><rect x="573.8" y="101" width="4.6" height="15.0" fill="rgb(241,169,40)" rx="2" ry="2" />
+<text  x="576.82" y="111.5" ></text>
+</g>
+<g >
+<title>divide_dc_basecase (510,439,023 samples, 0.81%)</title><rect x="719.8" y="117" width="9.6" height="15.0" fill="rgb(220,73,17)" rx="2" ry="2" />
+<text  x="722.85" y="127.5" ></text>
+</g>
+<g >
+<title>divide_dc_3n2n (193,546,247 samples, 0.31%)</title><rect x="486.6" y="101" width="3.6" height="15.0" fill="rgb(213,40,9)" rx="2" ry="2" />
+<text  x="489.59" y="111.5" ></text>
+</g>
+<g >
+<title>beman_big_int_multiply_long_runtime_avx512_ifma (193,215,181 samples, 0.31%)</title><rect x="420.9" y="69" width="3.6" height="15.0" fill="rgb(246,189,45)" rx="2" ry="2" />
+<text  x="423.92" y="79.5" ></text>
+</g>
+<g >
+<title>multiply_runtime (415,884,408 samples, 0.66%)</title><rect x="106.8" y="165" width="7.8" height="15.0" fill="rgb(224,90,21)" rx="2" ry="2" />
+<text  x="109.84" y="175.5" ></text>
+</g>
+<g >
+<title>divide_dc_basecase (269,474,768 samples, 0.43%)</title><rect x="656.3" y="101" width="5.1" height="15.0" fill="rgb(220,73,17)" rx="2" ry="2" />
+<text  x="659.33" y="111.5" ></text>
+</g>
+<g >
+<title>multiply_karatsuba (261,732,843 samples, 0.42%)</title><rect x="161.6" y="85" width="4.9" height="15.0" fill="rgb(223,83,20)" rx="2" ry="2" />
+<text  x="164.59" y="95.5" ></text>
+</g>
+<g >
+<title>toom_ladder (185,894,255 samples, 0.29%)</title><rect x="497.5" y="69" width="3.4" height="15.0" fill="rgb(207,9,2)" rx="2" ry="2" />
+<text  x="500.46" y="79.5" ></text>
+</g>
+<g >
+<title>divide_burnikel_ziegler (4,649,156,361 samples, 7.37%)</title><rect x="776.1" y="197" width="87.0" height="15.0" fill="rgb(246,191,45)" rx="2" ry="2" />
+<text  x="779.07" y="207.5" >divide_bur..</text>
+</g>
+<g >
+<title>divide_dc_2n1n (193,468,718 samples, 0.31%)</title><rect x="399.7" y="133" width="3.6" height="15.0" fill="rgb(226,99,23)" rx="2" ry="2" />
+<text  x="402.67" y="143.5" ></text>
+</g>
+<g >
+<title>beman_big_int_multiply_long_runtime_avx512_ifma (463,115,166 samples, 0.73%)</title><rect x="685.9" y="53" width="8.6" height="15.0" fill="rgb(246,189,45)" rx="2" ry="2" />
+<text  x="688.86" y="63.5" ></text>
+</g>
+<g >
+<title>divide_dc_3n2n (227,805,675 samples, 0.36%)</title><rect x="251.9" y="117" width="4.3" height="15.0" fill="rgb(213,40,9)" rx="2" ry="2" />
+<text  x="254.93" y="127.5" ></text>
+</g>
+<g >
+<title>square_karatsuba (2,193,417,735 samples, 3.48%)</title><rect x="30.7" y="133" width="41.0" height="15.0" fill="rgb(217,55,13)" rx="2" ry="2" />
+<text  x="33.68" y="143.5" >squ..</text>
+</g>
+<g >
+<title>multiply_karatsuba (725,423,555 samples, 1.15%)</title><rect x="426.1" y="101" width="13.6" height="15.0" fill="rgb(223,83,20)" rx="2" ry="2" />
+<text  x="429.11" y="111.5" ></text>
+</g>
+<g >
+<title>multiply_runtime_any (398,065,213 samples, 0.63%)</title><rect x="135.6" y="165" width="7.5" height="15.0" fill="rgb(242,171,40)" rx="2" ry="2" />
+<text  x="138.63" y="175.5" ></text>
+</g>
+<g >
+<title>multiply_runtime_impl (2,984,744,979 samples, 4.73%)</title><rect x="187.4" y="181" width="55.9" height="15.0" fill="rgb(207,11,2)" rx="2" ry="2" />
+<text  x="190.45" y="191.5" >multi..</text>
+</g>
+<g >
+<title>divide_dc_3n2n (274,822,673 samples, 0.44%)</title><rect x="345.9" y="133" width="5.1" height="15.0" fill="rgb(213,40,9)" rx="2" ry="2" />
+<text  x="348.90" y="143.5" ></text>
+</g>
+<g >
+<title>divide_dc_2n1n (227,687,527 samples, 0.36%)</title><rect x="333.4" y="133" width="4.3" height="15.0" fill="rgb(226,99,23)" rx="2" ry="2" />
+<text  x="336.41" y="143.5" ></text>
+</g>
+<g >
+<title>multiply_runtime_impl (272,010,839 samples, 0.43%)</title><rect x="516.5" y="117" width="5.1" height="15.0" fill="rgb(207,11,2)" rx="2" ry="2" />
+<text  x="519.47" y="127.5" ></text>
+</g>
+<g >
+<title>divide_dc_3n2n (4,592,901,541 samples, 7.28%)</title><rect x="247.0" y="197" width="86.0" height="15.0" fill="rgb(213,40,9)" rx="2" ry="2" />
+<text  x="250.03" y="207.5" >divide_dc_..</text>
+</g>
+<g >
+<title>divide_burnikel_ziegler (12,425,793,374 samples, 19.70%)</title><rect x="247.0" y="245" width="232.5" height="15.0" fill="rgb(246,191,45)" rx="2" ry="2" />
+<text  x="250.03" y="255.5" >divide_burnikel_ziegler</text>
+</g>
+<g >
+<title>widening_mul (240,590,291 samples, 0.38%)</title><rect x="820.5" y="69" width="4.5" height="15.0" fill="rgb(231,124,29)" rx="2" ry="2" />
+<text  x="823.52" y="79.5" ></text>
+</g>
+<g >
+<title>multiply_runtime_impl (387,170,401 samples, 0.61%)</title><rect x="273.1" y="117" width="7.3" height="15.0" fill="rgb(207,11,2)" rx="2" ry="2" />
+<text  x="276.13" y="127.5" ></text>
+</g>
+<g >
+<title>multiply_karatsuba (1,711,462,667 samples, 2.71%)</title><rect x="444.3" y="101" width="32.1" height="15.0" fill="rgb(223,83,20)" rx="2" ry="2" />
+<text  x="447.34" y="111.5" >mu..</text>
+</g>
+<g >
+<title>divide_dc_3n2n (683,302,603 samples, 1.08%)</title><rect x="247.5" y="133" width="12.8" height="15.0" fill="rgb(213,40,9)" rx="2" ry="2" />
+<text  x="250.52" y="143.5" ></text>
+</g>
+<g >
+<title>divide_dc_basecase (172,754,333 samples, 0.27%)</title><rect x="566.9" y="149" width="3.2" height="15.0" fill="rgb(220,73,17)" rx="2" ry="2" />
+<text  x="569.86" y="159.5" ></text>
+</g>
+<g >
+<title>submul_single_limb (800,344,522 samples, 1.27%)</title><rect x="810.0" y="85" width="15.0" height="15.0" fill="rgb(236,144,34)" rx="2" ry="2" />
+<text  x="813.05" y="95.5" ></text>
+</g>
+<g >
+<title>multiply_runtime (201,620,369 samples, 0.32%)</title><rect x="497.2" y="117" width="3.7" height="15.0" fill="rgb(224,90,21)" rx="2" ry="2" />
+<text  x="500.17" y="127.5" ></text>
+</g>
+<g >
+<title>divide_dc_3n2n (282,619,970 samples, 0.45%)</title><rect x="651.0" y="101" width="5.3" height="15.0" fill="rgb(213,40,9)" rx="2" ry="2" />
+<text  x="653.99" y="111.5" ></text>
+</g>
+<g >
+<title>beman_big_int_multiply_long_runtime_avx512_ifma (224,977,428 samples, 0.36%)</title><rect x="574.1" y="53" width="4.2" height="15.0" fill="rgb(246,189,45)" rx="2" ry="2" />
+<text  x="577.11" y="63.5" ></text>
+</g>
+<g >
+<title>multiply_runtime_impl (1,316,237,262 samples, 2.09%)</title><rect x="307.2" y="149" width="24.6" height="15.0" fill="rgb(207,11,2)" rx="2" ry="2" />
+<text  x="310.17" y="159.5" >m..</text>
+</g>
+<g >
+<title>divide_dc_3n2n (1,484,312,195 samples, 2.35%)</title><rect x="719.6" y="165" width="27.8" height="15.0" fill="rgb(213,40,9)" rx="2" ry="2" />
+<text  x="722.61" y="175.5" >d..</text>
+</g>
+<g >
+<title>toom_ladder (233,099,520 samples, 0.37%)</title><rect x="357.8" y="85" width="4.4" height="15.0" fill="rgb(207,9,2)" rx="2" ry="2" />
+<text  x="360.80" y="95.5" ></text>
+</g>
+<g >
+<title>divide_dc_2n1n (667,364,808 samples, 1.06%)</title><rect x="333.4" y="165" width="12.5" height="15.0" fill="rgb(226,99,23)" rx="2" ry="2" />
+<text  x="336.41" y="175.5" ></text>
+</g>
+<g >
+<title>divide_dc_3n2n (329,672,824 samples, 0.52%)</title><rect x="557.6" y="133" width="6.2" height="15.0" fill="rgb(213,40,9)" rx="2" ry="2" />
+<text  x="560.61" y="143.5" ></text>
+</g>
+<g >
+<title>divide_unsigned (962,922,081 samples, 1.53%)</title><rect x="876.2" y="101" width="18.0" height="15.0" fill="rgb(224,90,21)" rx="2" ry="2" />
+<text  x="879.19" y="111.5" ></text>
+</g>
+<g >
+<title>main (63,057,935,286 samples, 100.00%)</title><rect x="10.0" y="437" width="1180.0" height="15.0" fill="rgb(243,179,42)" rx="2" ry="2" />
+<text  x="13.00" y="447.5" >main</text>
+</g>
+<g >
+<title>multiply_runtime_any (499,802,502 samples, 0.79%)</title><rect x="614.0" y="165" width="9.4" height="15.0" fill="rgb(242,171,40)" rx="2" ry="2" />
+<text  x="617.01" y="175.5" ></text>
+</g>
+<g >
+<title>divide_unsigned (541,719,437 samples, 0.86%)</title><rect x="789.1" y="101" width="10.2" height="15.0" fill="rgb(224,90,21)" rx="2" ry="2" />
+<text  x="792.14" y="111.5" ></text>
+</g>
+<g >
+<title>divide_dc_3n2n (1,001,820,634 samples, 1.59%)</title><rect x="808.7" y="133" width="18.8" height="15.0" fill="rgb(213,40,9)" rx="2" ry="2" />
+<text  x="811.72" y="143.5" ></text>
+</g>
+<g >
+<title>emit_digits (50,296,023,557 samples, 79.76%)</title><rect x="247.0" y="261" width="941.2" height="15.0" fill="rgb(205,2,0)" rx="2" ry="2" />
+<text  x="250.03" y="271.5" >emit_digits</text>
+</g>
+<g >
+<title>multiply_karatsuba (831,877,939 samples, 1.32%)</title><rect x="758.4" y="85" width="15.6" height="15.0" fill="rgb(223,83,20)" rx="2" ry="2" />
+<text  x="761.40" y="95.5" ></text>
+</g>
+<g >
+<title>divide_unsigned (476,562,970 samples, 0.76%)</title><rect x="704.1" y="101" width="8.9" height="15.0" fill="rgb(224,90,21)" rx="2" ry="2" />
+<text  x="707.12" y="111.5" ></text>
+</g>
+<g >
+<title>multiply_runtime_impl (1,960,089,701 samples, 3.11%)</title><rect x="440.3" y="165" width="36.7" height="15.0" fill="rgb(207,11,2)" rx="2" ry="2" />
+<text  x="443.32" y="175.5" >mul..</text>
+</g>
+<g >
+<title>borrowing_sub (256,212,425 samples, 0.41%)</title><rect x="815.7" y="69" width="4.8" height="15.0" fill="rgb(205,0,0)" rx="2" ry="2" />
+<text  x="818.73" y="79.5" ></text>
+</g>
+<g >
+<title>divide_dc_basecase (300,771,780 samples, 0.48%)</title><rect x="600.4" y="133" width="5.6" height="15.0" fill="rgb(220,73,17)" rx="2" ry="2" />
+<text  x="603.35" y="143.5" ></text>
+</g>
+<g >
+<title>multiply_runtime_any (235,096,155 samples, 0.37%)</title><rect x="420.2" y="165" width="4.4" height="15.0" fill="rgb(242,171,40)" rx="2" ry="2" />
+<text  x="423.19" y="175.5" ></text>
+</g>
+<g >
+<title>divide_dc_3n2n (248,676,540 samples, 0.39%)</title><rect x="264.4" y="133" width="4.7" height="15.0" fill="rgb(213,40,9)" rx="2" ry="2" />
+<text  x="267.41" y="143.5" ></text>
+</g>
+<g >
+<title>submul_single_limb (248,648,507 samples, 0.39%)</title><rect x="579.7" y="69" width="4.6" height="15.0" fill="rgb(236,144,34)" rx="2" ry="2" />
+<text  x="582.69" y="79.5" ></text>
+</g>
+<g >
+<title>widening_mul (191,002,423 samples, 0.30%)</title><rect x="1076.6" y="101" width="3.5" height="15.0" fill="rgb(231,124,29)" rx="2" ry="2" />
+<text  x="1079.56" y="111.5" ></text>
+</g>
+<g >
+<title>multiply_runtime (1,083,512,371 samples, 1.72%)</title><rect x="166.8" y="181" width="20.3" height="15.0" fill="rgb(224,90,21)" rx="2" ry="2" />
+<text  x="169.83" y="191.5" ></text>
+</g>
+<g >
+<title>multiply_karatsuba (740,711,737 samples, 1.17%)</title><rect x="523.7" y="69" width="13.9" height="15.0" fill="rgb(223,83,20)" rx="2" ry="2" />
+<text  x="526.71" y="79.5" ></text>
+</g>
+<g >
+<title>multiply_runtime_any (418,502,880 samples, 0.66%)</title><rect x="106.8" y="181" width="7.9" height="15.0" fill="rgb(242,171,40)" rx="2" ry="2" />
+<text  x="109.84" y="191.5" ></text>
+</g>
+<g >
+<title>divide_dc_3n2n (329,679,152 samples, 0.52%)</title><rect x="585.3" y="133" width="6.2" height="15.0" fill="rgb(213,40,9)" rx="2" ry="2" />
+<text  x="588.33" y="143.5" ></text>
+</g>
+<g >
+<title>divide_unsigned (235,618,248 samples, 0.37%)</title><rect x="651.0" y="69" width="4.4" height="15.0" fill="rgb(224,90,21)" rx="2" ry="2" />
+<text  x="653.99" y="79.5" ></text>
+</g>
+<g >
+<title>divide_dc_3n2n (1,297,693,592 samples, 2.06%)</title><rect x="827.5" y="149" width="24.3" height="15.0" fill="rgb(213,40,9)" rx="2" ry="2" />
+<text  x="830.47" y="159.5" >d..</text>
+</g>
+<g >
+<title>divide_dc_3n2n (667,364,808 samples, 1.06%)</title><rect x="333.4" y="149" width="12.5" height="15.0" fill="rgb(213,40,9)" rx="2" ry="2" />
+<text  x="336.41" y="159.5" ></text>
+</g>
+<g >
+<title>divide_dc_3n2n (489,514,611 samples, 0.78%)</title><rect x="290.4" y="165" width="9.2" height="15.0" fill="rgb(213,40,9)" rx="2" ry="2" />
+<text  x="293.42" y="175.5" ></text>
+</g>
+<g >
+<title>divide_dc_3n2n (570,707,225 samples, 0.91%)</title><rect x="540.6" y="133" width="10.6" height="15.0" fill="rgb(213,40,9)" rx="2" ry="2" />
+<text  x="543.56" y="143.5" ></text>
+</g>
+<g >
+<title>divide_dc_2n1n (1,784,889,944 samples, 2.83%)</title><rect x="247.5" y="181" width="33.4" height="15.0" fill="rgb(226,99,23)" rx="2" ry="2" />
+<text  x="250.52" y="191.5" >di..</text>
+</g>
+<g >
+<title>multiply_runtime_any (292,813,655 samples, 0.46%)</title><rect x="932.4" y="133" width="5.5" height="15.0" fill="rgb(242,171,40)" rx="2" ry="2" />
+<text  x="935.40" y="143.5" ></text>
+</g>
+<g >
+<title>run_ladder (1,083,512,371 samples, 1.72%)</title><rect x="166.8" y="149" width="20.3" height="15.0" fill="rgb(241,169,40)" rx="2" ry="2" />
+<text  x="169.83" y="159.5" ></text>
+</g>
+<g >
+<title>divide_dc_basecase (217,210,999 samples, 0.34%)</title><rect x="609.9" y="165" width="4.1" height="15.0" fill="rgb(220,73,17)" rx="2" ry="2" />
+<text  x="612.95" y="175.5" ></text>
+</g>
+<g >
+<title>multiply_runtime_impl (298,353,930 samples, 0.47%)</title><rect x="393.8" y="117" width="5.6" height="15.0" fill="rgb(207,11,2)" rx="2" ry="2" />
+<text  x="396.79" y="127.5" ></text>
+</g>
+<g >
+<title>borrowing_sub (484,011,488 samples, 0.77%)</title><rect x="915.2" y="85" width="9.0" height="15.0" fill="rgb(205,0,0)" rx="2" ry="2" />
+<text  x="918.16" y="95.5" ></text>
+</g>
+<g >
+<title>divide_dc_2n1n (274,822,673 samples, 0.44%)</title><rect x="345.9" y="149" width="5.1" height="15.0" fill="rgb(226,99,23)" rx="2" ry="2" />
+<text  x="348.90" y="159.5" ></text>
+</g>
+<g >
+<title>beman_big_int_multiply_long_runtime (292,813,655 samples, 0.46%)</title><rect x="932.4" y="85" width="5.5" height="15.0" fill="rgb(237,149,35)" rx="2" ry="2" />
+<text  x="935.40" y="95.5" ></text>
+</g>
+<g >
+<title>divide_unsigned (410,869,177 samples, 0.65%)</title><rect x="939.4" y="181" width="7.7" height="15.0" fill="rgb(224,90,21)" rx="2" ry="2" />
+<text  x="942.39" y="191.5" ></text>
+</g>
+<g >
+<title>borrowing_sub (308,960,543 samples, 0.49%)</title><rect x="884.0" y="69" width="5.8" height="15.0" fill="rgb(205,0,0)" rx="2" ry="2" />
+<text  x="887.01" y="79.5" ></text>
+</g>
+<g >
+<title>divide_dc_3n2n (251,341,895 samples, 0.40%)</title><rect x="93.9" y="149" width="4.7" height="15.0" fill="rgb(213,40,9)" rx="2" ry="2" />
+<text  x="96.90" y="159.5" ></text>
+</g>
+<g >
+<title>beman_big_int_multiply_long_runtime_avx512_ifma (974,089,276 samples, 1.54%)</title><rect x="627.9" y="69" width="18.2" height="15.0" fill="rgb(246,189,45)" rx="2" ry="2" />
+<text  x="630.87" y="79.5" ></text>
+</g>
+<g >
+<title>divide_dc_3n2n (2,161,196,645 samples, 3.43%)</title><rect x="897.9" y="149" width="40.5" height="15.0" fill="rgb(213,40,9)" rx="2" ry="2" />
+<text  x="900.92" y="159.5" >div..</text>
+</g>
+<g >
+<title>divide_unsigned (266,854,445 samples, 0.42%)</title><rect x="656.3" y="85" width="5.0" height="15.0" fill="rgb(224,90,21)" rx="2" ry="2" />
+<text  x="659.33" y="95.5" ></text>
+</g>
+<g >
+<title>run_tochars (63,057,935,286 samples, 100.00%)</title><rect x="10.0" y="421" width="1180.0" height="15.0" fill="rgb(213,38,9)" rx="2" ry="2" />
+<text  x="13.00" y="431.5" >run_tochars</text>
+</g>
+<g >
+<title>multiply_runtime (358,390,241 samples, 0.57%)</title><rect x="299.6" y="149" width="6.7" height="15.0" fill="rgb(224,90,21)" rx="2" ry="2" />
+<text  x="302.58" y="159.5" ></text>
+</g>
+<g >
+<title>divide_dc_3n2n (831,913,479 samples, 1.32%)</title><rect x="579.1" y="149" width="15.6" height="15.0" fill="rgb(213,40,9)" rx="2" ry="2" />
+<text  x="582.11" y="159.5" ></text>
+</g>
+<g >
+<title>divide_dc_2n1n (683,302,603 samples, 1.08%)</title><rect x="247.5" y="149" width="12.8" height="15.0" fill="rgb(226,99,23)" rx="2" ry="2" />
+<text  x="250.52" y="159.5" ></text>
+</g>
+<g >
+<title>divide_dc_3n2n (1,187,999,381 samples, 1.88%)</title><rect x="479.6" y="149" width="22.3" height="15.0" fill="rgb(213,40,9)" rx="2" ry="2" />
+<text  x="482.64" y="159.5" >d..</text>
+</g>
+<g >
+<title>divide_short_preinv_in_place (1,222,396,431 samples, 1.94%)</title><rect x="1084.4" y="101" width="22.9" height="15.0" fill="rgb(235,141,33)" rx="2" ry="2" />
+<text  x="1087.44" y="111.5" >d..</text>
+</g>
+<g >
+<title>emit_digits (5,520,985,617 samples, 8.76%)</title><rect x="1080.2" y="133" width="103.3" height="15.0" fill="rgb(205,2,0)" rx="2" ry="2" />
+<text  x="1083.18" y="143.5" >emit_digits</text>
+</g>
+<g >
+<title>divide_dc_2n1n (303,522,378 samples, 0.48%)</title><rect x="594.7" y="149" width="5.7" height="15.0" fill="rgb(226,99,23)" rx="2" ry="2" />
+<text  x="597.67" y="159.5" ></text>
+</g>
+<g >
+<title>divide_dc_basecase (162,069,950 samples, 0.26%)</title><rect x="399.7" y="101" width="3.0" height="15.0" fill="rgb(220,73,17)" rx="2" ry="2" />
+<text  x="402.67" y="111.5" ></text>
+</g>
+<g >
+<title>divide_dc_3n2n (371,527,052 samples, 0.59%)</title><rect x="479.6" y="117" width="7.0" height="15.0" fill="rgb(213,40,9)" rx="2" ry="2" />
+<text  x="482.64" y="127.5" ></text>
+</g>
+<g >
+<title>divide_dc_3n2n (387,436,587 samples, 0.61%)</title><rect x="696.5" y="117" width="7.2" height="15.0" fill="rgb(213,40,9)" rx="2" ry="2" />
+<text  x="699.48" y="127.5" ></text>
+</g>
+<g >
+<title>multiply_runtime (175,177,174 samples, 0.28%)</title><rect x="848.0" y="117" width="3.3" height="15.0" fill="rgb(224,90,21)" rx="2" ry="2" />
+<text  x="851.04" y="127.5" ></text>
+</g>
+<g >
+<title>submul_single_limb (2,784,464,375 samples, 4.42%)</title><rect x="953.1" y="149" width="52.1" height="15.0" fill="rgb(236,144,34)" rx="2" ry="2" />
+<text  x="956.11" y="159.5" >submu..</text>
+</g>
+<g >
+<title>multiply_karatsuba (314,287,467 samples, 0.50%)</title><rect x="100.8" y="85" width="5.9" height="15.0" fill="rgb(223,83,20)" rx="2" ry="2" />
+<text  x="103.81" y="95.5" ></text>
+</g>
+<g >
+<title>multiply_runtime (398,065,213 samples, 0.63%)</title><rect x="135.6" y="149" width="7.5" height="15.0" fill="rgb(224,90,21)" rx="2" ry="2" />
+<text  x="138.63" y="159.5" ></text>
+</g>
+<g >
+<title>divide_dc_basecase (235,671,161 samples, 0.37%)</title><rect x="543.6" y="101" width="4.4" height="15.0" fill="rgb(220,73,17)" rx="2" ry="2" />
+<text  x="546.60" y="111.5" ></text>
+</g>
+<g >
+<title>divide_dc_3n2n (1,402,736,720 samples, 2.22%)</title><rect x="280.9" y="181" width="26.3" height="15.0" fill="rgb(213,40,9)" rx="2" ry="2" />
+<text  x="283.92" y="191.5" >d..</text>
+</g>
+<g >
+<title>divide_dc_3n2n (227,687,527 samples, 0.36%)</title><rect x="333.4" y="117" width="4.3" height="15.0" fill="rgb(213,40,9)" rx="2" ry="2" />
+<text  x="336.41" y="127.5" ></text>
+</g>
+<g >
+<title>multiply_karatsuba (957,904,686 samples, 1.52%)</title><rect x="168.0" y="85" width="17.9" height="15.0" fill="rgb(223,83,20)" rx="2" ry="2" />
+<text  x="170.96" y="95.5" ></text>
+</g>
+<g >
+<title>divide_dc_2n1n (518,497,629 samples, 0.82%)</title><rect x="115.1" y="165" width="9.7" height="15.0" fill="rgb(226,99,23)" rx="2" ry="2" />
+<text  x="118.11" y="175.5" ></text>
+</g>
+<g >
+<title>beman_big_int_multiply_long_runtime (337,227,397 samples, 0.53%)</title><rect x="801.2" y="85" width="6.3" height="15.0" fill="rgb(237,149,35)" rx="2" ry="2" />
+<text  x="804.24" y="95.5" ></text>
+</g>
+<g >
+<title>widening_mul (434,360,037 samples, 0.69%)</title><rect x="924.2" y="85" width="8.1" height="15.0" fill="rgb(231,124,29)" rx="2" ry="2" />
+<text  x="927.22" y="95.5" ></text>
+</g>
+<g >
+<title>run_ladder (274,878,452 samples, 0.44%)</title><rect x="394.2" y="101" width="5.2" height="15.0" fill="rgb(241,169,40)" rx="2" ry="2" />
+<text  x="397.23" y="111.5" ></text>
+</g>
+<g >
+<title>multiply_runtime_impl (175,177,174 samples, 0.28%)</title><rect x="848.0" y="101" width="3.3" height="15.0" fill="rgb(207,11,2)" rx="2" ry="2" />
+<text  x="851.04" y="111.5" ></text>
+</g>
+<g >
+<title>beman_big_int_multiply_long_runtime_avx512_ifma (337,227,397 samples, 0.53%)</title><rect x="801.2" y="69" width="6.3" height="15.0" fill="rgb(246,189,45)" rx="2" ry="2" />
+<text  x="804.24" y="79.5" ></text>
+</g>
+<g >
+<title>divide_dc_2n1n (1,174,737,894 samples, 1.86%)</title><rect x="875.9" y="149" width="22.0" height="15.0" fill="rgb(226,99,23)" rx="2" ry="2" />
+<text  x="878.94" y="159.5" >d..</text>
+</g>
+<g >
+<title>run_ladder (233,099,520 samples, 0.37%)</title><rect x="357.8" y="101" width="4.4" height="15.0" fill="rgb(241,169,40)" rx="2" ry="2" />
+<text  x="360.80" y="111.5" ></text>
+</g>
+<g >
+<title>divide_dc_3n2n (1,172,117,810 samples, 1.86%)</title><rect x="876.0" y="133" width="21.9" height="15.0" fill="rgb(213,40,9)" rx="2" ry="2" />
+<text  x="878.99" y="143.5" >d..</text>
+</g>
+<g >
+<title>divide_dc_basecase (570,579,239 samples, 0.90%)</title><rect x="776.5" y="101" width="10.6" height="15.0" fill="rgb(220,73,17)" rx="2" ry="2" />
+<text  x="779.46" y="111.5" ></text>
+</g>
+<g >
+<title>multiply_karatsuba (1,094,456,096 samples, 1.74%)</title><rect x="626.6" y="85" width="20.5" height="15.0" fill="rgb(223,83,20)" rx="2" ry="2" />
+<text  x="629.65" y="95.5" ></text>
+</g>
+<g >
+<title>divide_dc_2n1n (332,293,770 samples, 0.53%)</title><rect x="579.1" y="133" width="6.2" height="15.0" fill="rgb(226,99,23)" rx="2" ry="2" />
+<text  x="582.11" y="143.5" ></text>
+</g>
+<g >
+<title>beman_big_int_multiply_long_runtime_avx512_ifma (235,714,148 samples, 0.37%)</title><rect x="102.1" y="53" width="4.4" height="15.0" fill="rgb(246,189,45)" rx="2" ry="2" />
+<text  x="105.08" y="63.5" ></text>
+</g>
+<g >
+<title>divide_burnikel_ziegler (6,694,332,162 samples, 10.62%)</title><rect x="650.8" y="213" width="125.3" height="15.0" fill="rgb(246,191,45)" rx="2" ry="2" />
+<text  x="653.80" y="223.5" >divide_burnikel..</text>
+</g>
+<g >
+<title>divide_dc_2n1n (316,399,390 samples, 0.50%)</title><rect x="502.0" y="149" width="5.9" height="15.0" fill="rgb(226,99,23)" rx="2" ry="2" />
+<text  x="504.97" y="159.5" ></text>
+</g>
+<g >
+<title>multiply_karatsuba (203,681,475 samples, 0.32%)</title><rect x="420.8" y="85" width="3.8" height="15.0" fill="rgb(223,83,20)" rx="2" ry="2" />
+<text  x="423.78" y="95.5" ></text>
+</g>
+<g >
+<title>divide_unsigned (259,063,629 samples, 0.41%)</title><rect x="594.7" y="101" width="4.8" height="15.0" fill="rgb(224,90,21)" rx="2" ry="2" />
+<text  x="597.67" y="111.5" ></text>
+</g>
+<g >
+<title>divide_dc_3n2n (193,468,718 samples, 0.31%)</title><rect x="399.7" y="117" width="3.6" height="15.0" fill="rgb(213,40,9)" rx="2" ry="2" />
+<text  x="402.67" y="127.5" ></text>
+</g>
+<g >
+<title>emit_digits (37,836,167,415 samples, 60.00%)</title><rect x="479.5" y="245" width="708.1" height="15.0" fill="rgb(205,2,0)" rx="2" ry="2" />
+<text  x="482.54" y="255.5" >emit_digits</text>
+</g>
+<g >
+<title>multiply_runtime_impl (804,024,489 samples, 1.28%)</title><rect x="424.6" y="149" width="15.1" height="15.0" fill="rgb(207,11,2)" rx="2" ry="2" />
+<text  x="427.64" y="159.5" ></text>
+</g>
+<g >
+<title>void beman::big_int::detail::append_squared_power (2,816,450,931 samples, 4.47%)</title><rect x="22.3" y="261" width="52.7" height="15.0" fill="rgb(251,211,50)" rx="2" ry="2" />
+<text  x="25.30" y="271.5" >void ..</text>
+</g>
+<g >
+<title>divide_dc_3n2n (329,982,724 samples, 0.52%)</title><rect x="507.9" y="149" width="6.2" height="15.0" fill="rgb(213,40,9)" rx="2" ry="2" />
+<text  x="510.89" y="159.5" ></text>
+</g>
+<g >
+<title>beman_big_int_multiply_long_runtime (175,177,174 samples, 0.28%)</title><rect x="848.0" y="85" width="3.3" height="15.0" fill="rgb(237,149,35)" rx="2" ry="2" />
+<text  x="851.04" y="95.5" ></text>
+</g>
+<g >
+<title>multiply_runtime_impl (292,813,655 samples, 0.46%)</title><rect x="932.4" y="101" width="5.5" height="15.0" fill="rgb(207,11,2)" rx="2" ry="2" />
+<text  x="935.40" y="111.5" ></text>
+</g>
+<g >
+<title>beman_big_int_multiply_long_runtime_avx512_ifma (306,354,794 samples, 0.49%)</title><rect x="741.2" y="85" width="5.7" height="15.0" fill="rgb(246,189,45)" rx="2" ry="2" />
+<text  x="744.16" y="95.5" ></text>
+</g>
+<g >
+<title>multiply_runtime_impl (444,934,851 samples, 0.71%)</title><rect x="570.1" y="117" width="8.3" height="15.0" fill="rgb(207,11,2)" rx="2" ry="2" />
+<text  x="573.10" y="127.5" ></text>
+</g>
+<g >
+<title>divide_dc_3n2n (235,645,889 samples, 0.37%)</title><rect x="247.5" y="101" width="4.4" height="15.0" fill="rgb(213,40,9)" rx="2" ry="2" />
+<text  x="250.52" y="111.5" ></text>
+</g>
+<g >
+<title>beman_big_int_multiply_long_runtime_avx512_ifma (232,991,130 samples, 0.37%)</title><rect x="714.8" y="69" width="4.3" height="15.0" fill="rgb(246,189,45)" rx="2" ry="2" />
+<text  x="717.76" y="79.5" ></text>
+</g>
+<g >
+<title>beman_big_int_multiply_long_runtime_avx512_ifma (669,996,510 samples, 1.06%)</title><rect x="524.4" y="53" width="12.5" height="15.0" fill="rgb(246,189,45)" rx="2" ry="2" />
+<text  x="527.40" y="63.5" ></text>
+</g>
+<g >
+<title>borrowing_sub (188,447,169 samples, 0.30%)</title><rect x="869.2" y="165" width="3.6" height="15.0" fill="rgb(205,0,0)" rx="2" ry="2" />
+<text  x="872.23" y="175.5" ></text>
+</g>
+<g >
+<title>divide_dc_3n2n (1,238,298,073 samples, 1.96%)</title><rect x="696.4" y="149" width="23.2" height="15.0" fill="rgb(213,40,9)" rx="2" ry="2" />
+<text  x="699.43" y="159.5" >d..</text>
+</g>
+<g >
+<title>basecase_limbs_to_digits (4,628,472,982 samples, 7.34%)</title><rect x="1080.5" y="117" width="86.6" height="15.0" fill="rgb(223,84,20)" rx="2" ry="2" />
+<text  x="1083.47" y="127.5" >basecase_l..</text>
+</g>
+<g >
+<title>multiply_karatsuba (1,891,955,304 samples, 3.00%)</title><rect x="441.6" y="117" width="35.4" height="15.0" fill="rgb(223,83,20)" rx="2" ry="2" />
+<text  x="444.59" y="127.5" >mul..</text>
+</g>
+<g >
+<title>divide_unsigned (274,737,894 samples, 0.44%)</title><rect x="557.6" y="101" width="5.2" height="15.0" fill="rgb(224,90,21)" rx="2" ry="2" />
+<text  x="560.61" y="111.5" ></text>
+</g>
+<g >
+<title>measure&lt;::run_tochars (62,975,082,090 samples, 99.87%)</title><rect x="10.4" y="389" width="1178.4" height="15.0" fill="rgb(205,3,0)" rx="2" ry="2" />
+<text  x="13.36" y="399.5" >measure&lt;::run_tochars</text>
+</g>
+<g >
+<title>square_karatsuba (2,750,952,006 samples, 4.36%)</title><rect x="23.4" y="165" width="51.5" height="15.0" fill="rgb(217,55,13)" rx="2" ry="2" />
+<text  x="26.43" y="175.5" >squar..</text>
+</g>
+<g >
+<title>divide_unsigned (1,810,357,824 samples, 2.87%)</title><rect x="1027.1" y="149" width="33.9" height="15.0" fill="rgb(224,90,21)" rx="2" ry="2" />
+<text  x="1030.15" y="159.5" >di..</text>
+</g>
+<g >
+<title>divide_dc_2n1n (217,087,507 samples, 0.34%)</title><rect x="260.4" y="133" width="4.0" height="15.0" fill="rgb(226,99,23)" rx="2" ry="2" />
+<text  x="263.35" y="143.5" ></text>
+</g>
+<g >
+<title>multiply_karatsuba (546,660,160 samples, 0.87%)</title><rect x="364.6" y="69" width="10.2" height="15.0" fill="rgb(223,83,20)" rx="2" ry="2" />
+<text  x="367.56" y="79.5" ></text>
+</g>
+<g >
+<title>multiply_runtime_impl (339,847,860 samples, 0.54%)</title><rect x="801.2" y="101" width="6.3" height="15.0" fill="rgb(207,11,2)" rx="2" ry="2" />
+<text  x="804.19" y="111.5" ></text>
+</g>
+<g >
+<title>widening_mul (716,889,738 samples, 1.14%)</title><rect x="991.8" y="133" width="13.4" height="15.0" fill="rgb(231,124,29)" rx="2" ry="2" />
+<text  x="994.80" y="143.5" ></text>
+</g>
+<g >
+<title>borrowing_sub (473,200,844 samples, 0.75%)</title><rect x="1045.7" y="117" width="8.9" height="15.0" fill="rgb(205,0,0)" rx="2" ry="2" />
+<text  x="1048.71" y="127.5" ></text>
+</g>
+<g >
+<title>divide_unsigned (217,210,999 samples, 0.34%)</title><rect x="609.9" y="149" width="4.1" height="15.0" fill="rgb(224,90,21)" rx="2" ry="2" />
+<text  x="612.95" y="159.5" ></text>
+</g>
+<g >
+<title>beman_big_int_multiply_long_runtime_avx512_ifma (753,311,525 samples, 1.19%)</title><rect x="758.9" y="69" width="14.1" height="15.0" fill="rgb(246,189,45)" rx="2" ry="2" />
+<text  x="761.89" y="79.5" ></text>
+</g>
+<g >
+<title>multiply_karatsuba (360,960,582 samples, 0.57%)</title><rect x="273.5" y="53" width="6.7" height="15.0" fill="rgb(223,83,20)" rx="2" ry="2" />
+<text  x="276.48" y="63.5" ></text>
+</g>
+</g>
+</svg>
