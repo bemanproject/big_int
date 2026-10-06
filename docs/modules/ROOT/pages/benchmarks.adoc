@@ -31,7 +31,7 @@ lives inplace; `basic_big_int<128>` keeps two. This suite quantifies that
 optimization by timing `+`, `-`, `*`, and `/` for `big_int` next to the native
 builtin integer types, using https://github.com/google/benchmark[Google
 Benchmark] for the measurement loop. It is built from
-https://github.com/eisenwave/std-big-int/blob/main/tests/beman/big_int/perf/small_value_optimization.gbench.cpp[small_value_optimization.gbench.cpp].
+https://github.com/bemanproject/big_int/blob/main/tests/beman/big_int/perf/small_value_optimization.gbench.cpp[small_value_optimization.gbench.cpp].
 
 Three tiers are measured for every operation:
 
@@ -154,7 +154,7 @@ integer NTT of the default build, with a double-precision transform using AVX2
 kernels that is about twice as fast. So it changes nothing below the FFT gate,
 and its FFT gate for this combination was fitted as described under the cost
 model below. Timed end to end through the public operators with
-https://github.com/eisenwave/std-big-int/blob/main/tests/beman/big_int/perf/shape_sweep.cpp[shape_sweep.cpp]
+https://github.com/bemanproject/big_int/blob/main/tests/beman/big_int/perf/shape_sweep.cpp[shape_sweep.cpp]
 on 34 shapes (balanced and unbalanced products up to 1,000,000 limbs, and
 squares), it was up to 1.8x faster than the IFMA build with the integer NTT. It was
 3% and 4% slower at two balanced sizes (50,000 and 80,000 limbs), band tops where
@@ -196,7 +196,7 @@ unary operations and allocations, and it is timed end to end (the median of five
 runs). Runs with `beman::big_int`, `boost::cpp_int`, and `boost::gmp_int` are
 compared. At 256 bits the operands are four limbs, below every kernel and FFT
 threshold, so the build configuration does not matter here. Source:
-https://github.com/eisenwave/std-big-int/blob/main/tests/beman/big_int/perf/elliptic_ecc.perf.cpp[elliptic_ecc.perf.cpp].
+https://github.com/bemanproject/big_int/blob/main/tests/beman/big_int/perf/elliptic_ecc.perf.cpp[elliptic_ecc.perf.cpp].
 
 [cols="2,1,1", options="header"]
 |===
@@ -351,7 +351,7 @@ kernel earlier the more lopsided the operands are.
 ==== Tier-by-tier timings
 
 To isolate each tier, a stress benchmark
-(https://github.com/eisenwave/std-big-int/blob/main/tests/beman/big_int/multiplication_stress_bench.test.cpp[multiplication_stress_bench.test.cpp])
+(https://github.com/bemanproject/big_int/blob/main/tests/beman/big_int/multiplication_stress_bench.test.cpp[multiplication_stress_bench.test.cpp])
 calls the kernels directly on balanced operands, bypassing the dispatcher. The
 schoolbook tier is the runtime basecase kernel (the IFMA kernel here). Every
 higher tier is forced at the top level through its benchmark-only
@@ -454,7 +454,7 @@ image::crossover_square.png[Squaring algorithm crossover plot,align=center]
 The result of a multiplication adds the widths of its operands, so each row
 multiplies two operands of the stated width and the product is twice as wide. The
 times include allocating the result, for all three libraries. Source:
-https://github.com/eisenwave/std-big-int/blob/main/tests/beman/big_int/perf/mul_big_int_vs_gmp_cpp.perf.cpp[mul_big_int_vs_gmp_cpp.perf.cpp];
+https://github.com/bemanproject/big_int/blob/main/tests/beman/big_int/perf/mul_big_int_vs_gmp_cpp.perf.cpp[mul_big_int_vs_gmp_cpp.perf.cpp];
 pass an operand width in limbs (and optionally a trial count) on the command line
 to reproduce a row.
 
@@ -489,7 +489,7 @@ A mixed sweep of 16,384 products with random widths from 4 to 16,384 limbs (the
 second operand 0.5x to 1.5x as wide as the first) checks every result against GMP
 and averages 2.2x GMP's time, a mean dominated by the widest operands (all below
 the FFT gate). See
-https://github.com/eisenwave/std-big-int/blob/main/tests/beman/big_int/perf/mul_big_int_vs_gmp_cpp.limbs.cpp[mul_big_int_vs_gmp_cpp.limbs.cpp].
+https://github.com/bemanproject/big_int/blob/main/tests/beman/big_int/perf/mul_big_int_vs_gmp_cpp.limbs.cpp[mul_big_int_vs_gmp_cpp.limbs.cpp].
 
 [#benchmarks_division]
 === Division
@@ -504,7 +504,7 @@ listed in the crossover table above.
 ==== Tier-by-tier timings
 
 A stress benchmark
-(https://github.com/eisenwave/std-big-int/blob/main/tests/beman/big_int/division_stress_bench.test.cpp[division_stress_bench.test.cpp])
+(https://github.com/bemanproject/big_int/blob/main/tests/beman/big_int/division_stress_bench.test.cpp[division_stress_bench.test.cpp])
 calls the three kernels directly, including their scratch setup, and takes the
 median over three random operand pairs of the best of five repetitions. On
 balanced 2n / n shapes:
@@ -529,7 +529,7 @@ As with multiplication, only the division itself is timed, with a stopwatch read
 immediately before and after the operation and the times summed and averaged over
 many trials. Each row divides an pass:[N]-digit numerator by an
 pass:[N/2]-digit denominator, producing an pass:[N/2]-digit quotient. Source:
-https://github.com/eisenwave/std-big-int/blob/main/tests/beman/big_int/perf/div_big_int_vs_gmp_cpp.perf.cpp[div_big_int_vs_gmp_cpp.perf.cpp].
+https://github.com/bemanproject/big_int/blob/main/tests/beman/big_int/perf/div_big_int_vs_gmp_cpp.perf.cpp[div_big_int_vs_gmp_cpp.perf.cpp].
 
 [cols="1,1,1,1,1,1", options="header"]
 |===
@@ -558,7 +558,7 @@ image::vs_libraries_div.png[big_int vs cpp_int vs gmp_int division plot,align=ce
 A mixed sweep of 16,384 quotients with divisors of 4 to 16,384 limbs and
 dividends 1.1x to 2.1x as wide checks every result against GMP and averages 2.0x
 GMP's time. See
-https://github.com/eisenwave/std-big-int/blob/main/tests/beman/big_int/perf/div_big_int_vs_gmp_cpp.limbs.cpp[div_big_int_vs_gmp_cpp.limbs.cpp].
+https://github.com/bemanproject/big_int/blob/main/tests/beman/big_int/perf/div_big_int_vs_gmp_cpp.limbs.cpp[div_big_int_vs_gmp_cpp.limbs.cpp].
 
 [#benchmarks_reproducing]
 === Reproducing the measurements
@@ -665,13 +665,13 @@ simply via creation of and inclusion of a single hand-coded assembly
 routine for schoolbook long multiplication.
 
 An adaption of the program
-https://github.com/eisenwave/std-big-int/blob/main/tests/beman/big_int/perf/mul_big_int_vs_gmp_cpp.limbs.cpp[mul_big_int_vs_gmp_cpp.limbs.cpp]
+https://github.com/bemanproject/big_int/blob/main/tests/beman/big_int/perf/mul_big_int_vs_gmp_cpp.limbs.cpp[mul_big_int_vs_gmp_cpp.limbs.cpp]
 has been used for this runtime result. The implementations of the assembly subroutines
 `beman_big_int_multiply_long_runtime()` for `x86_64` using GCC(clang)/GAS and using MSVC/MASM
 can be found in
-https://github.com/eisenwave/std-big-int/blob/main/src/multiply_long_runtime_x86_64_generic.s[multiply_long_runtime_x86_64_generic.s]
+https://github.com/bemanproject/big_int/blob/main/src/multiply_long_runtime_x86_64_generic.s[multiply_long_runtime_x86_64_generic.s]
 and
-https://github.com/eisenwave/std-big-int/blob/main/src/multiply_long_runtime_x86_64_generic.asm[multiply_long_runtime_x86_64_generic.asm],
+https://github.com/bemanproject/big_int/blob/main/src/multiply_long_runtime_x86_64_generic.asm[multiply_long_runtime_x86_64_generic.asm],
 respectively.
 
 At the moment, the assembly optimized routines can not be used within
@@ -717,9 +717,9 @@ Times are per square, measured on the same Intel(R) Core(TM) i9-11900K.
 |===
 
 The implementations can be found in
-https://github.com/eisenwave/std-big-int/blob/main/src/square_long_runtime_x86_64_generic.s[square_long_runtime_x86_64_generic.s]
+https://github.com/bemanproject/big_int/blob/main/src/square_long_runtime_x86_64_generic.s[square_long_runtime_x86_64_generic.s]
 and
-https://github.com/eisenwave/std-big-int/blob/main/src/square_long_runtime_x86_64_generic.asm[square_long_runtime_x86_64_generic.asm].
+https://github.com/bemanproject/big_int/blob/main/src/square_long_runtime_x86_64_generic.asm[square_long_runtime_x86_64_generic.asm].
 
 [#benchmarks_arch_opts_aarch64]
 === AArch64
@@ -774,11 +774,11 @@ multiplication routine.
 |===
 
 The implementations can be found in
-https://github.com/eisenwave/std-big-int/blob/main/src/multiply_long_runtime_aarch64_generic.S[multiply_long_runtime_aarch64_generic.S],
-https://github.com/eisenwave/std-big-int/blob/main/src/multiply_long_runtime_aarch64_generic.asm[multiply_long_runtime_aarch64_generic.asm],
-https://github.com/eisenwave/std-big-int/blob/main/src/square_long_runtime_aarch64_generic.S[square_long_runtime_aarch64_generic.S],
+https://github.com/bemanproject/big_int/blob/main/src/multiply_long_runtime_aarch64_generic.S[multiply_long_runtime_aarch64_generic.S],
+https://github.com/bemanproject/big_int/blob/main/src/multiply_long_runtime_aarch64_generic.asm[multiply_long_runtime_aarch64_generic.asm],
+https://github.com/bemanproject/big_int/blob/main/src/square_long_runtime_aarch64_generic.S[square_long_runtime_aarch64_generic.S],
 and
-https://github.com/eisenwave/std-big-int/blob/main/src/square_long_runtime_aarch64_generic.asm[square_long_runtime_aarch64_generic.asm].
+https://github.com/bemanproject/big_int/blob/main/src/square_long_runtime_aarch64_generic.asm[square_long_runtime_aarch64_generic.asm].
 
 With these basecases, `AArch64` uses schoolbook multiplication up to 112 limbs
 (the shorter operand's length) instead of 48, and the squaring basecase up to
@@ -813,42 +813,42 @@ schoolbook multiplication needs.
 == Source programs
 
 The programs behind these measurements live in
-https://github.com/eisenwave/std-big-int/tree/main/tests/beman/big_int/perf[tests/beman/big_int/perf].
+https://github.com/bemanproject/big_int/tree/main/tests/beman/big_int/perf[tests/beman/big_int/perf].
 
 [cols="2,3", options="header"]
 |===
 | Source file | Description
 
-| https://github.com/eisenwave/std-big-int/blob/main/tests/beman/big_int/perf/small_value_optimization.gbench.cpp[small_value_optimization.gbench.cpp]
+| https://github.com/bemanproject/big_int/blob/main/tests/beman/big_int/perf/small_value_optimization.gbench.cpp[small_value_optimization.gbench.cpp]
 | Google Benchmark comparison of `big_int` add/sub/mul/div against the builtin integer types, showcasing the small-value (inplace, no-allocation) optimization.
 
-| https://github.com/eisenwave/std-big-int/blob/main/tests/beman/big_int/perf/elliptic_ecc.perf.cpp[elliptic_ecc.perf.cpp]
+| https://github.com/bemanproject/big_int/blob/main/tests/beman/big_int/perf/elliptic_ecc.perf.cpp[elliptic_ecc.perf.cpp]
 | Elliptic-curve cryptography (ECDSA) overall performance gauge at modest limb counts.
 
-| https://github.com/eisenwave/std-big-int/blob/main/tests/beman/big_int/perf/mul_big_int_vs_gmp_cpp.perf.cpp[mul_big_int_vs_gmp_cpp.perf.cpp]
+| https://github.com/bemanproject/big_int/blob/main/tests/beman/big_int/perf/mul_big_int_vs_gmp_cpp.perf.cpp[mul_big_int_vs_gmp_cpp.perf.cpp]
 | Multiplication performance with fixed limb counts and timing.
 
-| https://github.com/eisenwave/std-big-int/blob/main/tests/beman/big_int/perf/mul_big_int_vs_gmp_cpp.limbs.cpp[mul_big_int_vs_gmp_cpp.limbs.cpp]
+| https://github.com/bemanproject/big_int/blob/main/tests/beman/big_int/perf/mul_big_int_vs_gmp_cpp.limbs.cpp[mul_big_int_vs_gmp_cpp.limbs.cpp]
 | Multiplication performance with mixed limb counts, with timing and numerical-correctness checks.
 
-| https://github.com/eisenwave/std-big-int/blob/main/tests/beman/big_int/perf/div_big_int_vs_gmp_cpp.perf.cpp[div_big_int_vs_gmp_cpp.perf.cpp]
+| https://github.com/bemanproject/big_int/blob/main/tests/beman/big_int/perf/div_big_int_vs_gmp_cpp.perf.cpp[div_big_int_vs_gmp_cpp.perf.cpp]
 | Division performance with fixed limb counts and timing.
 
-| https://github.com/eisenwave/std-big-int/blob/main/tests/beman/big_int/perf/div_big_int_vs_gmp_cpp.limbs.cpp[div_big_int_vs_gmp_cpp.limbs.cpp]
+| https://github.com/bemanproject/big_int/blob/main/tests/beman/big_int/perf/div_big_int_vs_gmp_cpp.limbs.cpp[div_big_int_vs_gmp_cpp.limbs.cpp]
 | Division performance with mixed limb counts, with timing and numerical-correctness checks.
 
-| https://github.com/eisenwave/std-big-int/blob/main/tests/beman/big_int/perf/shape_sweep.cpp[shape_sweep.cpp]
+| https://github.com/bemanproject/big_int/blob/main/tests/beman/big_int/perf/shape_sweep.cpp[shape_sweep.cpp]
 | End-to-end timing harness used for tuning: multiplication, squaring and division through the public operators over a list of operand shapes (balanced and unbalanced), with residue checks and an optional GMP column. Built as the `beman.big_int.benchmarks.shape_sweep` target.
 
-| https://github.com/eisenwave/std-big-int/blob/main/tests/beman/big_int/multiplication_stress_bench.test.cpp[multiplication_stress_bench.test.cpp]
+| https://github.com/bemanproject/big_int/blob/main/tests/beman/big_int/multiplication_stress_bench.test.cpp[multiplication_stress_bench.test.cpp]
 | Each multiplication and squaring tier (schoolbook kernels through FFT) forced at the top level on balanced operands; CSV output for `plot_crossover.py`.
 
-| https://github.com/eisenwave/std-big-int/blob/main/tests/beman/big_int/division_stress_bench.test.cpp[division_stress_bench.test.cpp]
+| https://github.com/bemanproject/big_int/blob/main/tests/beman/big_int/division_stress_bench.test.cpp[division_stress_bench.test.cpp]
 | The schoolbook, Burnikel-Ziegler and Barrett division kernels called directly on balanced, quotient-length and unbalanced shapes; CSV output for `plot_crossover.py --division`.
 
-| https://github.com/eisenwave/std-big-int/blob/main/tests/beman/big_int/perf/plot_crossover.py[plot_crossover.py]
+| https://github.com/bemanproject/big_int/blob/main/tests/beman/big_int/perf/plot_crossover.py[plot_crossover.py]
 | Plots the tier timings and crossovers of multiplication, squaring and division, and fits their empirical complexity.
 
-| https://github.com/eisenwave/std-big-int/blob/main/tests/beman/big_int/perf/plot_vs_libraries.py[plot_vs_libraries.py]
+| https://github.com/bemanproject/big_int/blob/main/tests/beman/big_int/perf/plot_vs_libraries.py[plot_vs_libraries.py]
 | Plots `big_int` against `cpp_int` and `gmp_int` for multiplication and division.
 |===

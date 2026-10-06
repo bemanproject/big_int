@@ -5,7 +5,7 @@ content:
   sources:
     - url: ..
       start_path: docs
-      edit_url: 'https://github.com/eisenwave/std-big-int/edit/develop/{path}'
+      edit_url: 'https://github.com/bemanproject/big_int/edit/develop/{path}'
 output:
   dir: html
 ui:

@@ -58,7 +58,7 @@ cmake --list-presets=workflow
 ----
 
 For details on building `beman.big_int` without using a CMake preset, refer to
-the https://github.com/eisenwave/std-big-int/blob/main/CONTRIBUTING.md[Contributing Guidelines].
+the https://github.com/bemanproject/big_int/blob/main/CONTRIBUTING.md[Contributing Guidelines].
 
 [#build_and_usage_simd]
 === Optional: SIMD-accelerated multiplication
