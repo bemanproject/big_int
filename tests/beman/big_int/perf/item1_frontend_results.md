@@ -60,8 +60,9 @@ benefits without recommending a default.
 - **Runs.** Before and after binaries were interleaved: seeds 1 and 2, two repeats each, so four runs per binary and machine
   (`gap_sweep.sh --ops add,sub,shl,shr,mul,sqr,divrem,fromchars --bands small,medium`). Reported values are the median of the
   four runs; divrem shapes of up to 32 limbs are the mean over the two seeds (the operands change the Knuth D path, see
-  caveats). Large-band spot checks are 3-round runs per seed. Raw CSVs are in `perf/item1/`
-  (`x64_*`, `mac_*`; `x64_gcc14_base*` and `x64_gcc14_base{64,128,256}_vecsort_*` are the earlier cf1cf54 baseline runs).
+  caveats). Large-band spot checks are 3-round runs per seed. The per-run CSVs (183 files) were aggregated and removed; the medians
+  and means behind every table here are in `perf/item1/` (section 10 lists the files): `final_x64.csv`, `final_m4.csv`,
+  `study.csv`, `shortcut.csv` and `shift_ab.csv`, each with its build configuration (`#const` keys) in the header.
 - **Binaries.** Before: harness at cf1cf54 (`base64`). After: `opt_1` (`new64`). The inline-capacity study uses `new64`,
   `new128`, `new256`, `new512` (`-DBEMAN_BIG_INT_SWEEP_INLINE_BITS`). The `#const` line of every binary was checked
   (`SIMD_MUL=1`, `ndebug=1`, `sweep_inline_bits`, `sweep_int_sizeof`, x64 `BMI2_ADX=1 AVX512_IFMA=1`, `gcc-14.3.0`), and
@@ -71,8 +72,9 @@ benefits without recommending a default.
 
 Cells read `before -> after`. `auto/gmpz` is the user-visible gap to GMP (above 1 means `big_int` is slower). The tables are
 the re-measurement on `opt_1` (the add/sub, shift and single-limb follow-ups and the mul-add fix included): all rows come
-from the d689f75 runs (`macr3_*`, `x64r3_*`) except the shl/shr rows, which were re-measured at b823c5f (`macr4_*`,
-`x64r4_*`), the commit that changes only the shift code; one interleaved check of add/sub/mul/sqr/divrem at b823c5f found
+from the d689f75 runs except the shl/shr rows, which were re-measured at b823c5f, the commit that changes only the shift
+code (`final_x64.csv` and `final_m4.csv`: `after_commit` says which; `d689f75_ns` and `first_9145b4e_ns` hold the earlier
+measurements); one interleaved check of add/sub/mul/sqr/divrem at b823c5f found
 nothing else moved. Rows are the median of four runs per binary. An earlier measurement of 9145b4e is described in
 section 3.6.
 
@@ -265,7 +267,7 @@ M4:
   (+35%) because `add_n_tail` did not reach the speed of `add_unsigned_spans` on x64; the follow-up loop shape (a plain loop
   under GCC, the 4-way one under clang) brings it to 581 ns, the baseline.
 - **Decimal `fromchars` regression is fixed** (it was +8-11% at 64-256 limbs-worth of digits at 9145b4e); see section 3.7
-  for the cause. Now x64 `auto` 64x10 2791 -> 2852 ns (+2%), 256x10 28564 -> 27920 (-2%), 2000x10 429k -> 386k (-10%),
+  for the cause. Now x64 `auto` 64x10 2790 -> 2852 ns (+2%), 256x10 28564 -> 27920 (-2%), 2000x10 429k -> 386k (-10%),
   16x10 +0.8%; 10000x10 is -5.3%. M4 is unchanged (<= +-1%).
 - **In-place shifts (`c <<= s; c >>= s`, per op) after the shift fix (b823c5f).** The history is: the first build
   (9145b4e, single in-place `lshift_copy`/`rshift_copy` pass) was faster than the baseline on M4 and slower on x64;
@@ -302,7 +304,7 @@ M4:
   - These are the open items for item 2: the x64 GCC in-place shift gap at >= 256 limbs (+5-8%; the baseline in-place path
     is faster than every variant tried), the sub-nanosecond small add/sub in-place rows on both machines, and the M4 small
     add `auto` rows (+1.1-1.3 ns).
-- **History.** The first measurement (opt_1 at 9145b4e, CSVs `x64_*`/`mac_*`) showed x64 add/sub `inplace` +23..+35% at
+- **History.** The first measurement (opt_1 at 9145b4e, the `first_9145b4e_ns` column) showed x64 add/sub `inplace` +23..+35% at
   >= 64 limbs, decimal `fromchars` +8-11%, and in-place shifts +10-13% on x64 but -30..-35% on M4. The follow-ups fixed the
   first two and the add/sub `auto` rows improved a further 20-26%; the in-place shift change in d689f75 traded the x64
   result for an M4 loss, and b823c5f (revert plus per-compiler loops) restored the M4 result and kept most of the x64 one.
@@ -557,6 +559,9 @@ The A/B was not repeated on d689f75.
 
 ## 7. Inline-capacity study
 
+**Decision (2026-10-06): the default inline capacity stays at 64 bits (`big_int`, one limb).** The data below (`study.csv`)
+is kept for reference.
+
 Measured on the 9145b4e tree (before the add/sub, shift and single-limb follow-ups and the mul-add fix); the study was not
 repeated on d689f75, so small add/sub/shift rows are a few ns better there at every N. The same front-end code with the
 inline capacity of the integer type set to N = 64 (`big_int`), 128, 256 and 512 bits.
@@ -745,14 +750,30 @@ tools/gap_sweep.sh <bin> out.csv --seed S --ops add,sub,shl,shr,mul,sqr,divrem,f
 #   mul 2000x2000 and 16384x16384; divrem 4096x2048; tochars/fromchars 10000x10
 # study: tools/gap_sweep.sh <new{64,128,256,512}> out.csv --seed S --ops add,sub,shl,shr,mul,sqr,divrem --bands small
 #        tools/gap_sweep.sh <bin> out.csv --ops vecsort --bands medium
-# tables: python3 -I tools/item1_tables.py item1 x64r3   (x64, mac, macr3 for the other sets) [small medium spots shortcut study]
-# regression check (rows more than 3% slower than base64): python3 -I tools/item1_regress.py item1 x64r3 3 [rows]
-# in-place shift A/B tables: python3 -I tools/item1_vshift.py item1 x64   (or: mac)
+# raw per-run CSVs (named <prefix>_<variant>_seed<S><rep>.csv etc.) are written by tools/item1_bench.sh and by the
+# re-measurement and A/B variants of it into any directory; they are not kept in the repository. Tables, the regression
+# check and the summaries are produced from such a directory:
+# tables: python3 -I tools/item1_tables.py <raw_dir> x64r3   (x64, mac, macr3 for the other sets) [small medium spots shortcut study]
+# regression check (rows more than 3% slower than base64): python3 -I tools/item1_regress.py <raw_dir> x64r3 3 [rows]
+# in-place shift A/B tables: python3 -I tools/item1_vshift.py <raw_dir> x64   (or: mac)
+# the summary CSVs kept in perf/item1: python3 -I tools/item1_summary.py <raw_dir> perf/item1
 # re-measurement driver (base64 vs new64 vs previous build): the same loop as tools/item1_bench.sh over
 #   --ops add,sub,shl,shr,mul,sqr,divrem,fromchars,tochars --bands small,medium
 # allocation counts: cmake --build <dir> --target beman.big_int.tests.alloc_count; run the binary and read the
 #   "[alloc_count]" lines
 ```
+
+Kept data files in `perf/item1/` (medians as used by the tables above; ns per operation; the header comments hold the
+build configuration):
+
+| file | content |
+|---|---|
+| `final_x64.csv`, `final_m4.csv` | op, shape, row, `base_ns` (cf1cf54), `first_9145b4e_ns`, `d689f75_ns`, `after_ns`, `after_commit`; small and medium bands and the large spot checks (sections 3-4) |
+| `study.csv` | machine, inline_bits, op, shape, row, ns, including the vecsort rows (section 7) |
+| `shortcut.csv` | machine, op, shape, row, `on_ns`, `off_ns` (section 6) |
+| `shift_ab.csv` | machine, variant, op, shape, row, ns (section 3.8) |
+
+The raw-run figures quoted in section 8 (individual-run noise values) come from per-run CSVs that are not kept.
 
 The shortcut comparison builds a copy of the tree with `mul_header_basecase_enabled = false` in
 `include/beman/big_int/detail/mul_impl.hpp` and otherwise identical flags.

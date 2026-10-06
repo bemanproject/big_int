@@ -530,7 +530,8 @@ Decision criteria applied (from the plan):
 Status of item 1: implemented on branch `opt_1`; results, targets met and not met, and the inline-capacity study are in
 [`item1_frontend_results.md`](item1_frontend_results.md) (small `auto` is now 2-5 ns above the allocation floor for
 mul/sqr, 0-6 ns for shifts and 3-6 ns for add/sub; x64 add 1000 840 -> 600 ns, meeting the 650 ns goal; open items: x64
-GCC in-place shifts at >= 256 limbs are 5-8% slower than the baseline, and a few sub-nanosecond small in-place rows)
+GCC in-place shifts at >= 256 limbs are 5-8% slower than the baseline, and a few sub-nanosecond small in-place rows). Decision
+(2026-10-06): the default inline capacity stays at 64 bits (`big_int`, one limb).
 
 Not recommended: asm for cmp (already faster than GMP on x64, parity on M4); asm for mul 32-512 limbs on x64 (IFMA beats
 GMP by 1.1-1.8x).
