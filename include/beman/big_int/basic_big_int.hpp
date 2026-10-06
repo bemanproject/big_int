@@ -2382,6 +2382,27 @@ basic_big_int<b, L, A>::add_in_place(const std::span<const uint_multiprecision_t
     const std::size_t   m        = other.size();
     const std::uint32_t sign_bit = m_size_and_sign & 0x8000'0000U;
 
+    if (n == 1 && m == 1) {
+        // Single-limb operands: one add or subtract, no comparison of spans.
+        const limb_type x = limb_ptr()[0];
+        const limb_type y = other[0];
+        if (this_neg == other_neg) {
+            const auto [sum, carry] = detail::carrying_add(x, y, false);
+            limb_ptr()[0]           = sum;
+            if (carry) {
+                grow(2);
+                limb_ptr()[1]   = limb_type{1};
+                m_size_and_sign = sign_bit | 2U;
+            }
+        } else if (x == y) {
+            set_zero();
+        } else {
+            limb_ptr()[0]   = x > y ? x - y : y - x;
+            m_size_and_sign = (static_cast<std::uint32_t>(x > y ? this_neg : other_neg) << 31) | 1U;
+        }
+        return;
+    }
+
     if (this_neg == other_neg) {
         // Same sign: the magnitude grows, the sign stays.
         if (m <= n) {
@@ -2458,6 +2479,29 @@ constexpr void basic_big_int<b, L, A>::add_into(const std::span<const uint_multi
         std::swap(a, bs);
         std::swap(a_neg, b_neg);
     }
+    if (a.size() == 1) { // both single limbs (a is the longer operand)
+        const limb_type x         = a[0];
+        const limb_type y         = bs[0];
+        const size_type old_count = limb_count();
+        if (a_neg == b_neg) {
+            const auto [sum, carry] = detail::carrying_add(x, y, false);
+            limb_type* const limbs  = storage_for_overwrite(carry ? 2 : 1);
+            limbs[0]                = sum;
+            if (carry) {
+                limbs[1] = limb_type{1};
+            }
+            m_size_and_sign = (static_cast<std::uint32_t>(a_neg) << 31) | (carry ? 2U : 1U);
+        } else if (x == y) {
+            set_zero();
+            return;
+        } else {
+            storage_for_overwrite(1)[0] = x > y ? x - y : y - x;
+            m_size_and_sign             = (static_cast<std::uint32_t>(x > y ? a_neg : b_neg) << 31) | 1U;
+        }
+        clear_inline_tail(old_count);
+        return;
+    }
+
     const std::size_t old_count = limb_count();
     const std::size_t big       = a.size();
     const std::size_t cap       = is_representation_inplace() ? inplace_capacity : m_capacity;

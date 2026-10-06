@@ -191,6 +191,32 @@ void wide_integer_operands() {
 #endif
 }
 
+// Every sign combination of one-limb operands at the edges of the limb range: carry out of the single limb,
+// borrow, cancellation to zero, and results that change the limb count.
+template <class T>
+void single_limb_sweep() {
+    const limb ones = std::numeric_limits<limb>::max();
+    const limb half = limb{1} << (W - 1);
+    const limb mags[] = {0, 1, 2, 3, half - 1, half, half + 1, ones - 1, ones};
+    for (const limb ma : mags) {
+        for (const limb mb : mags) {
+            for (unsigned signs = 0; signs < 4; ++signs) {
+                ref a;
+                ref b;
+                if (ma != 0) {
+                    a.mag = {ma};
+                    a.neg = (signs & 1U) != 0;
+                }
+                if (mb != 0) {
+                    b.mag = {mb};
+                    b.neg = (signs & 2U) != 0;
+                }
+                check_add_sub<T>(a, b);
+            }
+        }
+    }
+}
+
 template <class T>
 void aliasing() {
     std::mt19937_64 rng(97531);
@@ -275,6 +301,22 @@ constexpr bool cx_add_sub(unsigned k) {
     return g == (T{1} << (k + 1)) - 1;
 }
 
+template <class T>
+constexpr bool cx_single_limb() {
+    const limb ones = std::numeric_limits<limb>::max();
+    const T    m{ones};
+    T          two_w{1};
+    two_w <<= W;
+    T c = m;
+    c += m; // carry out of the single limb, in place
+    T d = m;
+    d -= 5;
+    T e = -m;
+    e -= m;
+    return m + 1 == two_w && m + m == c && 1 + m == two_w && (T{0} - m) == -m && (m - m) == 0 &&
+           (m - m).representation().size() == 1 && c - m == m && d + 5 == m && -m + m == 0 && e == -c && -m - 1 == -two_w;
+}
+
 } // namespace front_end_test
 BEMAN_BIG_INT_END_NAMESPACE
 
@@ -287,6 +329,7 @@ namespace fe = BEMAN_BIG_INT_NAMESPACE::front_end_test;
 
 #define FRONT_END_TEST(SUFFIX, TYPE)                                                         \
     TEST(FrontEndAddSub##SUFFIX, Sweep) { fe::add_sub_sweep<TYPE>(); }                       \
+    TEST(FrontEndAddSub##SUFFIX, SingleLimb) { fe::single_limb_sweep<TYPE>(); }        \
     TEST(FrontEndAddSub##SUFFIX, Ripple) { fe::add_sub_ripple<TYPE>(); }                     \
     TEST(FrontEndAddSub##SUFFIX, IntegerOperands) { fe::integer_sweep<TYPE>(); }             \
     TEST(FrontEndAddSub##SUFFIX, WideIntegerOperands) { fe::wide_integer_operands<TYPE>(); } \
@@ -302,3 +345,5 @@ FRONT_END_TYPES(FRONT_END_TEST)
 FRONT_END_STATIC(bb::big_int);
 FRONT_END_STATIC(bb::basic_big_int<128>);
 FRONT_END_STATIC(bb::basic_big_int<256>);
+static_assert(fe::cx_single_limb<bb::big_int>());
+static_assert(fe::cx_single_limb<bb::basic_big_int<128>>());
