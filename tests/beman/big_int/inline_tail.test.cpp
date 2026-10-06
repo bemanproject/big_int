@@ -47,8 +47,8 @@ constexpr T all_ones(unsigned k) {
     for (unsigned i = 0; i < k * limb_width / 4; ++i) {
         digits[i] = 'f';
     }
-    T          x;
-    const auto n = k * limb_width / 4;
+    T                           x;
+    const auto                  n = k * limb_width / 4;
     [[maybe_unused]] const auto r = from_chars(digits, digits + n, x, 16);
     return x;
 }
@@ -148,14 +148,14 @@ constexpr bool div_rem_small_by_large() {
     if (!(r.quotient == 0U && tail_is_zero(r.quotient) && r.remainder == a && tail_is_zero(r.remainder))) {
         return false;
     }
-    T a2 = two_limbs<T>();
+    T    a2 = two_limbs<T>();
     auto r2 = div_rem_to_zero(std::move(a2), b);
     return r2.quotient == 0U && tail_is_zero(r2.quotient) && r2.remainder == two_limbs<T>();
 }
 
 template <class T>
 constexpr bool from_chars_into_two_limbs(int base, const char* digits, unsigned expected) {
-    T x = two_limbs<T>();
+    T                x = two_limbs<T>();
     std::string_view s{digits};
     const auto       r = from_chars(s.data(), s.data() + s.size(), x, base);
     return r.ec == std::errc{} && x == expected && tail_is_zero(x);
@@ -198,7 +198,16 @@ constexpr bool moved_from_after_steal() {
     src <<= static_cast<unsigned>(T::inplace_bits) + 10;
     T dst;
     dst = std::move(src);
-    return !is_inplace(dst) && src == 0U && tail_is_zero(src);
+    if (is_inplace(dst) || !(src == 0U) || !tail_is_zero(src)) {
+        return false;
+    }
+    // A destination that already holds more room still steals, and must leave a clean source.
+    T src2{1};
+    src2 <<= static_cast<unsigned>(T::inplace_bits) + 10;
+    T dst2{1};
+    dst2 <<= static_cast<unsigned>(T::inplace_bits) + 500;
+    dst2 = std::move(src2);
+    return !is_inplace(dst2) && src2 == 0U && tail_is_zero(src2);
 }
 
 } // namespace inline_tail_test
@@ -206,25 +215,25 @@ BEMAN_BIG_INT_END_NAMESPACE
 
 namespace it = BEMAN_BIG_INT_NAMESPACE::inline_tail_test;
 
-#define INLINE_TAIL_CASES(CASE)                                  \
-    CASE(Sub128, bb::basic_big_int<128>, sub_self)               \
-    CASE(Sub256, bb::basic_big_int<256>, sub_self)               \
-    CASE(Xor128, bb::basic_big_int<128>, xor_self)               \
-    CASE(Xor256, bb::basic_big_int<256>, xor_self)               \
-    CASE(ShrAll128, bb::basic_big_int<128>, shr_all)             \
-    CASE(ShrAll256, bb::basic_big_int<256>, shr_all)             \
-    CASE(ShrLimb128, bb::basic_big_int<128>, shr_by_a_limb_matches_builtin) \
-    CASE(ShrLimb256, bb::basic_big_int<256>, shr_by_a_limb_matches_builtin) \
-    CASE(Rem128, bb::basic_big_int<128>, rem_by_small)           \
-    CASE(Rem256, bb::basic_big_int<256>, rem_by_small)           \
-    CASE(DivRem128, bb::basic_big_int<128>, div_rem_small_by_large) \
-    CASE(DivRem256, bb::basic_big_int<256>, div_rem_small_by_large) \
-    CASE(FromChars128, bb::basic_big_int<128>, from_chars_small_cases) \
-    CASE(FromChars256, bb::basic_big_int<256>, from_chars_small_cases) \
-    CASE(FromCharsHeap64, bb::big_int, from_chars_reused_heap_all) \
+#define INLINE_TAIL_CASES(CASE)                                                \
+    CASE(Sub128, bb::basic_big_int<128>, sub_self)                             \
+    CASE(Sub256, bb::basic_big_int<256>, sub_self)                             \
+    CASE(Xor128, bb::basic_big_int<128>, xor_self)                             \
+    CASE(Xor256, bb::basic_big_int<256>, xor_self)                             \
+    CASE(ShrAll128, bb::basic_big_int<128>, shr_all)                           \
+    CASE(ShrAll256, bb::basic_big_int<256>, shr_all)                           \
+    CASE(ShrLimb128, bb::basic_big_int<128>, shr_by_a_limb_matches_builtin)    \
+    CASE(ShrLimb256, bb::basic_big_int<256>, shr_by_a_limb_matches_builtin)    \
+    CASE(Rem128, bb::basic_big_int<128>, rem_by_small)                         \
+    CASE(Rem256, bb::basic_big_int<256>, rem_by_small)                         \
+    CASE(DivRem128, bb::basic_big_int<128>, div_rem_small_by_large)            \
+    CASE(DivRem256, bb::basic_big_int<256>, div_rem_small_by_large)            \
+    CASE(FromChars128, bb::basic_big_int<128>, from_chars_small_cases)         \
+    CASE(FromChars256, bb::basic_big_int<256>, from_chars_small_cases)         \
+    CASE(FromCharsHeap64, bb::big_int, from_chars_reused_heap_all)             \
     CASE(FromCharsHeap128, bb::basic_big_int<128>, from_chars_reused_heap_all) \
-    CASE(Steal64, bb::big_int, moved_from_after_steal)           \
-    CASE(Steal128, bb::basic_big_int<128>, moved_from_after_steal) \
+    CASE(Steal64, bb::big_int, moved_from_after_steal)                         \
+    CASE(Steal128, bb::basic_big_int<128>, moved_from_after_steal)             \
     CASE(Steal256, bb::basic_big_int<256>, moved_from_after_steal)
 
 #define INLINE_TAIL_TEST(NAME, TYPE, FN) \

@@ -2,7 +2,9 @@
 // SPDX-License-Identifier: BSL-1.0
 
 #include <cstddef>
+#include <map>
 #include <memory>
+#include <memory_resource>
 #include <new>
 #include <type_traits>
 #include <utility>
@@ -868,26 +870,42 @@ TEST(Allocation, CopyAssignReusesDstStorage) {
     EXPECT_EQ(dst, src);
 }
 
-TEST(Allocation, MoveAssignReusesDstStorageWhenLarger) {
-    // When dst's capacity already covers src's limb count, assign_value should
-    // copy src's limbs into dst's buffer rather than stealing src's (smaller)
-    // buffer.
+TEST(Allocation, MoveAssignStealsHeapSrcEvenWhenDstLarger) {
+    // A heap source is stolen whatever capacity dst already holds: the source buffer is
+    // adopted, dst's own buffer is released, and the source is left as inline zero.
     BEMAN_BIG_INT_NAMESPACE::big_int dst{1U};
     dst.reserve_representation(16); // big dst buffer
-    const auto* const dst_data = dst.representation().data();
-    const auto        dst_cap  = dst.representation_capacity();
+    const auto dst_cap = dst.representation_capacity();
 
     BEMAN_BIG_INT_NAMESPACE::big_int src =
         BEMAN_BIG_INT_NAMESPACE::big_int{0xFFFFFFFFFFFFFFFFU} + BEMAN_BIG_INT_NAMESPACE::big_int{1};
     ASSERT_EQ(src.representation().size(), 2U);
-    const auto src_cap = src.representation_capacity();
+    const auto* const src_data = src.representation().data();
+    const auto        src_cap  = src.representation_capacity();
     ASSERT_LT(src_cap, dst_cap); // dst has more capacity than src
 
     dst = std::move(src);
-    // dst retained its larger buffer rather than adopting src's smaller one.
+    EXPECT_EQ(dst.representation().data(), src_data);
+    EXPECT_EQ(dst.representation_capacity(), src_cap);
+    ASSERT_EQ(dst.representation().size(), 2U);
+    EXPECT_TRUE(is_inplace(src));
+    EXPECT_EQ(src, 0U);
+}
+
+TEST(Allocation, MoveAssignInlineSrcReusesDstStorage) {
+    // An inline source has no buffer to steal, so it is copied into dst's existing storage.
+    BEMAN_BIG_INT_NAMESPACE::big_int dst{1U};
+    dst.reserve_representation(16);
+    const auto* const dst_data = dst.representation().data();
+    const auto        dst_cap  = dst.representation_capacity();
+
+    BEMAN_BIG_INT_NAMESPACE::big_int src{5U};
+    ASSERT_TRUE(is_inplace(src));
+
+    dst = std::move(src);
     EXPECT_EQ(dst.representation().data(), dst_data);
     EXPECT_EQ(dst.representation_capacity(), dst_cap);
-    ASSERT_EQ(dst.representation().size(), 2U);
+    EXPECT_EQ(dst, 5U);
 }
 
 TEST(Allocation, MoveAssignStealsSrcWhenDstTooSmall) {
@@ -1030,3 +1048,171 @@ consteval bool test_grow_shrink_grow() {
     return x.representation()[0] == 42U;
 }
 static_assert(test_grow_shrink_grow());
+
+// ----- Allocator ownership across assignment -----
+
+// Records which allocator id handed out each block, and counts blocks released through an allocator other than
+// the one that allocated them.
+struct ownership_tracker {
+    std::map<const void*, std::size_t> owner;
+    std::size_t                        mismatched_frees = 0;
+    std::size_t                        live             = 0;
+};
+
+ownership_tracker& tracker() {
+    static ownership_tracker t;
+    return t;
+}
+
+template <class T>
+struct tracking_pocca_alloc {
+    using value_type                             = T;
+    using propagate_on_container_copy_assignment = std::true_type;
+    using propagate_on_container_move_assignment = std::true_type;
+
+    std::size_t id = 0;
+
+    tracking_pocca_alloc() = default;
+    explicit tracking_pocca_alloc(std::size_t allocator_id) noexcept : id{allocator_id} {}
+    template <class U>
+    tracking_pocca_alloc(const tracking_pocca_alloc<U>& other) noexcept : id{other.id} {}
+
+    [[nodiscard]] T* allocate(std::size_t n) {
+        T* const p         = std::allocator<T>{}.allocate(n);
+        tracker().owner[p] = id;
+        ++tracker().live;
+        return p;
+    }
+    void deallocate(T* p, std::size_t n) noexcept {
+        if (tracker().owner[p] != id) {
+            ++tracker().mismatched_frees;
+        }
+        tracker().owner.erase(p);
+        --tracker().live;
+        std::allocator<T>{}.deallocate(p, n);
+    }
+
+    template <class U>
+    bool operator==(const tracking_pocca_alloc<U>& other) const noexcept {
+        return id == other.id;
+    }
+};
+
+using tracking_big_int =
+    BEMAN_BIG_INT_NAMESPACE::basic_big_int<64,
+                                           BEMAN_BIG_INT_NAMESPACE::uint_multiprecision_t,
+                                           tracking_pocca_alloc<BEMAN_BIG_INT_NAMESPACE::uint_multiprecision_t>>;
+
+namespace {
+using tracking_id = tracking_pocca_alloc<BEMAN_BIG_INT_NAMESPACE::uint_multiprecision_t>;
+
+tracking_big_int make_heap_value(const tracking_id alloc, const std::size_t bits) {
+    tracking_big_int x{1, alloc};
+    x <<= bits;
+    return x;
+}
+} // namespace
+
+TEST(Allocation, PropagatingCopyAssignFreesLargerDstWithItsOwnAllocator) {
+    tracker() = {};
+    {
+        tracking_big_int dst = make_heap_value(tracking_id{1U}, 4000);
+        dst.reserve_representation(200); // larger than the source, so the old fast path kept it
+        const tracking_big_int src = make_heap_value(tracking_id{2U}, 100);
+        ASSERT_FALSE(is_inplace(src));
+
+        dst = src;
+
+        EXPECT_EQ(dst, src);
+        EXPECT_EQ(dst.get_allocator().id, 2U);
+    }
+    EXPECT_EQ(tracker().mismatched_frees, 0U);
+    EXPECT_EQ(tracker().live, 0U);
+}
+
+TEST(Allocation, PropagatingCopyAssignOfInlineSrcFreesDstWithItsOwnAllocator) {
+    tracker() = {};
+    {
+        tracking_big_int       dst = make_heap_value(tracking_id{1U}, 4000);
+        const tracking_big_int src{7, tracking_id{2U}};
+
+        dst = src;
+
+        EXPECT_EQ(dst, 7);
+        EXPECT_EQ(dst.get_allocator().id, 2U);
+    }
+    EXPECT_EQ(tracker().mismatched_frees, 0U);
+    EXPECT_EQ(tracker().live, 0U);
+}
+
+TEST(Allocation, PropagatingMoveAssignFreesDstWithItsOwnAllocator) {
+    tracker() = {};
+    {
+        tracking_big_int  dst      = make_heap_value(tracking_id{1U}, 4000);
+        tracking_big_int  heap_src = make_heap_value(tracking_id{2U}, 100);
+        const auto* const src_data = heap_src.representation().data();
+
+        dst = std::move(heap_src);
+        EXPECT_EQ(dst.representation().data(), src_data);
+        EXPECT_EQ(dst.get_allocator().id, 2U);
+
+        tracking_big_int inline_src{9, tracking_id{3U}};
+        dst = std::move(inline_src);
+        EXPECT_EQ(dst, 9);
+        EXPECT_EQ(dst.get_allocator().id, 3U);
+    }
+    EXPECT_EQ(tracker().mismatched_frees, 0U);
+    EXPECT_EQ(tracker().live, 0U);
+}
+
+TEST(Allocation, PmrMoveAssignStealsFromTheSameResource) {
+    std::pmr::monotonic_buffer_resource   resource;
+    BEMAN_BIG_INT_NAMESPACE::pmr::big_int dst{1, &resource};
+    dst.reserve_representation(16);
+    BEMAN_BIG_INT_NAMESPACE::pmr::big_int src{1, &resource};
+    src <<= 200;
+    const auto* const src_data = src.representation().data();
+    const auto        expected = src;
+
+    dst = std::move(src);
+
+    EXPECT_EQ(dst.representation().data(), src_data);
+    EXPECT_EQ(dst, expected);
+    EXPECT_EQ(dst.get_allocator().resource(), &resource);
+    EXPECT_EQ(src, 0U);
+}
+
+TEST(Allocation, PmrMoveAssignCopiesFromAnotherResourceAndKeepsItsOwn) {
+    std::pmr::monotonic_buffer_resource   dst_resource;
+    std::pmr::monotonic_buffer_resource   src_resource;
+    BEMAN_BIG_INT_NAMESPACE::pmr::big_int dst{1, &dst_resource};
+    BEMAN_BIG_INT_NAMESPACE::pmr::big_int src{1, &src_resource};
+    src <<= 200;
+    const auto* const src_data = src.representation().data();
+    const auto        expected = src;
+
+    dst = std::move(src);
+
+    EXPECT_NE(dst.representation().data(), src_data);
+    EXPECT_EQ(dst, expected);
+    EXPECT_EQ(dst.get_allocator().resource(), &dst_resource);
+    EXPECT_EQ(src.get_allocator().resource(), &src_resource);
+    EXPECT_EQ(src, expected); // not stolen, so the source keeps its value
+}
+
+TEST(Allocation, PmrMoveAssignFromAnotherResourceReusesLargerDstStorage) {
+    std::pmr::monotonic_buffer_resource   dst_resource;
+    std::pmr::monotonic_buffer_resource   src_resource;
+    BEMAN_BIG_INT_NAMESPACE::pmr::big_int dst{1, &dst_resource};
+    dst.reserve_representation(16);
+    const auto* const                     dst_data = dst.representation().data();
+    BEMAN_BIG_INT_NAMESPACE::pmr::big_int src{1, &src_resource};
+    src <<= 200;
+    const auto expected = src;
+
+    dst = std::move(src);
+
+    EXPECT_EQ(dst.representation().data(), dst_data);
+    EXPECT_EQ(dst, expected);
+    EXPECT_EQ(dst.get_allocator().resource(), &dst_resource);
+}

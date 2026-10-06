@@ -722,11 +722,18 @@ class BEMAN_BIG_INT_TRIVIAL_ABI basic_big_int {
 
     // Shared implementation behind copy-assign, move-assign, and the lvalue
     // branches of `operator+` / `operator-`.
-    // Sets `*this` to a copy of `src`, reusing the existing allocation whenever
-    // the effective capacity already fits `src.limb_count() + extra_space` limbs.
-    // `extra_space` lets callers that know they are about to grow by a fixed
-    // amount (e.g., a carry-out of one limb in addition) reserve that space
-    // up front so that a subsequent grow is not needed.
+    // Sets `*this` to the value of `src`.
+    //
+    // An rvalue heap `src` is stolen (its buffer adopted, `src` left as inline zero) whenever our
+    // allocator can free it, i.e. the allocator propagates, is always-equal, or compares equal to
+    // `src`'s, regardless of the capacity we already hold. Our own buffer is released first, with
+    // our allocator. Every other case copies, reusing the existing allocation when it already
+    // fits `src.limb_count() + extra_space` limbs. `extra_space` lets callers that know they are
+    // about to grow by a fixed amount (e.g., a carry-out of one limb) reserve that space up front;
+    // it must be 0 for an rvalue `src`.
+    //
+    // When a propagating allocator compares unequal to ours, our heap buffer cannot be kept: it is
+    // released through the old allocator before the new one is adopted.
     template <detail::allocator_propagation propagation = detail::allocator_propagation::propagate, class Src>
         requires std::same_as<std::remove_cvref_t<Src>, basic_big_int>
     constexpr void assign_value(Src&& src, const std::size_t extra_space = 0) {
@@ -735,10 +742,6 @@ class BEMAN_BIG_INT_TRIVIAL_ABI basic_big_int {
             // self-aliasing the existing `operator=` overloads protected against.
             return;
         }
-
-        const std::size_t src_count = src.limb_count();
-        const std::size_t needed    = src_count + extra_space;
-        const std::size_t eff_cap   = is_representation_inplace() ? inplace_capacity : m_capacity;
 
         // Allocator propagation follows `std::allocator_traits`. Stateful allocators
         // such as `std::pmr::polymorphic_allocator` have a deleted copy/move
@@ -752,7 +755,39 @@ class BEMAN_BIG_INT_TRIVIAL_ABI basic_big_int {
             (std::is_lvalue_reference_v<Src> ? alloc_traits::propagate_on_container_copy_assignment::value
                                              : alloc_traits::propagate_on_container_move_assignment::value);
 
-        if (needed <= eff_cap) {
+        if constexpr (!std::is_lvalue_reference_v<Src>) {
+            BEMAN_BIG_INT_DEBUG_ASSERT(extra_space == 0);
+            if (!src.is_representation_inplace() &&
+                (propagate_alloc || alloc_traits::is_always_equal::value || m_alloc == src.m_alloc)) {
+                free_storage();
+                if constexpr (propagate_alloc) {
+                    m_alloc = std::forward<Src>(src).m_alloc;
+                }
+                m_capacity          = src.m_capacity;
+                m_storage.data      = src.m_storage.data;
+                m_size_and_sign     = src.m_size_and_sign;
+                src.m_capacity      = 0;
+                src.m_size_and_sign = 1;
+                src.m_storage       = {};
+                return;
+            }
+            // Inline `src`, or a heap `src` that our allocator cannot free: copy below.
+        }
+
+        const std::size_t src_count = src.limb_count();
+        const std::size_t needed    = src_count + extra_space;
+        const std::size_t eff_cap   = is_representation_inplace() ? inplace_capacity : m_capacity;
+
+        // Keeping our heap buffer is only valid if our allocator stays the one that frees it.
+        const bool keeps_buffer = [&] {
+            if constexpr (propagate_alloc && !alloc_traits::is_always_equal::value) {
+                return is_representation_inplace() || m_alloc == src.m_alloc;
+            } else {
+                return true;
+            }
+        }();
+
+        if (keeps_buffer && needed <= eff_cap) {
             // Fast path: current buffer is already big enough
             const auto old_count = limb_count();
             m_size_and_sign      = src.m_size_and_sign;
@@ -762,22 +797,16 @@ class BEMAN_BIG_INT_TRIVIAL_ABI basic_big_int {
             limb_type* const       dst_limbs = limb_ptr();
             const limb_type* const src_limbs = src.limb_ptr();
             std::copy_n(src_limbs, src_count, dst_limbs);
-            // Preserve the "limbs[limb_count..inplace_capacity) == 0" invariant that
-            // `inplace_to_bit_uint` relies on. Only relevant for inline storage.
-            if (is_representation_inplace()) {
-                for (std::size_t i = src_count; i < old_count; ++i) {
-                    dst_limbs[i] = limb_type{0};
-                }
-            }
+            clear_inline_tail(old_count);
             return;
         }
 
-        // Slow path: current buffer is too small. Each branch releases our buffer
-        // with our current allocator, before any propagation, and publishes the
-        // control words only once the storage they describe is in place.
+        // Slow path. Each branch releases our buffer with our current allocator, before any
+        // propagation, and publishes the control words only once the storage they describe is in place.
         if (src.is_representation_inplace() && needed <= inplace_capacity) {
             // Both src and the requested headroom fit inline. No buffer to
-            // adopt or allocate; just propagate (if applicable) and copy limbs.
+            // allocate; release ours (if any), propagate, and copy limbs.
+            free_storage();
             if constexpr (propagate_alloc) {
                 m_alloc = std::forward<Src>(src).m_alloc;
             }
@@ -789,39 +818,9 @@ class BEMAN_BIG_INT_TRIVIAL_ABI basic_big_int {
             return;
         }
 
-        if constexpr (!std::is_lvalue_reference_v<Src>) {
-            // For a heap `src`, adopt its pointer when the allocators are
-            // compatible -- i.e., we are propagating from src, the allocator
-            // type is always-equal (e.g. std::allocator), or the two
-            // allocators compare equal at runtime.
-            if (!src.is_representation_inplace()) {
-                if constexpr (propagate_alloc || alloc_traits::is_always_equal::value) {
-                    free_storage();
-                    if constexpr (propagate_alloc) {
-                        m_alloc = std::forward<Src>(src).m_alloc;
-                    }
-                    m_capacity          = src.m_capacity;
-                    m_storage.data      = src.m_storage.data;
-                    m_size_and_sign     = src.m_size_and_sign;
-                    src.m_capacity      = 0;
-                    src.m_size_and_sign = 1;
-                    src.m_storage       = {};
-                    if (m_capacity < needed) {
-                        grow(needed);
-                    }
-                    return;
-                }
-                // Allocators differ and don't propagate: fall through to a
-                // fresh allocation owned by our allocator.
-            }
-            // `src` is inline (or unstealable heap), fall through to the
-            // allocate-and-copy path below.
-        }
-
-        // Fall back to a fresh allocation of `needed` limbs. Secure it before
-        // releasing ours, so a throwing allocation leaves `*this` unchanged. A
-        // propagating allocator has to serve the new block while ours still has to
-        // release the old, so allocate through a copy of `src`'s.
+        // Fresh allocation of `needed` limbs. Secure it before releasing ours, so a throwing allocation
+        // leaves `*this` unchanged. A propagating allocator has to serve the new block while ours still
+        // has to release the old, so allocate through a copy of `src`'s.
         const alloc_result allocation = [&] {
             if constexpr (propagate_alloc) {
                 allocator_type src_alloc(src.m_alloc);
@@ -1136,11 +1135,11 @@ constexpr basic_big_int<b, L, A>& basic_big_int<b, L, A>::operator=(const basic_
 
 template <std::size_t b, class L, class A>
 constexpr basic_big_int<b, L, A>& basic_big_int<b, L, A>::operator=(basic_big_int&& x) noexcept {
-    // Invariant: `assign_value` with `extra_space == 0` and an rvalue `src`
-    // never allocates -- either `*this` already fits `x.limb_count()`, or we
-    // steal `x`'s heap buffer, or `x` is inline and fits inline in `*this`.
-    // So the `noexcept` contract holds even though `assign_value` itself is
-    // not marked `noexcept`.
+    // A heap `x` whose buffer our allocator can free (propagating, always-equal, or equal) is
+    // stolen whatever our capacity, leaving `x` as inline zero. Otherwise `x` is copied into the
+    // existing storage, which allocates only if it does not fit. That copy needs an unequal,
+    // non-propagating allocator (e.g. a different pmr resource); it is the one case in which this
+    // `noexcept` operator can throw, which terminates.
     assign_value(std::move(x));
     return *this;
 }
