@@ -7,6 +7,7 @@
 //   pmr       pmr::big_int with a counting memory_resource installed through std::pmr::set_default_resource, so
 //             results (which take select_on_container_copy_construction of an operand allocator) land on it
 //   wide256   basic_big_int<256, limb, counting_allocator<limb>>  (inline capacity of 4 64-bit limbs)
+//   wide128, wide512  the same with 128 and 512 inline bits (the inline-capacity study; no baseline column)
 // The measured counts are printed to stdout as "[alloc_count] ...". The expectations below are the item 1 targets
 // (see the front-end cost plan); with `item1_pending` true, cases that exceed their target at the baseline (cf1cf54)
 // are skipped instead of failing. The constant is false now that the front end changes have landed.
@@ -42,6 +43,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <cstdio>
+#include <limits>
 #include <memory_resource>
 #include <string>
 #include <system_error>
@@ -83,6 +85,13 @@ std::vector<limb> random_limbs(const std::size_t n, std::uint64_t seed) {
     return v;
 }
 
+// Like random_limbs with the top bit set, so sums, shifts and products have the full worst-case limb count.
+std::vector<limb> full_limbs(const std::size_t n, const std::uint64_t seed) {
+    auto v = random_limbs(n, seed);
+    v.back() |= limb{1} << (std::numeric_limits<limb>::digits - 1);
+    return v;
+}
+
 // ----- environments -----
 
 struct counting_env {
@@ -104,6 +113,34 @@ struct wide256_env {
     static constexpr std::size_t index = 2;
 
     using int_t = basic_big_int<256, limb, counting_allocator<limb>>;
+
+    counting_state           state;
+    counting_allocator<limb> alloc{&state};
+
+    [[nodiscard]] int_t       empty() { return int_t(alloc); }
+    [[nodiscard]] int_t       make(const std::vector<limb>& v) { return int_t(v.begin(), v.end(), alloc); }
+    [[nodiscard]] std::size_t count() const { return state.total_allocations; }
+};
+
+struct wide128_env {
+    static constexpr const char* name  = "wide128";
+    static constexpr std::size_t index = 3;
+
+    using int_t = basic_big_int<128, limb, counting_allocator<limb>>;
+
+    counting_state           state;
+    counting_allocator<limb> alloc{&state};
+
+    [[nodiscard]] int_t       empty() { return int_t(alloc); }
+    [[nodiscard]] int_t       make(const std::vector<limb>& v) { return int_t(v.begin(), v.end(), alloc); }
+    [[nodiscard]] std::size_t count() const { return state.total_allocations; }
+};
+
+struct wide512_env {
+    static constexpr const char* name  = "wide512";
+    static constexpr std::size_t index = 4;
+
+    using int_t = basic_big_int<512, limb, counting_allocator<limb>>;
 
     counting_state           state;
     counting_allocator<limb> alloc{&state};
@@ -170,8 +207,8 @@ void escape_value(const T& x) {
     escape_sink = x.size();
 }
 
-// Baseline (cf1cf54) count per environment, in the order counting, pmr, wide256.
-using baseline_counts = std::array<double, 3>;
+// Baseline (cf1cf54) count per environment, in the order counting, pmr, wide256, wide128, wide512 (-1: not measured).
+using baseline_counts = std::array<double, 5>;
 
 } // namespace
 
@@ -200,7 +237,7 @@ namespace {
 template <class Env>
 class AllocCount : public ::testing::Test {};
 
-using envs = ::testing::Types<counting_env, pmr_env, wide256_env>;
+using envs = ::testing::Types<counting_env, pmr_env, wide256_env, wide128_env, wide512_env>;
 TYPED_TEST_SUITE(AllocCount, envs);
 
 // Baseline columns are filled from the baseline run (see the table at the top of the file).
@@ -215,7 +252,7 @@ TYPED_TEST(AllocCount, AddHeapResult) {
     int_t        c = env.empty();
     const double n = steady_allocs(env, [&] { c = a + b; });
     EXPECT_TRUE(c - b == a);
-    ALLOC_EXPECT(TypeParam, "c = a + b (16x16)", n, 1.0, (baseline_counts{1.0, 1.0, 1.0}));
+    ALLOC_EXPECT(TypeParam, "c = a + b (16x16)", n, 1.0, (baseline_counts{1.0, 1.0, 1.0, -1.0, -1.0}));
 }
 
 TYPED_TEST(AllocCount, SubHeapResult) {
@@ -226,7 +263,7 @@ TYPED_TEST(AllocCount, SubHeapResult) {
     int_t        c = env.empty();
     const double n = steady_allocs(env, [&] { c = a - b; });
     EXPECT_TRUE(c + b == a);
-    ALLOC_EXPECT(TypeParam, "c = a - b (16x16)", n, 1.0, (baseline_counts{1.0, 1.0, 1.0}));
+    ALLOC_EXPECT(TypeParam, "c = a - b (16x16)", n, 1.0, (baseline_counts{1.0, 1.0, 1.0, -1.0, -1.0}));
 }
 
 TYPED_TEST(AllocCount, AddSubInPlaceWithCapacity) {
@@ -240,7 +277,7 @@ TYPED_TEST(AllocCount, AddSubInPlaceWithCapacity) {
         c -= b;
     });
     EXPECT_TRUE(c == a);
-    ALLOC_EXPECT(TypeParam, "c += b; c -= b (16x16)", n, 0.0, (baseline_counts{0.0, 0.0, 0.0}));
+    ALLOC_EXPECT(TypeParam, "c += b; c -= b (16x16)", n, 0.0, (baseline_counts{0.0, 0.0, 0.0, -1.0, -1.0}));
 }
 
 // ----- shifts -----
@@ -252,7 +289,7 @@ TYPED_TEST(AllocCount, ShiftLeftHeapResult) {
     int_t        c = env.empty();
     const double n = steady_allocs(env, [&] { c = a << 13; });
     EXPECT_TRUE((c >> 13) == a);
-    ALLOC_EXPECT(TypeParam, "c = a << 13 (16 limbs)", n, 1.0, (baseline_counts{1.0, 1.0, 1.0}));
+    ALLOC_EXPECT(TypeParam, "c = a << 13 (16 limbs)", n, 1.0, (baseline_counts{1.0, 1.0, 1.0, -1.0, -1.0}));
 }
 
 TYPED_TEST(AllocCount, ShiftRightHeapResult) {
@@ -262,7 +299,7 @@ TYPED_TEST(AllocCount, ShiftRightHeapResult) {
     int_t        c = env.empty();
     const double n = steady_allocs(env, [&] { c = a >> 13; });
     EXPECT_TRUE((c << 13) <= a);
-    ALLOC_EXPECT(TypeParam, "c = a >> 13 (16 limbs)", n, 1.0, (baseline_counts{1.0, 1.0, 1.0}));
+    ALLOC_EXPECT(TypeParam, "c = a >> 13 (16 limbs)", n, 1.0, (baseline_counts{1.0, 1.0, 1.0, -1.0, -1.0}));
 }
 
 TYPED_TEST(AllocCount, ShiftInPlaceWithCapacity) {
@@ -275,7 +312,7 @@ TYPED_TEST(AllocCount, ShiftInPlaceWithCapacity) {
         c >>= 13;
     });
     EXPECT_TRUE(c == a);
-    ALLOC_EXPECT(TypeParam, "c <<= 13; c >>= 13 (16 limbs)", n, 0.0, (baseline_counts{0.0, 0.0, 0.0}));
+    ALLOC_EXPECT(TypeParam, "c <<= 13; c >>= 13 (16 limbs)", n, 0.0, (baseline_counts{0.0, 0.0, 0.0, -1.0, -1.0}));
 }
 
 // ----- multiply -----
@@ -288,7 +325,7 @@ TYPED_TEST(AllocCount, MultiplyHeapResult) {
     int_t        c = env.empty();
     const double n = steady_allocs(env, [&] { c = a * b; });
     EXPECT_TRUE(c / b == a);
-    ALLOC_EXPECT(TypeParam, "c = a * b (8x8)", n, 1.0, (baseline_counts{1.0, 1.0, 1.0}));
+    ALLOC_EXPECT(TypeParam, "c = a * b (8x8)", n, 1.0, (baseline_counts{1.0, 1.0, 1.0, -1.0, -1.0}));
 }
 
 // c is restored from a inside the timed call (a copy into existing capacity), so the pair is steady.
@@ -303,7 +340,7 @@ TYPED_TEST(AllocCount, MultiplyInPlaceByBigInt) {
         c *= b;
     });
     EXPECT_TRUE(c == a * b);
-    ALLOC_EXPECT(TypeParam, "c = a; c *= b (8x8 -> 16)", n, 0.0, (baseline_counts{1.0, 1.0, 1.0}));
+    ALLOC_EXPECT(TypeParam, "c = a; c *= b (8x8 -> 16)", n, 0.0, (baseline_counts{1.0, 1.0, 1.0, -1.0, -1.0}));
 }
 
 TYPED_TEST(AllocCount, MultiplyInPlaceBySmall) {
@@ -316,7 +353,7 @@ TYPED_TEST(AllocCount, MultiplyInPlaceBySmall) {
         c *= 7;
     });
     EXPECT_TRUE(c == a * 7);
-    ALLOC_EXPECT(TypeParam, "c = a; c *= 7 (8 limbs)", n, 0.0, (baseline_counts{1.0, 1.0, 1.0}));
+    ALLOC_EXPECT(TypeParam, "c = a; c *= 7 (8 limbs)", n, 0.0, (baseline_counts{1.0, 1.0, 1.0, -1.0, -1.0}));
 }
 
 // ----- divide -----
@@ -329,7 +366,7 @@ TYPED_TEST(AllocCount, DivideHeapResult) {
     int_t        c = env.empty();
     const double n = steady_allocs(env, [&] { c = a / b; });
     EXPECT_TRUE(c * b + a % b == a);
-    ALLOC_EXPECT(TypeParam, "c = a / b (8x4)", n, 1.0, (baseline_counts{2.0, 2.0, 2.0}));
+    ALLOC_EXPECT(TypeParam, "c = a / b (8x4)", n, 1.0, (baseline_counts{2.0, 2.0, 2.0, -1.0, -1.0}));
 }
 
 TYPED_TEST(AllocCount, RemainderHeapResult) {
@@ -340,7 +377,7 @@ TYPED_TEST(AllocCount, RemainderHeapResult) {
     int_t        c = env.empty();
     const double n = steady_allocs(env, [&] { c = a % b; });
     EXPECT_TRUE(a / b * b + c == a);
-    ALLOC_EXPECT(TypeParam, "c = a % b (8x4)", n, 1.0, (baseline_counts{2.0, 2.0, 2.0}));
+    ALLOC_EXPECT(TypeParam, "c = a % b (8x4)", n, 1.0, (baseline_counts{2.0, 2.0, 2.0, -1.0, -1.0}));
 }
 
 TYPED_TEST(AllocCount, DivRemToZero) {
@@ -355,7 +392,7 @@ TYPED_TEST(AllocCount, DivRemToZero) {
     });
     const auto   qr = div_rem_to_zero(a, b);
     EXPECT_TRUE(qr.quotient * b + qr.remainder == a);
-    ALLOC_EXPECT(TypeParam, "div_rem_to_zero (8x4)", n, 2.0, (baseline_counts{4.0, 4.0, 3.0}));
+    ALLOC_EXPECT(TypeParam, "div_rem_to_zero (8x4)", n, 2.0, (baseline_counts{4.0, 4.0, 3.0, -1.0, -1.0}));
 }
 
 // A two-limb dividend over a one-limb divisor, quotient two limbs: it fits inline only when the inline capacity is at
@@ -376,7 +413,7 @@ TYPED_TEST(AllocCount, DivideTwoByOneQuotientInline) {
                     static_cast<std::size_t>(int_t::inplace_capacity));
         GTEST_SKIP() << "the 2-limb quotient only fits inline at inline capacity >= 2";
     }
-    ALLOC_EXPECT(TypeParam, "c = a / b (2x1, inline q)", n, 0.0, (baseline_counts{1.0, 1.0, 0.0}));
+    ALLOC_EXPECT(TypeParam, "c = a / b (2x1, inline q)", n, 0.0, (baseline_counts{1.0, 1.0, 0.0, -1.0, -1.0}));
 }
 
 // Stretch: in the schoolbook band the quotient could be built in the object's own limbs.
@@ -391,7 +428,7 @@ TYPED_TEST(AllocCount, DivideInPlace) {
         c /= b;
     });
     EXPECT_TRUE(c == a / b);
-    ALLOC_EXPECT(TypeParam, "c = a; c /= b (8x4) [stretch]", n, 0.0, (baseline_counts{3.0, 3.0, 2.0}));
+    ALLOC_EXPECT(TypeParam, "c = a; c /= b (8x4) [stretch]", n, 0.0, (baseline_counts{3.0, 3.0, 2.0, -1.0, -1.0}));
 }
 
 TYPED_TEST(AllocCount, RemainderInPlace) {
@@ -405,7 +442,7 @@ TYPED_TEST(AllocCount, RemainderInPlace) {
         c %= b;
     });
     EXPECT_TRUE(c == a % b);
-    ALLOC_EXPECT(TypeParam, "c = a; c %= b (8x4) [stretch]", n, 0.0, (baseline_counts{2.0, 2.0, 2.0}));
+    ALLOC_EXPECT(TypeParam, "c = a; c %= b (8x4) [stretch]", n, 0.0, (baseline_counts{2.0, 2.0, 2.0, -1.0, -1.0}));
 }
 
 // ----- decimal from_chars -----
@@ -431,7 +468,48 @@ TYPED_TEST(AllocCount, FromCharsDecimalIntoReserved) {
     EXPECT_EQ(ec, std::errc{});
     // The value must be 2000 decimal digits long.
     EXPECT_GT(c.size(), 6600u);
-    ALLOC_EXPECT(TypeParam, "from_chars 2000 digits (reserved)", n, 2.0, (baseline_counts{2.0, 2.0, 2.0}));
+    ALLOC_EXPECT(TypeParam, "from_chars 2000 digits (reserved)", n, 2.0, (baseline_counts{2.0, 2.0, 2.0, -1.0, -1.0}));
+}
+
+// ----- small shapes (the inline-capacity study): allocations per call at 1, 2, 4 and 8 limbs -----
+// A result that fits the inline capacity allocates nothing; otherwise one block. Counts are printed for the study
+// table.
+
+TYPED_TEST(AllocCount, SmallShapes) {
+    TypeParam env;
+    using int_t = typename TypeParam::int_t;
+    for (const std::size_t n : {std::size_t{1}, std::size_t{2}, std::size_t{4}, std::size_t{8}}) {
+        const int_t       a     = env.make(full_limbs(n, 40 + n));
+        const int_t       b     = env.make(full_limbs(n, 50 + n));
+        const int_t       d     = env.make(full_limbs((n + 1) / 2, 60 + n));
+        int_t             c     = env.empty();
+        int_t             q     = env.empty();
+        int_t             r     = env.empty();
+        const std::string shape = std::to_string(n) + " limbs";
+        const auto        row   = [&](const char* op, const double allocs, const double want) {
+            const std::string name = std::string(op) + " (" + shape + ")";
+            std::printf(
+                "[alloc_count] %-8s %-34s measured=%6.3f small-shape\n", TypeParam::name, name.c_str(), allocs);
+            EXPECT_LE(allocs, want) << name;
+        };
+        row("c = a + b", steady_allocs(env, [&] { c = a + b; }), 1.0);
+        row("c = a - b", steady_allocs(env, [&] { c = a - b; }), 1.0);
+        row("c = a << 13", steady_allocs(env, [&] { c = a << 13; }), 1.0);
+        row("c = a >> 13", steady_allocs(env, [&] { c = a >> 13; }), 1.0);
+        row("c = a * b", steady_allocs(env, [&] { c = a * b; }), 1.0);
+        row("c = a * a", steady_allocs(env, [&] { c = a * a; }), 1.0);
+        row("c = a / d (n x n/2)", steady_allocs(env, [&] { c = a / d; }), 1.0);
+        row("div_rem_to_zero (n x n/2)",
+            steady_allocs(env,
+                          [&] {
+                              const auto qr = div_rem_to_zero(a, d);
+                              escape_value(qr.quotient);
+                          }),
+            2.0);
+        q = a / d;
+        r = a % d;
+        EXPECT_TRUE(q * d + r == a);
+    }
 }
 
 } // namespace
