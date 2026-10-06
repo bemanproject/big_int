@@ -13,6 +13,7 @@
 #include <limits>
 #include <random>
 #include <string>
+#include <type_traits>
 #include <utility>
 #include <vector>
 
@@ -24,8 +25,17 @@
 BEMAN_BIG_INT_BEGIN_NAMESPACE
 namespace front_end_test {
 
+using limb = uint_multiprecision_t;
+// Converts without a cast when the types already agree (GCC's -Wuseless-cast), and with one otherwise.
+template <class U>
+constexpr limb to_limb(const U v) noexcept {
+    if constexpr (std::is_same_v<U, limb>) {
+        return v;
+    } else {
+        return static_cast<limb>(v);
+    }
+}
 
-using limb                = uint_multiprecision_t;
 inline constexpr unsigned W = static_cast<unsigned>(std::numeric_limits<limb>::digits);
 
 // Sign and trimmed little-endian magnitude (empty for zero).
@@ -58,9 +68,9 @@ inline std::vector<limb> add_mag(const std::vector<limb>& a, const std::vector<l
     for (std::size_t i = 0; i < std::max(a.size(), b.size()); ++i) {
         const limb x = i < a.size() ? a[i] : 0;
         const limb y = i < b.size() ? b[i] : 0;
-        const limb s = static_cast<limb>(x + y);
-        const limb t = static_cast<limb>(s + carry);
-        carry        = static_cast<limb>((s < x ? 1 : 0) + (t < s ? 1 : 0));
+        const limb s = x + y;
+        const limb t = s + carry;
+        carry        = static_cast<limb>(s < x) + static_cast<limb>(t < s);
         r.push_back(t);
     }
     if (carry != 0) {
@@ -76,9 +86,9 @@ inline std::vector<limb> sub_mag(const std::vector<limb>& a, const std::vector<l
     limb              borrow = 0;
     for (std::size_t i = 0; i < a.size(); ++i) {
         const limb y = i < b.size() ? b[i] : 0;
-        const limb d = static_cast<limb>(a[i] - y);
-        const limb e = static_cast<limb>(d - borrow);
-        borrow       = static_cast<limb>((a[i] < y ? 1 : 0) + (d < borrow ? 1 : 0));
+        const limb d = a[i] - y;
+        const limb e = d - borrow;
+        borrow       = static_cast<limb>(a[i] < y) + static_cast<limb>(d < borrow);
         r.push_back(e);
     }
     trim(r);
@@ -118,7 +128,7 @@ inline ref ref_shl(const ref& a, std::size_t s) {
     for (std::size_t i = 0; i < a.mag.size() * W; ++i) {
         if (bit_at(a.mag, i)) {
             const std::size_t j = i + s;
-            r.mag[j / W] |= static_cast<limb>(limb{1} << (j % W));
+            r.mag[j / W] |= limb{1} << (j % W);
         }
     }
     trim(r.mag);
@@ -139,7 +149,7 @@ inline ref ref_shr(const ref& a, std::size_t s) {
             inexact = true;
         } else {
             const std::size_t j = i - s;
-            r.mag[j / W] |= static_cast<limb>(limb{1} << (j % W));
+            r.mag[j / W] |= limb{1} << (j % W);
         }
     }
     trim(r.mag);
@@ -169,9 +179,9 @@ inline std::string hex(const ref& r) {
 
 template <class T>
 T make(const ref& r) {
-    T           x;
-    const auto  s   = hex(r);
-    const auto  res = from_chars(s.data(), s.data() + s.size(), x, 16);
+    T          x;
+    const auto s   = hex(r);
+    const auto res = from_chars(s.data(), s.data() + s.size(), x, 16);
     EXPECT_TRUE(res.ec == std::errc{});
     return x;
 }
@@ -192,13 +202,13 @@ constexpr bool tail_is_zero(const T& x) {
 
 template <class T>
 ::testing::AssertionResult matches(const T& x, const ref& expect) {
-    const auto rep = x.representation();
+    const auto        rep = x.representation();
     std::vector<limb> got(rep.begin(), rep.end());
     trim(got);
     const bool neg = x < 0;
     if (got != expect.mag || neg != expect.neg) {
-        return ::testing::AssertionFailure() << "got " << (neg ? "-" : "") << "[" << got.size() << " limbs] expected "
-                                             << hex(expect);
+        return ::testing::AssertionFailure()
+               << "got " << (neg ? "-" : "") << "[" << got.size() << " limbs] expected " << hex(expect);
     }
     if (!is_normalized(x)) {
         return ::testing::AssertionFailure() << "not normalized, expected " << hex(expect);
@@ -220,7 +230,7 @@ inline ref gen(std::mt19937_64& rng, std::size_t n, unsigned pattern, bool neg) 
     switch (pattern % 6) {
     case 0: // random
         for (auto& l : r.mag) {
-            l = static_cast<limb>(rng());
+            l = to_limb(rng());
         }
         break;
     case 1: // all ones
@@ -235,11 +245,11 @@ inline ref gen(std::mt19937_64& rng, std::size_t n, unsigned pattern, bool neg) 
         break;
     case 4: // random with zero low limbs
         for (std::size_t i = n / 2; i < n; ++i) {
-            r.mag[i] = static_cast<limb>(rng());
+            r.mag[i] = to_limb(rng());
         }
         break;
     default: // single high bit set
-        r.mag.back() = static_cast<limb>(limb{1} << (W - 1));
+        r.mag.back() = limb{1} << (W - 1);
         break;
     }
     if (r.mag.back() == 0) {
@@ -264,12 +274,12 @@ inline std::vector<std::size_t> sizes_for(std::size_t cap) {
 
 template <class T>
 constexpr T cx_ones(unsigned k) {
-    char digits[2048] = {};
-    const unsigned n  = k * W / 4;
+    char           digits[2048] = {};
+    const unsigned n            = k * W / 4;
     for (unsigned i = 0; i < n; ++i) {
         digits[i] = 'f';
     }
-    T x;
+    T                           x;
     [[maybe_unused]] const auto r = from_chars(digits, digits + n, x, 16);
     return x;
 }
@@ -280,7 +290,6 @@ constexpr bool cx_pow2(const T& x, unsigned e) { // x == 2^e
     p <<= e;
     return x == p;
 }
-
 
 } // namespace front_end_test
 BEMAN_BIG_INT_END_NAMESPACE

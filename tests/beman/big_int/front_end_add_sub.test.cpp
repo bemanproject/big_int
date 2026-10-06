@@ -72,14 +72,14 @@ void check_integer_forms(const ref& a, long long v, unsigned long long u) {
         ref r;
         r.neg = v < 0;
         if (v != 0) {
-            r.mag = {static_cast<limb>(v < 0 ? 0 - static_cast<unsigned long long>(v) : static_cast<unsigned long long>(v))};
+            r.mag = {to_limb(v < 0 ? 0 - static_cast<unsigned long long>(v) : static_cast<unsigned long long>(v))};
         }
         return r;
     }();
     const ref ru = [&] {
         ref r;
         if (u != 0) {
-            r.mag = {static_cast<limb>(u)};
+            r.mag = {to_limb(u)};
         }
         return r;
     }();
@@ -149,7 +149,8 @@ void add_sub_ripple() {
 template <class T>
 void integer_sweep() {
     std::mt19937_64 rng(2468);
-    const long long vs[] = {0, 1, -1, 5, -5, std::numeric_limits<long long>::max(), std::numeric_limits<long long>::min()};
+    const long long vs[] = {
+        0, 1, -1, 5, -5, std::numeric_limits<long long>::max(), std::numeric_limits<long long>::min()};
     for (const std::size_t n : sizes_for(T::inplace_capacity)) {
         for (unsigned p = 0; p < 6; ++p) {
             for (const bool neg : {false, true}) {
@@ -164,21 +165,25 @@ void integer_sweep() {
 // A two-limb integer operand whose high limb is zero is not canonical; the front ends must trim it.
 template <class T>
 void wide_integer_operands() {
-#ifdef __SIZEOF_INT128__
+#ifdef BEMAN_BIG_INT_HAS_INT128_FUNDAMENTAL
     if constexpr (W != 64) {
         return; // the split below assumes 64-bit limbs
     }
     std::mt19937_64 rng(4242);
     for (const std::size_t n : {0U, 1U, 2U, 3U, 5U}) {
         for (const bool neg : {false, true}) {
-            const ref a = gen(rng, n, 0, neg);
+            const ref a  = gen(rng, n, 0, neg);
             const T   ta = make<T>(a);
-            for (const __int128 v : {static_cast<__int128>(0), static_cast<__int128>(5), static_cast<__int128>(-5),
-                                     (static_cast<__int128>(1) << 70) + 3, -((static_cast<__int128>(1) << 90) + 1)}) {
-                const unsigned __int128 m = v < 0 ? 0 - static_cast<unsigned __int128>(v) : static_cast<unsigned __int128>(v);
-                ref                     rv;
+            for (const detail::int128_t v : {static_cast<detail::int128_t>(0),
+                                             static_cast<detail::int128_t>(5),
+                                             static_cast<detail::int128_t>(-5),
+                                             (static_cast<detail::int128_t>(1) << 70) + 3,
+                                             -((static_cast<detail::int128_t>(1) << 90) + 1)}) {
+                const detail::uint128_t m =
+                    v < 0 ? 0 - static_cast<detail::uint128_t>(v) : static_cast<detail::uint128_t>(v);
+                ref rv;
                 rv.neg = v < 0;
-                rv.mag = {static_cast<limb>(m), static_cast<limb>(m >> 64)};
+                rv.mag = {to_limb(m), to_limb(m >> 64)};
                 trim(rv.mag);
                 SCOPED_TRACE("a=" + hex(a));
                 EXPECT_TRUE(matches(ta + v, ref_add(a, rv)));
@@ -234,8 +239,8 @@ void aliasing() {
 
 template <class T>
 constexpr bool cx_add_sub(unsigned k) {
-    const T x = cx_ones<T>(k);
-    const T y = cx_ones<T>(k + 1);
+    const T        x  = cx_ones<T>(k);
+    const T        y  = cx_ones<T>(k + 1);
     const unsigned kw = k * W;
 
     // carry ripples through every limb
@@ -293,19 +298,19 @@ namespace fe = BEMAN_BIG_INT_NAMESPACE::front_end_test;
     CASE(Inline128, bb::basic_big_int<128>) \
     CASE(Inline256, bb::basic_big_int<256>)
 
-#define FRONT_END_TEST(SUFFIX, TYPE)                                          \
-    TEST(FrontEndAddSub##SUFFIX, Sweep) { fe::add_sub_sweep<TYPE>(); }          \
-    TEST(FrontEndAddSub##SUFFIX, Ripple) { fe::add_sub_ripple<TYPE>(); }        \
-    TEST(FrontEndAddSub##SUFFIX, IntegerOperands) { fe::integer_sweep<TYPE>(); } \
+#define FRONT_END_TEST(SUFFIX, TYPE)                                                         \
+    TEST(FrontEndAddSub##SUFFIX, Sweep) { fe::add_sub_sweep<TYPE>(); }                       \
+    TEST(FrontEndAddSub##SUFFIX, Ripple) { fe::add_sub_ripple<TYPE>(); }                     \
+    TEST(FrontEndAddSub##SUFFIX, IntegerOperands) { fe::integer_sweep<TYPE>(); }             \
     TEST(FrontEndAddSub##SUFFIX, WideIntegerOperands) { fe::wide_integer_operands<TYPE>(); } \
     TEST(FrontEndAddSub##SUFFIX, Aliasing) { fe::aliasing<TYPE>(); }
 FRONT_END_TYPES(FRONT_END_TEST)
 
-#define FRONT_END_STATIC(TYPE)                                            \
-    static_assert(fe::cx_add_sub<TYPE>(1));                                \
-    static_assert(fe::cx_add_sub<TYPE>(2));                                \
-    static_assert(fe::cx_add_sub<TYPE>(TYPE::inplace_capacity));           \
-    static_assert(fe::cx_add_sub<TYPE>(TYPE::inplace_capacity + 1));       \
+#define FRONT_END_STATIC(TYPE)                                       \
+    static_assert(fe::cx_add_sub<TYPE>(1));                          \
+    static_assert(fe::cx_add_sub<TYPE>(2));                          \
+    static_assert(fe::cx_add_sub<TYPE>(TYPE::inplace_capacity));     \
+    static_assert(fe::cx_add_sub<TYPE>(TYPE::inplace_capacity + 1)); \
     static_assert(fe::cx_add_sub<TYPE>(TYPE::inplace_capacity + 3))
 FRONT_END_STATIC(bb::big_int);
 FRONT_END_STATIC(bb::basic_big_int<128>);

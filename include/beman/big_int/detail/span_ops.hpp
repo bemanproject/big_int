@@ -1241,11 +1241,11 @@ constexpr uint_multiprecision_t lshift_copy(uint_multiprecision_t* const       d
         return 0;
     }
     const unsigned              back = limb_bits - bits;
-    const uint_multiprecision_t out  = static_cast<uint_multiprecision_t>(src[n - 1] >> back);
+    const uint_multiprecision_t out  = src[n - 1] >> back;
     for (std::size_t i = n - 1; i > 0; --i) {
-        dst[i] = static_cast<uint_multiprecision_t>((src[i] << bits) | (src[i - 1] >> back));
+        dst[i] = (src[i] << bits) | (src[i - 1] >> back);
     }
-    dst[0] = static_cast<uint_multiprecision_t>(src[0] << bits);
+    dst[0] = src[0] << bits;
     return out;
 }
 
@@ -1262,11 +1262,11 @@ constexpr uint_multiprecision_t rshift_copy(uint_multiprecision_t* const       d
         return 0;
     }
     const unsigned              back = limb_bits - bits;
-    const uint_multiprecision_t out  = static_cast<uint_multiprecision_t>(src[0] << back);
+    const uint_multiprecision_t out  = src[0] << back;
     for (std::size_t i = 0; i + 1 < n; ++i) {
-        dst[i] = static_cast<uint_multiprecision_t>((src[i] >> bits) | (src[i + 1] << back));
+        dst[i] = (src[i] >> bits) | (src[i + 1] << back);
     }
-    dst[n - 1] = static_cast<uint_multiprecision_t>(src[n - 1] >> bits);
+    dst[n - 1] = src[n - 1] >> bits;
     return out;
 }
 

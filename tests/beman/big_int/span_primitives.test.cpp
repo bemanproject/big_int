@@ -8,6 +8,7 @@
 #include <limits>
 #include <random>
 #include <span>
+#include <type_traits>
 #include <vector>
 
 #include <beman/big_int.hpp>
@@ -20,6 +21,16 @@ namespace {
 using limb                    = bb::uint_multiprecision_t;
 constexpr unsigned limb_width = static_cast<unsigned>(std::numeric_limits<limb>::digits);
 constexpr limb     max_limb   = std::numeric_limits<limb>::max();
+
+// Converts without a cast when the types already agree (GCC's -Wuseless-cast), and with one otherwise.
+template <class U>
+constexpr limb to_limb(const U v) noexcept {
+    if constexpr (std::is_same_v<U, limb>) {
+        return v;
+    } else {
+        return static_cast<limb>(v);
+    }
+}
 
 using bits_t = std::vector<bool>; // little-endian bit string, the reference representation
 
@@ -35,7 +46,7 @@ std::vector<limb> from_bits(const bits_t& b) {
     std::vector<limb> out(b.size() / limb_width, limb{0});
     for (std::size_t i = 0; i < b.size(); ++i) {
         if (b[i]) {
-            out[i / limb_width] |= static_cast<limb>(limb{1} << (i % limb_width));
+            out[i / limb_width] |= limb{1} << (i % limb_width);
         }
     }
     return out;
@@ -73,7 +84,7 @@ limb pick(std::mt19937_64& rng) {
     case 2:
         return 1;
     default:
-        return static_cast<limb>(rng());
+        return to_limb(rng());
     }
 }
 
@@ -85,7 +96,7 @@ std::vector<limb> random_limbs(std::mt19937_64& rng, const std::size_t n) {
     return v;
 }
 
-constexpr limb poison = static_cast<limb>(0xA5A5A5A5A5A5A5A5ULL);
+constexpr limb poison = to_limb(0xA5A5A5A5A5A5A5A5ULL);
 
 template <bool Sub>
 void check_addsub(const bool in_place) {
@@ -106,8 +117,8 @@ void check_addsub(const bool in_place) {
                 std::vector<limb> expected;
                 const bool        expected_flag = ref_addsub(expected, a, b, Sub);
 
-                std::vector<limb> dst_storage = in_place ? a : std::vector<limb>(m, poison);
-                const limb*       a_ptr       = in_place ? dst_storage.data() : a.data();
+                std::vector<limb>           dst_storage = in_place ? a : std::vector<limb>(m, poison);
+                const limb*                 a_ptr       = in_place ? dst_storage.data() : a.data();
                 const std::span<const limb> a_span{a_ptr, m};
                 const std::span<limb>       dst_span{dst_storage.data(), m};
                 const bool flag = Sub ? bb::detail::sub_n_tail(dst_span, a_span, std::span<const limb>{b})
@@ -137,13 +148,13 @@ std::vector<limb> ref_shift(const std::vector<limb>& src, const unsigned bits, c
             if (i + bits < in.size()) {
                 res[i + bits] = in[i];
             } else if (in[i]) {
-                out_bits |= static_cast<limb>(limb{1} << (i + bits - in.size()));
+                out_bits |= limb{1} << (i + bits - in.size());
             }
         } else {
             if (i >= bits) {
                 res[i - bits] = in[i];
             } else if (in[i]) {
-                out_bits |= static_cast<limb>(limb{1} << (limb_width - bits + i));
+                out_bits |= limb{1} << (limb_width - bits + i);
             }
         }
     }
@@ -155,14 +166,14 @@ void check_shift(const bool left, const bool aliased) {
     for (std::size_t n = 0; n <= 9; ++n) {
         for (unsigned bits = 1; bits < limb_width; bits += (bits < 5 || bits + 6 > limb_width ? 1 : 7)) {
             for (int trial = 0; trial < 20; ++trial) {
-                const std::vector<limb> src = random_limbs(rng, n);
+                const std::vector<limb> src          = random_limbs(rng, n);
                 limb                    expected_out = 0;
                 const auto              expected     = ref_shift(src, bits, left, expected_out);
 
                 // Non-aliased: destination below (rshift) or above (lshift) in a bigger buffer.
                 std::vector<limb> buf(n + 3, poison);
-                limb*             dst = nullptr;
-                const limb*       s   = nullptr;
+                limb*             dst     = nullptr;
+                const limb*       s       = nullptr;
                 std::vector<limb> src_buf = src;
                 if (aliased) {
                     buf.assign(src.begin(), src.end());
@@ -173,7 +184,8 @@ void check_shift(const bool left, const bool aliased) {
                     dst = buf.data() + 1;
                     s   = src_buf.data();
                 }
-                const limb out = left ? bb::detail::lshift_copy(dst, s, n, bits) : bb::detail::rshift_copy(dst, s, n, bits);
+                const limb out =
+                    left ? bb::detail::lshift_copy(dst, s, n, bits) : bb::detail::rshift_copy(dst, s, n, bits);
                 ASSERT_EQ(out, expected_out) << "n=" << n << " bits=" << bits;
                 ASSERT_EQ(std::vector<limb>(dst, dst + n), expected) << "n=" << n << " bits=" << bits;
                 if (!aliased) {
@@ -191,8 +203,8 @@ void check_shift_overlap(const bool left) {
     std::mt19937_64 rng{left ? 13U : 17U};
     for (std::size_t n = 1; n <= 9; ++n) {
         for (std::size_t offset = 1; offset <= 3; ++offset) {
-            const unsigned          bits = 1 + static_cast<unsigned>(rng() % (limb_width - 1));
-            const std::vector<limb> src  = random_limbs(rng, n);
+            const unsigned          bits         = 1 + static_cast<unsigned>(rng() % (limb_width - 1));
+            const std::vector<limb> src          = random_limbs(rng, n);
             limb                    expected_out = 0;
             const auto              expected     = ref_shift(src, bits, left, expected_out);
 
@@ -200,7 +212,8 @@ void check_shift_overlap(const bool left) {
             limb*             s   = left ? buf.data() : buf.data() + offset;
             limb*             dst = left ? buf.data() + offset : buf.data();
             std::copy(src.begin(), src.end(), s);
-            const limb out = left ? bb::detail::lshift_copy(dst, s, n, bits) : bb::detail::rshift_copy(dst, s, n, bits);
+            const limb out =
+                left ? bb::detail::lshift_copy(dst, s, n, bits) : bb::detail::rshift_copy(dst, s, n, bits);
             ASSERT_EQ(out, expected_out);
             ASSERT_EQ(std::vector<limb>(dst, dst + n), expected) << "n=" << n << " offset=" << offset;
         }
@@ -225,8 +238,7 @@ consteval bool constexpr_primitives() {
     std::array<limb, 2> b{1, 0};
     std::array<limb, 5> dst{};
     // a + b: the carry ripples through four limbs.
-    if (bb::detail::add_n_tail(dst, a, b) || dst[0] != 0 || dst[1] != 0 || dst[2] != 0 || dst[3] != 0 ||
-        dst[4] != 6) {
+    if (bb::detail::add_n_tail(dst, a, b) || dst[0] != 0 || dst[1] != 0 || dst[2] != 0 || dst[3] != 0 || dst[4] != 6) {
         return false;
     }
     // In-place subtract undoes it.
