@@ -8,8 +8,8 @@
 //             results (which take select_on_container_copy_construction of an operand allocator) land on it
 //   wide256   basic_big_int<256, limb, counting_allocator<limb>>  (inline capacity of 4 64-bit limbs)
 // The measured counts are printed to stdout as "[alloc_count] ...". The expectations below are the item 1 targets
-// (see the front-end cost plan); cases that exceed their target at the baseline (cf1cf54) are marked pending and skipped
-// while `item1_pending` is true. Drop the constant (and the baseline columns) when the library changes land.
+// (see the front-end cost plan); cases that exceed their target at the baseline (cf1cf54) are marked pending and
+// skipped while `item1_pending` is true. Drop the constant (and the baseline columns) when the library changes land.
 //
 // Baseline counts measured at cf1cf54 (allocations per call, K = 64 after one warm-up call; `want` is the target the
 // case asserts; the cases whose baseline exceeds `want` are the pending ones):
@@ -168,22 +168,22 @@ using baseline_counts = std::array<double, 3>;
 
 // Prints the measurement; fails when it exceeds `want`, or skips when the case is known to exceed it at the baseline
 // and the item 1 changes are still pending.
-#define ALLOC_EXPECT(Env, case_name, measured, want, baseline)                                                        \
-    do {                                                                                                              \
-        const double alloc_measured_ = (measured);                                                                    \
-        const double alloc_want_     = (want);                                                                        \
-        const double alloc_base_     = (baseline)[Env::index];                                                        \
-        std::printf("[alloc_count] %-8s %-34s measured=%6.3f want<=%5.2f baseline=%6.3f\n",                           \
-                    Env::name,                                                                                        \
-                    case_name,                                                                                        \
-                    alloc_measured_,                                                                                  \
-                    alloc_want_,                                                                                      \
-                    alloc_base_);                                                                                     \
-        if (alloc_measured_ > alloc_want_ && item1_pending && alloc_base_ > alloc_want_) {                            \
-            GTEST_SKIP() << "item 1 pending: " << case_name << " measures " << alloc_measured_ << ", want <= "       \
-                         << alloc_want_;                                                                              \
-        }                                                                                                             \
-        EXPECT_LE(alloc_measured_, alloc_want_) << case_name;                                                         \
+#define ALLOC_EXPECT(Env, case_name, measured, want, baseline)                                 \
+    do {                                                                                       \
+        const double alloc_measured_ = (measured);                                             \
+        const double alloc_want_     = (want);                                                 \
+        const double alloc_base_     = (baseline)[Env::index];                                 \
+        std::printf("[alloc_count] %-8s %-34s measured=%6.3f want<=%5.2f baseline=%6.3f\n",    \
+                    Env::name,                                                                 \
+                    case_name,                                                                 \
+                    alloc_measured_,                                                           \
+                    alloc_want_,                                                               \
+                    alloc_base_);                                                              \
+        if (alloc_measured_ > alloc_want_ && item1_pending && alloc_base_ > alloc_want_) {     \
+            GTEST_SKIP() << "item 1 pending: " << case_name << " measures " << alloc_measured_ \
+                         << ", want <= " << alloc_want_;                                       \
+        }                                                                                      \
+        EXPECT_LE(alloc_measured_, alloc_want_) << case_name;                                  \
     } while (false)
 
 namespace {
@@ -199,33 +199,33 @@ TYPED_TEST_SUITE(AllocCount, envs);
 // ----- add and subtract -----
 
 TYPED_TEST(AllocCount, AddHeapResult) {
-    TypeParam    env;
-    using int_t   = typename TypeParam::int_t;
-    const int_t a = env.make(random_limbs(16, 1));
-    const int_t b = env.make(random_limbs(16, 2));
-    int_t       c = env.empty();
+    TypeParam env;
+    using int_t    = typename TypeParam::int_t;
+    const int_t  a = env.make(random_limbs(16, 1));
+    const int_t  b = env.make(random_limbs(16, 2));
+    int_t        c = env.empty();
     const double n = steady_allocs(env, [&] { c = a + b; });
     EXPECT_TRUE(c - b == a);
     ALLOC_EXPECT(TypeParam, "c = a + b (16x16)", n, 1.0, (baseline_counts{1.0, 1.0, 1.0}));
 }
 
 TYPED_TEST(AllocCount, SubHeapResult) {
-    TypeParam    env;
-    using int_t   = typename TypeParam::int_t;
-    const int_t a = env.make(random_limbs(16, 3));
-    const int_t b = env.make(random_limbs(16, 4));
-    int_t       c = env.empty();
+    TypeParam env;
+    using int_t    = typename TypeParam::int_t;
+    const int_t  a = env.make(random_limbs(16, 3));
+    const int_t  b = env.make(random_limbs(16, 4));
+    int_t        c = env.empty();
     const double n = steady_allocs(env, [&] { c = a - b; });
     EXPECT_TRUE(c + b == a);
     ALLOC_EXPECT(TypeParam, "c = a - b (16x16)", n, 1.0, (baseline_counts{1.0, 1.0, 1.0}));
 }
 
 TYPED_TEST(AllocCount, AddSubInPlaceWithCapacity) {
-    TypeParam    env;
-    using int_t   = typename TypeParam::int_t;
-    const int_t a = env.make(random_limbs(16, 5));
-    const int_t b = env.make(random_limbs(16, 6));
-    int_t       c = a;
+    TypeParam env;
+    using int_t    = typename TypeParam::int_t;
+    const int_t  a = env.make(random_limbs(16, 5));
+    const int_t  b = env.make(random_limbs(16, 6));
+    int_t        c = a;
     const double n = steady_allocs(env, [&] {
         c += b;
         c -= b;
@@ -237,30 +237,30 @@ TYPED_TEST(AllocCount, AddSubInPlaceWithCapacity) {
 // ----- shifts -----
 
 TYPED_TEST(AllocCount, ShiftLeftHeapResult) {
-    TypeParam    env;
-    using int_t   = typename TypeParam::int_t;
-    const int_t a = env.make(random_limbs(16, 7));
-    int_t       c = env.empty();
+    TypeParam env;
+    using int_t    = typename TypeParam::int_t;
+    const int_t  a = env.make(random_limbs(16, 7));
+    int_t        c = env.empty();
     const double n = steady_allocs(env, [&] { c = a << 13; });
     EXPECT_TRUE((c >> 13) == a);
     ALLOC_EXPECT(TypeParam, "c = a << 13 (16 limbs)", n, 1.0, (baseline_counts{1.0, 1.0, 1.0}));
 }
 
 TYPED_TEST(AllocCount, ShiftRightHeapResult) {
-    TypeParam    env;
-    using int_t   = typename TypeParam::int_t;
-    const int_t a = env.make(random_limbs(16, 8));
-    int_t       c = env.empty();
+    TypeParam env;
+    using int_t    = typename TypeParam::int_t;
+    const int_t  a = env.make(random_limbs(16, 8));
+    int_t        c = env.empty();
     const double n = steady_allocs(env, [&] { c = a >> 13; });
     EXPECT_TRUE((c << 13) <= a);
     ALLOC_EXPECT(TypeParam, "c = a >> 13 (16 limbs)", n, 1.0, (baseline_counts{1.0, 1.0, 1.0}));
 }
 
 TYPED_TEST(AllocCount, ShiftInPlaceWithCapacity) {
-    TypeParam    env;
-    using int_t   = typename TypeParam::int_t;
-    const int_t a = env.make(random_limbs(16, 9));
-    int_t       c = a;
+    TypeParam env;
+    using int_t    = typename TypeParam::int_t;
+    const int_t  a = env.make(random_limbs(16, 9));
+    int_t        c = a;
     const double n = steady_allocs(env, [&] {
         c <<= 13;
         c >>= 13;
@@ -272,11 +272,11 @@ TYPED_TEST(AllocCount, ShiftInPlaceWithCapacity) {
 // ----- multiply -----
 
 TYPED_TEST(AllocCount, MultiplyHeapResult) {
-    TypeParam    env;
-    using int_t   = typename TypeParam::int_t;
-    const int_t a = env.make(random_limbs(8, 10));
-    const int_t b = env.make(random_limbs(8, 11));
-    int_t       c = env.empty();
+    TypeParam env;
+    using int_t    = typename TypeParam::int_t;
+    const int_t  a = env.make(random_limbs(8, 10));
+    const int_t  b = env.make(random_limbs(8, 11));
+    int_t        c = env.empty();
     const double n = steady_allocs(env, [&] { c = a * b; });
     EXPECT_TRUE(c / b == a);
     ALLOC_EXPECT(TypeParam, "c = a * b (8x8)", n, 1.0, (baseline_counts{1.0, 1.0, 1.0}));
@@ -284,11 +284,11 @@ TYPED_TEST(AllocCount, MultiplyHeapResult) {
 
 // c is restored from a inside the timed call (a copy into existing capacity), so the pair is steady.
 TYPED_TEST(AllocCount, MultiplyInPlaceByBigInt) {
-    TypeParam    env;
-    using int_t   = typename TypeParam::int_t;
-    const int_t a = env.make(random_limbs(8, 12));
-    const int_t b = env.make(random_limbs(8, 13));
-    int_t       c = env.empty();
+    TypeParam env;
+    using int_t    = typename TypeParam::int_t;
+    const int_t  a = env.make(random_limbs(8, 12));
+    const int_t  b = env.make(random_limbs(8, 13));
+    int_t        c = env.empty();
     const double n = steady_allocs(env, [&] {
         c = a;
         c *= b;
@@ -298,10 +298,10 @@ TYPED_TEST(AllocCount, MultiplyInPlaceByBigInt) {
 }
 
 TYPED_TEST(AllocCount, MultiplyInPlaceBySmall) {
-    TypeParam    env;
-    using int_t   = typename TypeParam::int_t;
-    const int_t a = env.make(random_limbs(8, 14));
-    int_t       c = env.empty();
+    TypeParam env;
+    using int_t    = typename TypeParam::int_t;
+    const int_t  a = env.make(random_limbs(8, 14));
+    int_t        c = env.empty();
     const double n = steady_allocs(env, [&] {
         c = a;
         c *= 7;
@@ -313,34 +313,34 @@ TYPED_TEST(AllocCount, MultiplyInPlaceBySmall) {
 // ----- divide -----
 
 TYPED_TEST(AllocCount, DivideHeapResult) {
-    TypeParam    env;
-    using int_t   = typename TypeParam::int_t;
-    const int_t a = env.make(random_limbs(8, 15));
-    const int_t b = env.make(random_limbs(4, 16));
-    int_t       c = env.empty();
+    TypeParam env;
+    using int_t    = typename TypeParam::int_t;
+    const int_t  a = env.make(random_limbs(8, 15));
+    const int_t  b = env.make(random_limbs(4, 16));
+    int_t        c = env.empty();
     const double n = steady_allocs(env, [&] { c = a / b; });
     EXPECT_TRUE(c * b + a % b == a);
     ALLOC_EXPECT(TypeParam, "c = a / b (8x4)", n, 1.0, (baseline_counts{2.0, 2.0, 2.0}));
 }
 
 TYPED_TEST(AllocCount, RemainderHeapResult) {
-    TypeParam    env;
-    using int_t   = typename TypeParam::int_t;
-    const int_t a = env.make(random_limbs(8, 17));
-    const int_t b = env.make(random_limbs(4, 18));
-    int_t       c = env.empty();
+    TypeParam env;
+    using int_t    = typename TypeParam::int_t;
+    const int_t  a = env.make(random_limbs(8, 17));
+    const int_t  b = env.make(random_limbs(4, 18));
+    int_t        c = env.empty();
     const double n = steady_allocs(env, [&] { c = a % b; });
     EXPECT_TRUE(a / b * b + c == a);
     ALLOC_EXPECT(TypeParam, "c = a % b (8x4)", n, 1.0, (baseline_counts{2.0, 2.0, 2.0}));
 }
 
 TYPED_TEST(AllocCount, DivRemToZero) {
-    TypeParam    env;
-    using int_t   = typename TypeParam::int_t;
-    const int_t a = env.make(random_limbs(8, 19));
-    const int_t b = env.make(random_limbs(4, 20));
-    bool        ok = true;
-    const double n = steady_allocs(env, [&] {
+    TypeParam env;
+    using int_t     = typename TypeParam::int_t;
+    const int_t  a  = env.make(random_limbs(8, 19));
+    const int_t  b  = env.make(random_limbs(4, 20));
+    bool         ok = true;
+    const double n  = steady_allocs(env, [&] {
         const auto qr = div_rem_to_zero(a, b);
         ok            = ok && qr.quotient * b + qr.remainder == a;
     });
@@ -351,11 +351,11 @@ TYPED_TEST(AllocCount, DivRemToZero) {
 // A two-limb dividend over a one-limb divisor, quotient two limbs: it fits inline only when the inline capacity is at
 // least two limbs, so the case applies to wide256 only.
 TYPED_TEST(AllocCount, DivideTwoByOneQuotientInline) {
-    TypeParam    env;
-    using int_t   = typename TypeParam::int_t;
-    const int_t a = env.make(std::vector<limb>{random_limbs(1, 21)[0], ~limb{0}});
-    const int_t b = env.make(std::vector<limb>{limb{0x123456789ULL}});
-    int_t       c = env.empty();
+    TypeParam env;
+    using int_t    = typename TypeParam::int_t;
+    const int_t  a = env.make(std::vector<limb>{random_limbs(1, 21)[0], ~limb{0}});
+    const int_t  b = env.make(std::vector<limb>{limb{0x123456789ULL}});
+    int_t        c = env.empty();
     const double n = steady_allocs(env, [&] { c = a / b; });
     EXPECT_TRUE(c * b + a % b == a);
     if (int_t::inplace_capacity < 2) {
@@ -371,11 +371,11 @@ TYPED_TEST(AllocCount, DivideTwoByOneQuotientInline) {
 
 // Stretch: in the schoolbook band the quotient could be built in the object's own limbs.
 TYPED_TEST(AllocCount, DivideInPlace) {
-    TypeParam    env;
-    using int_t   = typename TypeParam::int_t;
-    const int_t a = env.make(random_limbs(8, 22));
-    const int_t b = env.make(random_limbs(4, 23));
-    int_t       c = env.empty();
+    TypeParam env;
+    using int_t    = typename TypeParam::int_t;
+    const int_t  a = env.make(random_limbs(8, 22));
+    const int_t  b = env.make(random_limbs(4, 23));
+    int_t        c = env.empty();
     const double n = steady_allocs(env, [&] {
         c = a;
         c /= b;
@@ -385,11 +385,11 @@ TYPED_TEST(AllocCount, DivideInPlace) {
 }
 
 TYPED_TEST(AllocCount, RemainderInPlace) {
-    TypeParam    env;
-    using int_t   = typename TypeParam::int_t;
-    const int_t a = env.make(random_limbs(8, 24));
-    const int_t b = env.make(random_limbs(4, 25));
-    int_t       c = env.empty();
+    TypeParam env;
+    using int_t    = typename TypeParam::int_t;
+    const int_t  a = env.make(random_limbs(8, 24));
+    const int_t  b = env.make(random_limbs(4, 25));
+    int_t        c = env.empty();
     const double n = steady_allocs(env, [&] {
         c = a;
         c %= b;
@@ -401,7 +401,7 @@ TYPED_TEST(AllocCount, RemainderInPlace) {
 // ----- decimal from_chars -----
 
 TYPED_TEST(AllocCount, FromCharsDecimalIntoReserved) {
-    TypeParam   env;
+    TypeParam env;
     using int_t = typename TypeParam::int_t;
     std::string digits(2000, '0');
     for (std::size_t i = 0; i < digits.size(); ++i) {
