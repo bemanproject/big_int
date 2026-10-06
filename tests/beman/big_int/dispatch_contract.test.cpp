@@ -35,12 +35,12 @@ using limbs_t = std::vector<uint_t>;
 using cspan_t = std::span<const uint_t>;
 using span_t  = std::span<uint_t>;
 
-constexpr uint_t        poison      = static_cast<uint_t>(0xA5A5A5A5A5A5A5A5ULL);
-constexpr uint_t        guard_value = static_cast<uint_t>(0x5A5A5A5A5A5A5A5AULL);
-constexpr std::size_t   guard_limbs = 3;
-constexpr std::size_t   limb_bits   = std::numeric_limits<uint_t>::digits;
-constexpr std::size_t   max_ref_work = 4'000'000;
-constexpr std::size_t   max_limbs    = 20'000;
+constexpr uint_t      poison       = static_cast<uint_t>(0xA5A5A5A5A5A5A5A5ULL);
+constexpr uint_t      guard_value  = static_cast<uint_t>(0x5A5A5A5A5A5A5A5AULL);
+constexpr std::size_t guard_limbs  = 3;
+constexpr std::size_t limb_bits    = std::numeric_limits<uint_t>::digits;
+constexpr std::size_t max_ref_work = 4'000'000;
+constexpr std::size_t max_limbs    = 20'000;
 
 limbs_t random_limbs(const std::size_t n, std::mt19937_64& rng) {
     limbs_t v(n);
@@ -75,15 +75,14 @@ void check_product(const char* what, const cspan_t a, const cspan_t b, Run&& run
     const std::size_t n_clean = run(span_t{clean.data(), total}, a, b);
 
     for (std::size_t i = total; i < dirty.size(); ++i) {
-        EXPECT_EQ(dirty[i], guard_value) << what << ": guard limb " << (i - total) << " overwritten, la=" << a.size()
-                                         << " lb=" << b.size();
+        EXPECT_EQ(dirty[i], guard_value)
+            << what << ": guard limb " << (i - total) << " overwritten, la=" << a.size() << " lb=" << b.size();
     }
     EXPECT_EQ(n_dirty, n_clean) << what << ": la=" << a.size() << " lb=" << b.size();
     EXPECT_EQ(n_dirty, detail::trimmed_size_span(cspan_t{dirty.data(), total}))
         << what << ": returned size is not the trimmed size, la=" << a.size() << " lb=" << b.size();
     const bool same = std::equal(dirty.begin(), dirty.begin() + static_cast<std::ptrdiff_t>(total), clean.begin());
-    EXPECT_TRUE(same) << what << ": poisoned result differs from zeroed result, la=" << a.size()
-                      << " lb=" << b.size();
+    EXPECT_TRUE(same) << what << ": poisoned result differs from zeroed result, la=" << a.size() << " lb=" << b.size();
 
     if (a.size() * b.size() <= max_ref_work) {
         limbs_t ref(total, uint_t{0});
@@ -161,7 +160,7 @@ std::size_t sat_sub(const std::size_t x, const std::size_t d) { return x > d ? x
 
 // Operand sizes straddling every cutoff and basecase boundary.
 std::vector<std::size_t> boundary_sizes() {
-    std::vector<std::size_t> v = {1, 2, 3, 4, 5, 8, 16, 31, 32, 33};
+    std::vector<std::size_t> v         = {1, 2, 3, 4, 5, 8, 16, 31, 32, 33};
     const std::size_t        cutoffs[] = {detail::square_long_cutoff,
                                           detail::karatsuba_cutoff,
                                           detail::square_karatsuba_cutoff,
@@ -264,10 +263,14 @@ TEST(DispatchContract, PowerOfTwoKernelWritesEveryLimb) {
 
 // Sliced shapes: a long operand against a short one at or above karatsuba_cutoff.
 TEST(DispatchContract, SlicedUnbalancedShapes) {
-    std::mt19937_64 rng{0x511ceu};
-    const std::size_t kc = detail::karatsuba_cutoff;
-    const std::pair<std::size_t, std::size_t> shapes[] = {
-        {kc, 3 * kc + 1}, {kc, 4 * kc + 3}, {kc + 5, 9 * kc}, {kc + 1, 2 * kc}, {2 * kc, 7 * kc + 2}, {kc - 1, 6 * kc}};
+    std::mt19937_64                           rng{0x511ceu};
+    const std::size_t                         kc       = detail::karatsuba_cutoff;
+    const std::pair<std::size_t, std::size_t> shapes[] = {{kc, 3 * kc + 1},
+                                                          {kc, 4 * kc + 3},
+                                                          {kc + 5, 9 * kc},
+                                                          {kc + 1, 2 * kc},
+                                                          {2 * kc, 7 * kc + 2},
+                                                          {kc - 1, 6 * kc}};
     for (const auto& [s, l] : shapes) {
         if (l > max_limbs) {
             continue;
@@ -314,10 +317,11 @@ TEST(DispatchContract, UntrimmedOperands) {
         limbs_t           dirty(total, poison);
         limbs_t           clean(total, uint_t{0});
         alloc_t           alloc;
-        const std::size_t nd = detail::multiply_dispatch(span_t{dirty}, cspan_t{a}, cspan_t{b}, alloc);
-        const std::size_t nc = detail::multiply_dispatch(span_t{clean}, cspan_t{a}, cspan_t{b}, alloc);
-        EXPECT_EQ(nd, nc);
-        EXPECT_TRUE(std::equal(dirty.begin(), dirty.begin() + static_cast<std::ptrdiff_t>(trimmed_total), clean.begin()));
+        const std::size_t n_dirty = detail::multiply_dispatch(span_t{dirty}, cspan_t{a}, cspan_t{b}, alloc);
+        const std::size_t n_clean = detail::multiply_dispatch(span_t{clean}, cspan_t{a}, cspan_t{b}, alloc);
+        EXPECT_EQ(n_dirty, n_clean);
+        EXPECT_TRUE(
+            std::equal(dirty.begin(), dirty.begin() + static_cast<std::ptrdiff_t>(trimmed_total), clean.begin()));
         for (std::size_t i = trimmed_total; i < total; ++i) {
             EXPECT_EQ(dirty[i], poison) << "limb " << i << " past the trimmed product was written";
         }
@@ -340,8 +344,8 @@ void check_division(const std::size_t m, const std::size_t s, std::mt19937_64& r
     const std::size_t rn = m + 1;
 
     auto run_full = [&](const uint_t fill) {
-        limbs_t q(qn, fill);
-        limbs_t r(rn, fill);
+        limbs_t                            q(qn, fill);
+        limbs_t                            r(rn, fill);
         detail::scratch_allocator<alloc_t> scratch(detail::divide_schoolbook_storage_size(m, s, false), alloc);
         detail::divide_dispatch(span_t{q}, span_t{r}, a, b, scratch, alloc);
         return std::pair{std::move(q), std::move(r)};
@@ -362,11 +366,11 @@ void check_division(const std::size_t m, const std::size_t s, std::mt19937_64& r
 
     // q * divisor + r == dividend, checked through the (already contract-tested) multiply_long.
     limbs_t prod(qn + s, uint_t{0});
-    detail::multiply_long(span_t{prod}, cspan_t{qc.data(), detail::trimmed_size_span(cspan_t{qc})},
-                          b);
+    detail::multiply_long(span_t{prod}, cspan_t{qc.data(), detail::trimmed_size_span(cspan_t{qc})}, b);
     limbs_t sum(std::max(prod.size(), rd.size()) + 1, uint_t{0});
     std::copy(prod.begin(), prod.end(), sum.begin());
-    const bool carry = detail::add_unsigned_spans(span_t{sum}.first(sum.size() - 1), span_t{sum}.first(sum.size() - 1),
+    const bool carry = detail::add_unsigned_spans(span_t{sum}.first(sum.size() - 1),
+                                                  span_t{sum}.first(sum.size() - 1),
                                                   cspan_t{rd.data(), std::min(rd.size(), sum.size() - 1)});
     EXPECT_FALSE(carry);
     for (std::size_t i = 0; i < sum.size(); ++i) {
@@ -425,7 +429,7 @@ TEST(DispatchContract, DivideTakesSchoolbookMatchesGates) {
                                  (s >= detail::barrett_march8_cutoff && m / 8 >= s) ||
                                  (m >= detail::barrett_quarter_cutoff && m / 4 >= s) ||
                                  (m >= detail::barrett_balanced_cutoff && m - s >= s);
-            const bool bz = s >= detail::burnikel_ziegler_cutoff && m - s >= detail::burnikel_ziegler_offset;
+            const bool bz      = s >= detail::burnikel_ziegler_cutoff && m - s >= detail::burnikel_ziegler_offset;
             EXPECT_EQ(detail::divide_takes_schoolbook(m, s), !barrett && !bz) << "m=" << m << " s=" << s;
         }
     }
@@ -435,9 +439,9 @@ TEST(DispatchContract, DivideTakesSchoolbookMatchesGates) {
 TEST(DispatchContract, SchoolbookQuotientMayAliasDividend) {
     std::mt19937_64 rng{0xa11a5u};
     for (const auto& [m, s] : {std::pair<std::size_t, std::size_t>{8, 4}, {9, 2}, {20, 3}, {5, 5}, {33, 17}}) {
-        const limbs_t dividend = random_limbs(m, rng);
-        const limbs_t divisor  = random_limbs(s, rng);
-        const std::size_t qn   = m - s + 1;
+        const limbs_t     dividend = random_limbs(m, rng);
+        const limbs_t     divisor  = random_limbs(s, rng);
+        const std::size_t qn       = m - s + 1;
         alloc_t           alloc;
 
         limbs_t q_ref(qn, uint_t{0});
@@ -451,7 +455,8 @@ TEST(DispatchContract, SchoolbookQuotientMayAliasDividend) {
         limbs_t r(m + 1, poison);
         {
             detail::scratch_allocator<alloc_t> scratch(detail::divide_unsigned_storage_size(m, s), alloc);
-            detail::divide_unsigned(span_t{buf.data(), qn}, span_t{r}, cspan_t{buf.data(), m}, cspan_t{divisor}, scratch);
+            detail::divide_unsigned(
+                span_t{buf.data(), qn}, span_t{r}, cspan_t{buf.data(), m}, cspan_t{divisor}, scratch);
         }
         EXPECT_TRUE(std::equal(q_ref.begin(), q_ref.end(), buf.begin())) << "m=" << m << " s=" << s;
         EXPECT_EQ(r, r_ref) << "m=" << m << " s=" << s;
@@ -481,7 +486,7 @@ constexpr bool constexpr_product_ok(const std::span<const uint_t> a, const std::
 }
 
 constexpr bool constexpr_cases() {
-    constexpr uint_t       max = ~uint_t{0};
+    constexpr uint_t            max = ~uint_t{0};
     const std::array<uint_t, 1> one{7};
     const std::array<uint_t, 1> three{3};
     const std::array<uint_t, 3> wide{1, 2, 4};

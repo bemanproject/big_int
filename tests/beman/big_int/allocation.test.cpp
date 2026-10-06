@@ -312,6 +312,79 @@ TEST(Allocation, PropagatingAssignmentIsStrongWhenAllocationThrows) {
     EXPECT_EQ(dst, src);
 }
 
+// Compound multiplication, division and modulus keep the object's own allocator. These objects use a
+// propagating-on-move-assignment allocator, so replacing `*this` with a default-constructed one would
+// reset its id.
+TEST(Allocation, CompoundMultiplyDivideModulusKeepPropagatingAllocator) {
+    using alloc_t  = pocca_alloc<BEMAN_BIG_INT_NAMESPACE::uint_multiprecision_t>;
+    const auto big = [](std::size_t id, unsigned shift) {
+        pocca_big_int x{1, alloc_t{id}};
+        x <<= shift;
+        x += 12345;
+        return x;
+    };
+    // Small (inline), a few limbs (stack product), and large (fresh-buffer product) operands.
+    for (const unsigned shift : {10U, 200U, 700U, 6000U}) {
+        pocca_big_int       a  = big(7U, shift);
+        pocca_big_int       b  = big(7U, 130U);
+        pocca_big_int       c  = big(7U, 64U);
+        const pocca_big_int a0 = a;
+
+        a *= b;
+        EXPECT_EQ(a.get_allocator().id, 7U) << "*= shift " << shift;
+        EXPECT_EQ(a, a0 * b);
+
+        a /= b;
+        EXPECT_EQ(a.get_allocator().id, 7U) << "/= shift " << shift;
+        EXPECT_EQ(a, a0);
+
+        a *= a;
+        EXPECT_EQ(a.get_allocator().id, 7U) << "x *= x shift " << shift;
+        EXPECT_EQ(a, a0 * a0);
+
+        a %= b;
+        EXPECT_EQ(a.get_allocator().id, 7U) << "%= shift " << shift;
+        EXPECT_EQ(a, (a0 * a0) % b);
+
+        a = a0;
+        a /= a;
+        EXPECT_EQ(a.get_allocator().id, 7U) << "x /= x shift " << shift;
+        EXPECT_EQ(a, 1);
+
+        a = a0;
+        a %= a;
+        EXPECT_EQ(a.get_allocator().id, 7U) << "x %= x shift " << shift;
+        EXPECT_EQ(a, 0);
+
+        a = a0;
+        a *= 3;
+        a /= 3;
+        a %= 1000003;
+        EXPECT_EQ(a.get_allocator().id, 7U) << "integer rhs shift " << shift;
+
+        // Divisors and multipliers that fit one limb take the in-place paths.
+        a = a0;
+        a *= c;
+        a /= c;
+        EXPECT_EQ(a.get_allocator().id, 7U);
+        EXPECT_EQ(a, a0);
+    }
+}
+
+TEST(Allocation, MultiplyAndDivideResultsTakeAllocatorFromOperand) {
+    using alloc_t = pocca_alloc<BEMAN_BIG_INT_NAMESPACE::uint_multiprecision_t>;
+    pocca_big_int a{1, alloc_t{3U}};
+    a <<= 500;
+    pocca_big_int b{1, alloc_t{3U}};
+    b <<= 190;
+    EXPECT_EQ((a * b).get_allocator().id, 3U);
+    EXPECT_EQ((a / b).get_allocator().id, 3U);
+    EXPECT_EQ((a % b).get_allocator().id, 3U);
+    const auto both = div_rem_to_zero(a + 1, b + 1);
+    EXPECT_EQ(both.quotient.get_allocator().id, 3U);
+    EXPECT_EQ(both.remainder.get_allocator().id, 3U);
+}
+
 // A stateful allocator whose `select_on_container_copy_construction` hands back a
 // distinct allocator (`id + 1`) instead of a copy. A copy-constructed container
 // must adopt that allocator, so `id` shows whether the constructor consulted the
