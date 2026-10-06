@@ -650,6 +650,10 @@ class BEMAN_BIG_INT_TRIVIAL_ABI basic_big_int {
 
     constexpr void shift_left(shift_type s);
     constexpr void shift_right(shift_type s);
+    // `*this = (src, neg) << s` / `>> s` (floor rounding) in a single pass. `src` must be canonical and
+    // must not alias `*this`.
+    constexpr void assign_shifted_left(std::span<const uint_multiprecision_t> src, bool neg, shift_type s);
+    constexpr void assign_shifted_right(std::span<const uint_multiprecision_t> src, bool neg, shift_type s);
 
     template <detail::signed_or_unsigned Integer>
     [[nodiscard]] constexpr bool equals_integer(Integer x) const noexcept;
@@ -1333,49 +1337,37 @@ constexpr bool basic_big_int<b, L, A>::unchecked_decrement_magnitude() {
     return borrow_in;
 }
 
+// Zero stays zero. The result is sized exactly: the extra top limb exists only when the top limb's
+// leading zeros cannot absorb the bit shift.
 template <std::size_t b, class L, class A>
 constexpr void basic_big_int<b, L, A>::shift_left(const shift_type s) {
     BEMAN_BIG_INT_DEBUG_ASSERT(s <= shift_max);
-    if (s == 0) {
+    const size_type n = limb_count();
+    if (s == 0 || limb_ptr()[n - 1] == 0) {
         return;
     }
 
-    const shift_type shifted_limbs = s / bits_per_limb;
-    const shift_type shifted_bits  = s % bits_per_limb;
+    const size_type whole = s / bits_per_limb;
+    const unsigned  bits  = static_cast<unsigned>(s % bits_per_limb);
+    const bool      extra = bits != 0 && static_cast<unsigned>(std::countl_zero(limb_ptr()[n - 1])) < bits;
+    const size_type new_n = n + whole + static_cast<size_type>(extra);
 
-    // Only reserve an extra limb for the bit-shift when the top limb doesn't enough leading zeros.
-    // `countl_zero` tells us exactly how many bits of headroom the current top limb provides.
-    const bool needs_extra_limb =
-        shifted_bits != 0 && static_cast<shift_type>(std::countl_zero(limb_ptr()[limb_count() - 1])) < shifted_bits;
-    reserve_representation(limb_count() + shifted_limbs + static_cast<size_type>(needs_extra_limb));
+    grow(new_n);
     limb_type* const limbs = limb_ptr();
-
-    if (shifted_limbs != 0) {
-        const auto current_count = limb_count();
-        std::copy_backward(limbs, limbs + current_count, limbs + current_count + shifted_limbs);
-        std::fill_n(limbs, static_cast<std::ptrdiff_t>(shifted_limbs), limb_type{0});
-        unchecked_set_limb_count(static_cast<std::uint32_t>(current_count + shifted_limbs));
-    }
-    if (shifted_bits != 0) {
-        const auto      current_count = limb_count();
-        const limb_type overflow      = limbs[current_count - 1] >> (bits_per_limb - shifted_bits);
-
-        // Shift all limbs in place, top to bottom.
-        // Each iteration reads limbs[i-1] (original) and limbs[i] (original), writes limbs[i].
-        // This avoids an out-of-bounds write
-        for (shift_type i = current_count - 1; i > shifted_limbs; --i) {
-            const detail::wide<limb_type> all_bits{.low_bits = limbs[i - 1], .high_bits = limbs[i]};
-            limbs[i] = detail::funnel_shl(all_bits, static_cast<unsigned int>(shifted_bits));
+    if (bits != 0) {
+        const limb_type out = detail::lshift_copy(limbs + whole, limbs, n, bits);
+        if (extra) {
+            limbs[n + whole] = out;
         }
-        limbs[shifted_limbs] <<= shifted_bits;
-
-        if (overflow != 0) {
-            limbs[current_count] = overflow;
-            unchecked_set_limb_count(static_cast<std::uint32_t>(current_count + 1));
-        }
+    } else {
+        std::copy_backward(limbs, limbs + n, limbs + n + whole);
     }
+    std::fill_n(limbs, whole, limb_type{0});
+    unchecked_set_limb_count(static_cast<std::uint32_t>(new_n));
 }
 
+// Floor division by `2^s`: a negative value whose discarded bits are not all zero gets its magnitude
+// incremented after the (truncating) magnitude shift.
 template <std::size_t b, class L, class A>
 constexpr void basic_big_int<b, L, A>::shift_right(const shift_type s) {
     BEMAN_BIG_INT_DEBUG_ASSERT(s <= shift_max);
@@ -1383,52 +1375,129 @@ constexpr void basic_big_int<b, L, A>::shift_right(const shift_type s) {
         return;
     }
 
-    const shift_type shifted_limbs = s / bits_per_limb;
-    const shift_type shifted_bits  = s % bits_per_limb;
-    limb_type* const limbs         = limb_ptr();
+    const size_type n     = limb_count();
+    const size_type whole = s / bits_per_limb;
+    const unsigned  bits  = static_cast<unsigned>(s % bits_per_limb);
+    const bool      neg   = is_negative();
 
-    // Shifting to the right has the effect of dividing by `pow(2, N)` rounded towards negative infinity.
-    // When we "discard" limbs, this has truncating rounding;
-    // for positive numbers that is already what we need, but requires adjustment for negative numbers.
-    // In that case, we need to figure out whether the result is inexact
-    // by detecting whether any nonzero bits are shifted out.
-    const bool needs_decrement = is_negative() && [&] {
-        for (shift_type i = 0; i < shifted_limbs; ++i) {
-            if (i >= limb_count()) {
-                return false;
-            }
-            if (limbs[i] != 0) {
-                return true;
-            }
+    if (whole >= n) {
+        // Everything is discarded: zero, or -1 for a negative value (which is nonzero, so bits were lost).
+        set_zero();
+        if (neg) {
+            limb_ptr()[0]   = 1;
+            m_size_and_sign = 0x8000'0001U;
         }
-        const auto shift_mask = (limb_type{1} << shifted_bits) - 1;
-        return shifted_limbs < limb_count() && (limbs[shifted_limbs] & shift_mask) != 0;
-    }();
+        return;
+    }
 
-    if (shifted_limbs != 0) {
-        const auto current_count = limb_count();
-        if (shifted_limbs >= current_count) {
-            limbs[0] = 0;
-            unchecked_set_limb_count(1);
-        } else {
-            std::shift_left(limbs, limbs + current_count, static_cast<std::ptrdiff_t>(shifted_limbs));
-            unchecked_set_limb_count(static_cast<std::uint32_t>(current_count - shifted_limbs));
+    limb_type* const limbs   = limb_ptr();
+    bool             inexact = false;
+    if (neg) {
+        for (size_type i = 0; i < whole && !inexact; ++i) {
+            inexact = limbs[i] != 0;
         }
-        clear_inline_tail(current_count);
     }
-    if (shifted_bits != 0) {
-        for (size_type i = 0; i + 1 < limb_count(); ++i) {
-            const detail::wide<limb_type> all_bits{.low_bits = limbs[i], .high_bits = limbs[i + 1]};
-            limbs[i] = detail::funnel_shr(all_bits, static_cast<unsigned int>(shifted_bits));
+
+    const size_type new_n = n - whole;
+    if (bits != 0) {
+        inexact |= detail::rshift_copy(limbs, limbs + whole, new_n, bits) != 0;
+    } else if (whole != 0) {
+        std::copy(limbs + whole, limbs + n, limbs);
+    }
+
+    size_type k = new_n;
+    while (k > 1 && limbs[k - 1] == 0) {
+        --k;
+    }
+    m_size_and_sign = (m_size_and_sign & 0x8000'0000U) | static_cast<std::uint32_t>(k);
+    clear_inline_tail(n);
+    if (neg && inexact) {
+        // A magnitude that shifted down to zero is a negative zero here; incrementing makes it -1.
+        unchecked_increment_magnitude();
+        BEMAN_BIG_INT_DEBUG_ASSERT(is_negative());
+    }
+}
+
+template <std::size_t b, class L, class A>
+constexpr void basic_big_int<b, L, A>::assign_shifted_left(const std::span<const uint_multiprecision_t> src,
+                                                           const bool                                   neg,
+                                                           const shift_type                             s) {
+    BEMAN_BIG_INT_DEBUG_ASSERT(s <= shift_max);
+    const size_type n = src.size();
+    if (src[n - 1] == 0) {
+        set_zero();
+        return;
+    }
+
+    const size_type old_count = limb_count();
+    const size_type whole     = s / bits_per_limb;
+    const unsigned  bits      = static_cast<unsigned>(s % bits_per_limb);
+    const bool      extra     = bits != 0 && static_cast<unsigned>(std::countl_zero(src[n - 1])) < bits;
+    const size_type new_n     = n + whole + static_cast<size_type>(extra);
+
+    limb_type* const limbs = storage_for_overwrite(new_n);
+    if (bits != 0) {
+        const limb_type out = detail::lshift_copy(limbs + whole, src.data(), n, bits);
+        if (extra) {
+            limbs[n + whole] = out;
         }
-        BEMAN_BIG_INT_DEBUG_ASSERT(limb_count() != 0);
-        limbs[limb_count() - 1] >>= shifted_bits;
+    } else {
+        std::copy_n(src.data(), n, limbs + whole);
     }
-    unchecked_trim_magnitude();
-    if (needs_decrement) {
-        // See above for rounding considerations.
-        // Also note that we may be holding a negative zero right now,
-        // and increasing the magnitude converts that into `-1`.
+    std::fill_n(limbs, whole, limb_type{0});
+    m_size_and_sign = (static_cast<std::uint32_t>(neg) << 31) | static_cast<std::uint32_t>(new_n);
+    clear_inline_tail(old_count);
+}
+
+template <std::size_t b, class L, class A>
+constexpr void basic_big_int<b, L, A>::assign_shifted_right(const std::span<const uint_multiprecision_t> src,
+                                                            const bool                                   neg,
+                                                            const shift_type                             s) {
+    BEMAN_BIG_INT_DEBUG_ASSERT(s <= shift_max);
+    const size_type n     = src.size();
+    const size_type whole = s / bits_per_limb;
+    const unsigned  bits  = static_cast<unsigned>(s % bits_per_limb);
+
+    if (whole >= n) {
+        set_zero();
+        if (neg) {
+            limb_ptr()[0]   = 1;
+            m_size_and_sign = 0x8000'0001U;
+        }
+        return;
+    }
+
+    bool inexact = false;
+    if (neg) {
+        for (size_type i = 0; i < whole && !inexact; ++i) {
+            inexact = src[i] != 0;
+        }
+    }
+
+    // Size the result exactly (the source's top limb may shift away entirely) so a heap source whose
+    // shifted value fits inline does not allocate.
+    const size_type  old_count = limb_count();
+    const limb_type* from      = src.data() + whole;
+    size_type        k         = n - whole;
+    const bool       top_dies  = k > 1 && bits != 0 && (from[k - 1] >> bits) == 0;
+    k -= static_cast<size_type>(top_dies);
+    limb_type* const limbs = storage_for_overwrite(k);
+    if (bits != 0) {
+        inexact |= detail::rshift_copy(limbs, from, k, bits) != 0;
+        if (top_dies) {
+            // The vanished top limb still contributes its low bits to limb k - 1.
+            limbs[k - 1] |= static_cast<limb_type>(from[k] << (bits_per_limb - bits));
+        }
+    } else {
+        std::copy_n(from, k, limbs);
+    }
+
+    while (k > 1 && limbs[k - 1] == 0) {
+        --k;
+    }
+    m_size_and_sign = (static_cast<std::uint32_t>(neg) << 31) | static_cast<std::uint32_t>(k);
+    clear_inline_tail(old_count);
+    if (neg && inexact) {
         unchecked_increment_magnitude();
         BEMAN_BIG_INT_DEBUG_ASSERT(is_negative());
     }
@@ -2103,17 +2172,9 @@ constexpr std::remove_cvref_t<T> operator<<(T&& x, const S s) {
         r.shift_left(shift);
         return r;
     } else if constexpr (form == detail::binary_op_form::copy_int) {
-        // lvalue: use assign_value with headroom so shift_left doesn't reallocate.
-        const shift_type shifted_limbs = shift / Result::bits_per_limb;
-        const shift_type shifted_bits  = shift % Result::bits_per_limb;
-        const bool       needs_extra =
-            shifted_bits != 0 &&
-            static_cast<shift_type>(std::countl_zero(x.limb_ptr()[x.limb_count() - 1])) < shifted_bits;
-        const std::size_t headroom = shifted_limbs + static_cast<std::size_t>(needs_extra);
-
+        // lvalue: build the shifted value straight into a fresh result, one pass.
         Result r{detail::result_allocator<Result>(x, s)};
-        r.template assign_value<detail::allocator_propagation::no_propagate>(x, headroom);
-        r.shift_left(shift);
+        r.assign_shifted_left(x.representation(), x.is_negative(), shift);
         return r;
     }
 }
@@ -2139,95 +2200,17 @@ constexpr std::remove_cvref_t<T> operator>>(T&& x, const S s) {
         r.shift_right(shift);
         return r;
     } else if constexpr (form == detail::binary_op_form::copy_int) {
-        // lvalue: copy then shift. Two fast paths avoid copying bits that are
-        // about to be discarded anyway
-        //
-        // First is the case where the value is discarded entirely
-        // All we need to do is copy the sign
-        //
-        // Second is the case where some of the value is discarded
-        // For positive values this is a simple copy what we need and make a final limb internal shift
-        // For negative values we need to account for the rounding at the end
-        //
-        // If neither of these situations applies, make a full copy and shift.
-
-        using limb_type = uint_multiprecision_t;
-
-        const shift_type shifted_limbs = shift / Result::bits_per_limb;
-        const shift_type shifted_bits  = shift % Result::bits_per_limb;
-        const shift_type x_bits        = static_cast<shift_type>(x.size());
-
+        // lvalue: shift straight from the source into a fresh result, one pass.
+        // Shifting out every bit leaves just the sign (-1 or 0), without touching the limbs.
         const auto alloc = detail::result_allocator<Result>(x, s);
-
-        // Case 1: Everything is discarded except the sign
-        if (shift >= x_bits) {
+        if (shift >= static_cast<shift_type>(x.size())) {
             if (x.is_negative()) {
                 return Result{-1, alloc};
             }
             return Result{alloc};
         }
-
-        const limb_type* const src_limbs = x.limb_ptr();
-        const shift_type       src_count = static_cast<shift_type>(x.limb_count());
-
-        // Number of limbs the shifted result actually occupies. Smaller than
-        // `src_count` exactly when at least one source limb (or the top
-        // limb's surviving bits) shrinks away.
-        const auto new_count = detail::div_to_pos_inf(x_bits - shift, static_cast<shift_type>(Result::bits_per_limb));
-
-        // Case 2: Result is strictly smaller than the source
-        if (new_count < src_count) {
-            const shift_type src_offset = shifted_limbs;
-
-            Result r{alloc};
-            r.reserve_representation(new_count);
-            limb_type* const dst = r.limb_ptr();
-
-            if (shifted_bits == 0) {
-                std::copy_n(src_limbs + src_offset, new_count, dst);
-            } else {
-                // Funnel-shift directly from source limbs into `dst`.
-                // Handles the case where we can theoretically go from heap -> inline storage with our result
-                for (shift_type i = 0; i < new_count; ++i) {
-                    const shift_type src_idx = src_offset + i;
-                    const limb_type  low     = src_limbs[src_idx];
-                    const limb_type  high    = (src_idx + 1 < src_count) ? src_limbs[src_idx + 1] : limb_type{0};
-                    const detail::wide<limb_type> all_bits{.low_bits = low, .high_bits = high};
-                    dst[i] = detail::funnel_shr(all_bits, static_cast<unsigned int>(shifted_bits));
-                }
-            }
-            r.unchecked_set_limb_count(static_cast<std::uint32_t>(new_count));
-
-            if (x.is_negative()) {
-                // Mirror `shift_right`'s rounding-toward-negative-infinity
-                // We have to account even for the bits that will never be copied
-                bool discarded_nonzero = false;
-                for (shift_type i = 0; i < src_offset; ++i) {
-                    if (src_limbs[i] != 0) {
-                        discarded_nonzero = true;
-                        break;
-                    }
-                }
-
-                if (!discarded_nonzero && shifted_bits != 0) {
-                    const auto mask = static_cast<limb_type>((limb_type{1} << shifted_bits) - 1);
-                    if ((src_limbs[src_offset] & mask) != 0) {
-                        discarded_nonzero = true;
-                    }
-                }
-
-                r.unchecked_set_sign(true);
-                if (discarded_nonzero) {
-                    r.unchecked_increment_magnitude();
-                }
-            }
-            return r;
-        }
-
-        // Case 3: Make a full copy and shift
         Result r{alloc};
-        r.template assign_value<detail::allocator_propagation::no_propagate>(x);
-        r.shift_right(shift);
+        r.assign_shifted_right(x.representation(), x.is_negative(), shift);
         return r;
     }
 }
