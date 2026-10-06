@@ -400,8 +400,9 @@ TEST(MulDivFrontend, CompoundWithIntegers) {
         for (const std::int64_t v :
              {std::int64_t{3}, std::int64_t{-7}, std::int64_t{1} << 40, std::numeric_limits<std::int64_t>::max()}) {
             // The 64-bit magnitude split into limbs of whatever width the build uses.
-            const std::uint64_t vmag = v < 0 ? -static_cast<std::uint64_t>(v) : static_cast<std::uint64_t>(v);
-            limbs_t             vm;
+            const std::uint64_t vmag =
+                v < 0 ? std::uint64_t{0} - static_cast<std::uint64_t>(v) : static_cast<std::uint64_t>(v);
+            limbs_t vm;
             for (std::size_t sh = 0; sh < 64; sh += limb_bits) {
                 vm.push_back(to_limb(vmag >> sh));
             }

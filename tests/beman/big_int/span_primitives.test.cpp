@@ -20,7 +20,7 @@ namespace {
 
 using limb                    = bb::uint_multiprecision_t;
 constexpr unsigned limb_width = static_cast<unsigned>(std::numeric_limits<limb>::digits);
-constexpr limb     max_limb   = std::numeric_limits<limb>::max();
+constexpr limb     limb_max   = std::numeric_limits<limb>::max();
 
 // Converts without a cast when the types already agree (GCC's -Wuseless-cast), and with one otherwise.
 template <class U>
@@ -80,7 +80,7 @@ limb pick(std::mt19937_64& rng) {
     case 0:
         return 0;
     case 1:
-        return max_limb;
+        return limb_max;
     case 2:
         return 1;
     default:
@@ -108,7 +108,7 @@ void check_addsub(const bool in_place) {
                 std::vector<limb> b = random_limbs(rng, n);
                 if (trial % 7 == 0) { // long carry / borrow ripples
                     for (auto& x : a) {
-                        x = Sub ? limb{0} : max_limb;
+                        x = Sub ? limb{0} : limb_max;
                     }
                     if (n != 0) {
                         b[0] = 1;
@@ -234,7 +234,7 @@ TEST(SpanPrimitives, RshiftCopyOverlapping) { check_shift_overlap(false); }
 namespace {
 
 consteval bool constexpr_primitives() {
-    std::array<limb, 5> a{max_limb, max_limb, max_limb, max_limb, 5};
+    std::array<limb, 5> a{limb_max, limb_max, limb_max, limb_max, 5};
     std::array<limb, 2> b{1, 0};
     std::array<limb, 5> dst{};
     // a + b: the carry ripples through four limbs.
@@ -249,7 +249,7 @@ consteval bool constexpr_primitives() {
     // 0 - 1 borrows out of the top.
     std::array<limb, 2> z{};
     std::array<limb, 2> one{1, 0};
-    if (!bb::detail::sub_n_tail(z, std::array<limb, 2>{}, one) || z[0] != max_limb || z[1] != max_limb) {
+    if (!bb::detail::sub_n_tail(z, std::array<limb, 2>{}, one) || z[0] != limb_max || z[1] != limb_max) {
         return false;
     }
     // Shifts round-trip.

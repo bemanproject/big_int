@@ -2367,8 +2367,8 @@ template <std::size_t extent_other>
 constexpr void
 basic_big_int<b, L, A>::add_in_place(const std::span<const uint_multiprecision_t, extent_other> other_in,
                                      const bool                                                 other_neg) {
-    using span_t                 = std::span<const uint_multiprecision_t>;
-    const span_t        other    = other_in.first(detail::trimmed_size_span(other_in));
+    using limb_view              = std::span<const uint_multiprecision_t>;
+    const limb_view     other    = other_in.first(detail::trimmed_size_span(other_in));
     const bool          this_neg = is_negative();
     const std::size_t   n        = limb_count();
     const std::size_t   m        = other.size();
@@ -2423,7 +2423,7 @@ basic_big_int<b, L, A>::add_in_place(const std::span<const uint_multiprecision_t
     }
 
     // Differing signs: subtract the smaller magnitude from the larger; the larger one's sign wins.
-    const auto order = detail::compare_limb_magnitudes(span_t{limb_ptr(), n}, other);
+    const auto order = detail::compare_limb_magnitudes(limb_view{limb_ptr(), n}, other);
     if (std::is_eq(order)) {
         set_zero();
         return;
@@ -2464,9 +2464,9 @@ constexpr void basic_big_int<b, L, A>::add_into(const std::span<const uint_multi
                                                 bool                                                   a_neg,
                                                 const std::span<const uint_multiprecision_t, extent_b> b_in,
                                                 bool                                                   b_neg) {
-    using span_t = std::span<const uint_multiprecision_t>;
-    span_t a     = a_in.first(detail::trimmed_size_span(a_in));
-    span_t bs    = b_in.first(detail::trimmed_size_span(b_in));
+    using limb_view = std::span<const uint_multiprecision_t>;
+    limb_view a     = a_in.first(detail::trimmed_size_span(a_in));
+    limb_view bs    = b_in.first(detail::trimmed_size_span(b_in));
     if (a.size() < bs.size()) {
         std::swap(a, bs);
         std::swap(a_neg, b_neg);
@@ -2521,10 +2521,10 @@ constexpr void basic_big_int<b, L, A>::add_into(const std::span<const uint_multi
         set_zero();
         return;
     }
-    const bool   a_larger   = std::is_gt(order);
-    const span_t larger     = a_larger ? a : bs;
-    const span_t smaller    = a_larger ? bs : a;
-    const bool   result_neg = a_larger ? a_neg : b_neg;
+    const bool      a_larger   = std::is_gt(order);
+    const limb_view larger     = a_larger ? a : bs;
+    const limb_view smaller    = a_larger ? bs : a;
+    const bool      result_neg = a_larger ? a_neg : b_neg;
 
     std::size_t                 k      = larger.size();
     limb_type* const            limbs  = storage_for_overwrite(k);

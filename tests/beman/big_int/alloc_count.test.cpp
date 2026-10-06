@@ -405,15 +405,16 @@ TYPED_TEST(AllocCount, DivideTwoByOneQuotientInline) {
     int_t        c = env.empty();
     const double n = steady_allocs(env, [&] { c = a / b; });
     EXPECT_TRUE(c * b + a % b == a);
-    if (int_t::inplace_capacity < 2) {
+    if constexpr (int_t::inplace_capacity < 2) {
         std::printf("[alloc_count] %-8s %-34s measured=%6.3f (inline capacity %zu: quotient needs the heap, n/a)\n",
                     TypeParam::name,
                     "c = a / b (2x1)",
                     n,
                     static_cast<std::size_t>(int_t::inplace_capacity));
         GTEST_SKIP() << "the 2-limb quotient only fits inline at inline capacity >= 2";
+    } else {
+        ALLOC_EXPECT(TypeParam, "c = a / b (2x1, inline q)", n, 0.0, (baseline_counts{1.0, 1.0, 0.0, -1.0, -1.0}));
     }
-    ALLOC_EXPECT(TypeParam, "c = a / b (2x1, inline q)", n, 0.0, (baseline_counts{1.0, 1.0, 0.0, -1.0, -1.0}));
 }
 
 // Stretch: in the schoolbook band the quotient could be built in the object's own limbs.
