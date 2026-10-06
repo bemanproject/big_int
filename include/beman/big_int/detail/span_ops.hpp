@@ -1256,12 +1256,25 @@ constexpr uint_multiprecision_t lshift_copy(uint_multiprecision_t* const       d
     if (n == 0) {
         return 0;
     }
-    const unsigned              back = limb_bits - bits;
-    const uint_multiprecision_t out  = src[n - 1] >> back;
+    const unsigned back = limb_bits - bits;
+#if defined(__GNUC__) && !defined(__clang__)
+    // GCC reloads src[i - 1] each iteration when dst may alias src; carry it in a register.
+    // Clang compiles the two-load form below better.
+    uint_multiprecision_t       hi  = src[n - 1];
+    const uint_multiprecision_t out = hi >> back;
+    for (std::size_t i = n - 1; i > 0; --i) {
+        const uint_multiprecision_t lo = src[i - 1];
+        dst[i]                         = (hi << bits) | (lo >> back);
+        hi                             = lo;
+    }
+    dst[0] = hi << bits;
+#else
+    const uint_multiprecision_t out = src[n - 1] >> back;
     for (std::size_t i = n - 1; i > 0; --i) {
         dst[i] = (src[i] << bits) | (src[i - 1] >> back);
     }
     dst[0] = src[0] << bits;
+#endif
     return out;
 }
 
@@ -1277,12 +1290,24 @@ constexpr uint_multiprecision_t rshift_copy(uint_multiprecision_t* const       d
     if (n == 0) {
         return 0;
     }
-    const unsigned              back = limb_bits - bits;
-    const uint_multiprecision_t out  = src[0] << back;
+    const unsigned back = limb_bits - bits;
+#if defined(__GNUC__) && !defined(__clang__)
+    // See lshift_copy.
+    uint_multiprecision_t       lo  = src[0];
+    const uint_multiprecision_t out = lo << back;
+    for (std::size_t i = 0; i + 1 < n; ++i) {
+        const uint_multiprecision_t hi = src[i + 1];
+        dst[i]                         = (lo >> bits) | (hi << back);
+        lo                             = hi;
+    }
+    dst[n - 1] = lo >> bits;
+#else
+    const uint_multiprecision_t out = src[0] << back;
     for (std::size_t i = 0; i + 1 < n; ++i) {
         dst[i] = (src[i] >> bits) | (src[i + 1] << back);
     }
     dst[n - 1] = src[n - 1] >> bits;
+#endif
     return out;
 }
 

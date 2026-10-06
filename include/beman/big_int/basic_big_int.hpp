@@ -1372,21 +1372,15 @@ constexpr void basic_big_int<b, L, A>::shift_left(const shift_type s) {
 
     grow(new_n);
     limb_type* const limbs = limb_ptr();
-    if (whole == 0) {
-        // A pure bit shift in place: the existing kernel is the fastest single pass.
-        [[maybe_unused]] const auto size = detail::shift_left_n({limbs, new_n}, n, bits);
-        BEMAN_BIG_INT_DEBUG_ASSERT(size == new_n);
-    } else {
-        if (bits != 0) {
-            const limb_type out = detail::lshift_copy(limbs + whole, limbs, n, bits);
-            if (extra) {
-                limbs[n + whole] = out;
-            }
-        } else {
-            std::copy_backward(limbs, limbs + n, limbs + n + whole);
+    if (bits != 0) {
+        const limb_type out = detail::lshift_copy(limbs + whole, limbs, n, bits);
+        if (extra) {
+            limbs[n + whole] = out;
         }
-        std::fill_n(limbs, whole, limb_type{0});
+    } else {
+        std::copy_backward(limbs, limbs + n, limbs + n + whole);
     }
+    std::fill_n(limbs, whole, limb_type{0});
     unchecked_set_limb_count(static_cast<std::uint32_t>(new_n));
 }
 
@@ -1423,11 +1417,9 @@ constexpr void basic_big_int<b, L, A>::shift_right(const shift_type s) {
     }
 
     const size_type new_n = n - whole;
-    if (whole == 0) {
-        inexact |= detail::shift_right_n({limbs, n}, bits) != 0;
-    } else if (bits != 0) {
+    if (bits != 0) {
         inexact |= detail::rshift_copy(limbs, limbs + whole, new_n, bits) != 0;
-    } else {
+    } else if (whole != 0) {
         std::copy(limbs + whole, limbs + n, limbs);
     }
 
