@@ -24,9 +24,9 @@ namespace front_end_test {
 
 template <class T>
 void check_shifts(const ref& a, const std::size_t s) {
-    const T    ta  = make<T>(a);
-    const ref  shl = ref_shl(a, s);
-    const ref  shr = ref_shr(a, s);
+    const T   ta  = make<T>(a);
+    const ref shl = ref_shl(a, s);
+    const ref shr = ref_shr(a, s);
     SCOPED_TRACE("a=" + hex(a) + " s=" + std::to_string(s));
 
     EXPECT_TRUE(matches(ta << s, shl));
@@ -54,7 +54,7 @@ void check_shifts(const ref& a, const std::size_t s) {
 
 template <class T>
 void shift_sweep() {
-    std::mt19937_64 rng(1357);
+    std::mt19937_64   rng(1357);
     const std::size_t cap = T::inplace_capacity;
     for (const std::size_t n : sizes_for(cap)) {
         if (n > 8 && n != cap && n != cap + 1) {
@@ -62,10 +62,23 @@ void shift_sweep() {
         }
         for (unsigned p = 0; p < 6; ++p) {
             for (const bool neg : {false, true}) {
-                const ref a = gen(rng, n, p, neg);
-                std::vector<std::size_t> shifts = {0,         1,         W - 1,     W,         W + 1,     2 * W,
-                                                   2 * W + 13, 3 * W - 1, n * W - 1, n * W,     n * W + 1, n * W + 5,
-                                                   cap * W,    cap * W + 13, (cap + 1) * W, (cap + 2) * W + 1};
+                const ref                a      = gen(rng, n, p, neg);
+                std::vector<std::size_t> shifts = {0,
+                                                   1,
+                                                   W - 1,
+                                                   W,
+                                                   W + 1,
+                                                   2 * W,
+                                                   2 * W + 13,
+                                                   3 * W - 1,
+                                                   n * W - 1,
+                                                   n * W,
+                                                   n * W + 1,
+                                                   n * W + 5,
+                                                   cap * W,
+                                                   cap * W + 13,
+                                                   (cap + 1) * W,
+                                                   (cap + 2) * W + 1};
                 for (const std::size_t s : shifts) {
                     if (s > 100000) {
                         continue; // n == 0 underflow of n * W - 1
@@ -82,7 +95,7 @@ template <class T>
 void small_exhaustive() {
     for (long long x = -70; x <= 70; ++x) {
         for (unsigned s = 0; s <= 130; ++s) {
-            const T tx{x};
+            const T   tx{x};
             long long expect_r = x >> std::min(s, 62U);
             EXPECT_EQ(tx >> s, expect_r) << x << " >> " << s;
             T c = tx;
@@ -131,7 +144,7 @@ void shift_aliasing() {
                 const ref a = gen(rng, n, p, neg);
                 SCOPED_TRACE("a=" + hex(a));
                 T x = make<T>(a);
-                x = x << 0;
+                x   = x << 0;
                 EXPECT_TRUE(matches(x, a)) << "x = x << 0";
                 x = make<T>(a);
                 x = x >> 0;
@@ -209,18 +222,18 @@ namespace fe = BEMAN_BIG_INT_NAMESPACE::front_end_test;
     CASE(Inline128, bb::basic_big_int<128>) \
     CASE(Inline256, bb::basic_big_int<256>)
 
-#define FRONT_END_TEST(SUFFIX, TYPE)                                                \
-    TEST(FrontEndShift##SUFFIX, Sweep) { fe::shift_sweep<TYPE>(); }                  \
-    TEST(FrontEndShift##SUFFIX, Aliasing) { fe::shift_aliasing<TYPE>(); }                \
-    TEST(FrontEndShift##SUFFIX, SmallExhaustive) { fe::small_exhaustive<TYPE>(); }   \
+#define FRONT_END_TEST(SUFFIX, TYPE)                                               \
+    TEST(FrontEndShift##SUFFIX, Sweep) { fe::shift_sweep<TYPE>(); }                \
+    TEST(FrontEndShift##SUFFIX, Aliasing) { fe::shift_aliasing<TYPE>(); }          \
+    TEST(FrontEndShift##SUFFIX, SmallExhaustive) { fe::small_exhaustive<TYPE>(); } \
     TEST(FrontEndShift##SUFFIX, LeftShiftExactSizing) { fe::left_shift_exact_sizing<TYPE>(); }
 FRONT_END_TYPES(FRONT_END_TEST)
 
-#define FRONT_END_STATIC(TYPE)                                       \
-    static_assert(fe::cx_shift<TYPE>(1));                             \
-    static_assert(fe::cx_shift<TYPE>(2));                             \
-    static_assert(fe::cx_shift<TYPE>(TYPE::inplace_capacity));        \
-    static_assert(fe::cx_shift<TYPE>(TYPE::inplace_capacity + 1));    \
+#define FRONT_END_STATIC(TYPE)                                     \
+    static_assert(fe::cx_shift<TYPE>(1));                          \
+    static_assert(fe::cx_shift<TYPE>(2));                          \
+    static_assert(fe::cx_shift<TYPE>(TYPE::inplace_capacity));     \
+    static_assert(fe::cx_shift<TYPE>(TYPE::inplace_capacity + 1)); \
     static_assert(fe::cx_shift<TYPE>(TYPE::inplace_capacity + 3))
 FRONT_END_STATIC(bb::big_int);
 FRONT_END_STATIC(bb::basic_big_int<128>);
