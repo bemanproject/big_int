@@ -401,7 +401,7 @@ TYPED_TEST(AllocCount, DivideTwoByOneQuotientInline) {
     TypeParam env;
     using int_t    = typename TypeParam::int_t;
     const int_t  a = env.make(std::vector<limb>{random_limbs(1, 21)[0], ~limb{0}});
-    const int_t  b = env.make(std::vector<limb>{limb{0x123456789ULL}});
+    const int_t  b = env.make(std::vector<limb>{limb{0x12345678U}});
     int_t        c = env.empty();
     const double n = steady_allocs(env, [&] { c = a / b; });
     EXPECT_TRUE(c * b + a % b == a);
