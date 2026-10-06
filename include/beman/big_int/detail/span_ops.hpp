@@ -708,12 +708,23 @@ constexpr std::size_t multiply_single_limb(const std::span<uint_multiprecision_t
     BEMAN_BIG_INT_DEBUG_ASSERT(mul != 0);
 
     uint_multiprecision_t carry = add;
+#ifdef BEMAN_BIG_INT_HAS_INT128_FUNDAMENTAL
+    // A direct wide multiply-add keeps the product in registers; GCC spills the
+    // `widening_mul` pair to the stack in this loop. s[i] * mul + carry fits two limbs.
+    using wide_type = wider_t<uint_multiprecision_t>;
+    for (std::size_t i = 0; i < size; ++i) {
+        const wide_type product = static_cast<wide_type>(s[i]) * mul + carry;
+        s[i]                    = static_cast<uint_multiprecision_t>(product);
+        carry                   = static_cast<uint_multiprecision_t>(product >> width_v<uint_multiprecision_t>);
+    }
+#else
     for (std::size_t i = 0; i < size; ++i) {
         const auto [lo, hi]              = widening_mul(s[i], mul);
         const uint_multiprecision_t next = lo + carry;
         carry                            = hi + static_cast<uint_multiprecision_t>(next < lo);
         s[i]                             = next;
     }
+#endif
     if (carry == 0) {
         return size;
     }
