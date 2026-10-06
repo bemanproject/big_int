@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: BSL-1.0
 
 #include <cstddef>
+#include <limits>
 #include <map>
 #include <memory>
 #include <memory_resource>
@@ -922,6 +923,10 @@ TEST(Allocation, SelfAssignment) {
 }
 
 // ----- operator= storage reuse -----
+// Limbs in 2^64, whatever the limb width.
+constexpr std::size_t two_pow_64_limbs =
+    64U / static_cast<std::size_t>(std::numeric_limits<BEMAN_BIG_INT_NAMESPACE::uint_multiprecision_t>::digits) + 1U;
+
 // The shared `assign_value` helper keeps the destination's allocation if its
 // effective capacity already fits the source. These tests verify the fast path
 // by checking that the destination's data pointer does not change.
@@ -934,12 +939,12 @@ TEST(Allocation, CopyAssignReusesDstStorage) {
 
     const BEMAN_BIG_INT_NAMESPACE::big_int src =
         BEMAN_BIG_INT_NAMESPACE::big_int{0xFFFFFFFFFFFFFFFFU} + BEMAN_BIG_INT_NAMESPACE::big_int{1};
-    ASSERT_EQ(src.representation().size(), 2U); // heap, 2 limbs -- fits in dst's capacity
+    ASSERT_EQ(src.representation().size(), two_pow_64_limbs); // heap -- fits in dst's capacity
 
     dst = src;
     EXPECT_EQ(dst.representation().data(), dst_data); // no reallocation
     EXPECT_EQ(dst.representation_capacity(), dst_cap);
-    ASSERT_EQ(dst.representation().size(), 2U);
+    ASSERT_EQ(dst.representation().size(), two_pow_64_limbs);
     EXPECT_EQ(dst, src);
 }
 
@@ -952,7 +957,7 @@ TEST(Allocation, MoveAssignStealsHeapSrcEvenWhenDstLarger) {
 
     BEMAN_BIG_INT_NAMESPACE::big_int src =
         BEMAN_BIG_INT_NAMESPACE::big_int{0xFFFFFFFFFFFFFFFFU} + BEMAN_BIG_INT_NAMESPACE::big_int{1};
-    ASSERT_EQ(src.representation().size(), 2U);
+    ASSERT_EQ(src.representation().size(), two_pow_64_limbs);
     const auto* const src_data = src.representation().data();
     const auto        src_cap  = src.representation_capacity();
     ASSERT_LT(src_cap, dst_cap); // dst has more capacity than src
@@ -960,7 +965,7 @@ TEST(Allocation, MoveAssignStealsHeapSrcEvenWhenDstLarger) {
     dst = std::move(src);
     EXPECT_EQ(dst.representation().data(), src_data);
     EXPECT_EQ(dst.representation_capacity(), src_cap);
-    ASSERT_EQ(dst.representation().size(), 2U);
+    ASSERT_EQ(dst.representation().size(), two_pow_64_limbs);
     EXPECT_TRUE(is_inplace(src));
     EXPECT_EQ(src, 0U);
 }
@@ -1011,7 +1016,7 @@ TEST(Allocation, CopyAssignAllocatesWhenDstTooSmall) {
     ASSERT_FALSE(is_inplace(src));
 
     dst = src;
-    ASSERT_EQ(dst.representation().size(), 2U);
+    ASSERT_EQ(dst.representation().size(), two_pow_64_limbs);
     EXPECT_FALSE(is_inplace(dst));
     EXPECT_NE(dst.representation().data(), src.representation().data());
     EXPECT_EQ(dst, src);

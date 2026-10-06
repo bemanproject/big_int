@@ -47,6 +47,19 @@ struct ref {
 };
 BEMAN_BIG_INT_DIAGNOSTIC_POP()
 
+inline void trim(std::vector<limb>& v);
+
+// The magnitude of a 64-bit value split into limbs of any width.
+inline ref from_u64(const unsigned long long m, const bool neg) {
+    ref r;
+    for (unsigned sh = 0; sh < 64; sh += W) {
+        r.mag.push_back(to_limb(m >> sh));
+    }
+    trim(r.mag);
+    r.neg = neg && !r.mag.empty();
+    return r;
+}
+
 inline void trim(std::vector<limb>& v) {
     while (!v.empty() && v.back() == 0) {
         v.pop_back();

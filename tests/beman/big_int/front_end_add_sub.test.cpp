@@ -68,21 +68,8 @@ void check_add_sub(const ref& a, const ref& b) {
 template <class T>
 void check_integer_forms(const ref& a, long long v, unsigned long long u) {
     const T   ta = make<T>(a);
-    const ref rv = [&] {
-        ref r;
-        r.neg = v < 0;
-        if (v != 0) {
-            r.mag = {to_limb(v < 0 ? 0 - static_cast<unsigned long long>(v) : static_cast<unsigned long long>(v))};
-        }
-        return r;
-    }();
-    const ref ru = [&] {
-        ref r;
-        if (u != 0) {
-            r.mag = {to_limb(u)};
-        }
-        return r;
-    }();
+    const ref rv = from_u64(v < 0 ? 0 - static_cast<unsigned long long>(v) : static_cast<unsigned long long>(v), v < 0);
+    const ref ru = from_u64(u, false);
     SCOPED_TRACE("a=" + hex(a) + " v=" + std::to_string(v));
     EXPECT_TRUE(matches(ta + v, ref_add(a, rv)));
     EXPECT_TRUE(matches(v + ta, ref_add(rv, a)));

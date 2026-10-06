@@ -15,6 +15,7 @@
 #include <span>
 #include <string>
 #include <utility>
+#include <type_traits>
 #include <vector>
 
 #include <beman/big_int.hpp>
@@ -388,8 +389,19 @@ TEST(MulDivFrontend, CompoundWithIntegers) {
         const limbs_t am = random_mag(n, rng);
         for (const std::int64_t v :
              {std::int64_t{3}, std::int64_t{-7}, std::int64_t{1} << 40, std::numeric_limits<std::int64_t>::max()}) {
-            const limbs_t vm = {
-                static_cast<limb_t>(v < 0 ? -static_cast<std::uint64_t>(v) : static_cast<std::uint64_t>(v))};
+            // The 64-bit magnitude split into limbs of whatever width the build uses.
+            const std::uint64_t vmag = v < 0 ? -static_cast<std::uint64_t>(v) : static_cast<std::uint64_t>(v);
+            limbs_t             vm;
+            for (std::size_t sh = 0; sh < 64; sh += limb_bits) {
+                if constexpr (std::is_same_v<limb_t, std::uint64_t>) {
+                    vm.push_back(vmag >> sh);
+                } else {
+                    vm.push_back(static_cast<limb_t>(vmag >> sh));
+                }
+            }
+            while (vm.size() > 1 && vm.back() == 0) {
+                vm.pop_back();
+            }
             big_int a = make<big_int>(am, false);
             a *= v;
             EXPECT_TRUE(is_value(a, ref_mul(am, vm), v < 0)) << "a *= int, n=" << n;
