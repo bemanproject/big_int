@@ -1142,6 +1142,134 @@ struct subsystem_signs {
     bool inner;
 };
 
+// ===== Front-end primitives: tail-aware add/sub and copying shifts ==================================
+// Single-pass building blocks for the basic_big_int front end. They are independent of the
+// kernels above, which stay untouched as a fixed yardstick.
+
+// dst[0..a.size()) = a + b, returns the carry out of the top limb. Requires a.size() >= b.size() and
+// dst.size() >= a.size(). `dst` may equal `a` exactly (in-place add); otherwise it must not overlap `a`.
+// Once the carry dies the rest of `a` is copied (skipped entirely when dst == a).
+[[nodiscard]] constexpr bool add_n_tail(const std::span<uint_multiprecision_t>       dst,
+                                        const std::span<const uint_multiprecision_t> a,
+                                        const std::span<const uint_multiprecision_t> b) noexcept {
+    BEMAN_BIG_INT_DEBUG_ASSERT(a.size() >= b.size());
+    BEMAN_BIG_INT_DEBUG_ASSERT(dst.size() >= a.size());
+    const std::size_t common = b.size();
+    const std::size_t total  = a.size();
+    bool              carry  = false;
+    std::size_t       i      = 0;
+    for (; i + 4 <= common; i += 4) {
+        const auto [v0, c0] = carrying_add(a[i + 0], b[i + 0], carry);
+        const auto [v1, c1] = carrying_add(a[i + 1], b[i + 1], c0);
+        const auto [v2, c2] = carrying_add(a[i + 2], b[i + 2], c1);
+        const auto [v3, c3] = carrying_add(a[i + 3], b[i + 3], c2);
+        dst[i + 0]          = v0;
+        dst[i + 1]          = v1;
+        dst[i + 2]          = v2;
+        dst[i + 3]          = v3;
+        carry               = c3;
+    }
+    for (; i < common; ++i) {
+        const auto [v, c] = carrying_add(a[i], b[i], carry);
+        dst[i]            = v;
+        carry             = c;
+    }
+    while (i < total && carry) {
+        const auto [v, c] = carrying_add(a[i], uint_multiprecision_t{0}, true);
+        dst[i]            = v;
+        carry             = c;
+        ++i;
+    }
+    if (dst.data() != a.data()) {
+        for (; i < total; ++i) {
+            dst[i] = a[i];
+        }
+    }
+    return carry;
+}
+
+// dst[0..a.size()) = a - b, returns the borrow out of the top limb. Same contract as `add_n_tail`.
+[[nodiscard]] constexpr bool sub_n_tail(const std::span<uint_multiprecision_t>       dst,
+                                        const std::span<const uint_multiprecision_t> a,
+                                        const std::span<const uint_multiprecision_t> b) noexcept {
+    BEMAN_BIG_INT_DEBUG_ASSERT(a.size() >= b.size());
+    BEMAN_BIG_INT_DEBUG_ASSERT(dst.size() >= a.size());
+    const std::size_t common = b.size();
+    const std::size_t total  = a.size();
+    bool              borrow = false;
+    std::size_t       i      = 0;
+    for (; i + 4 <= common; i += 4) {
+        const auto [v0, b0] = borrowing_sub(a[i + 0], b[i + 0], borrow);
+        const auto [v1, b1] = borrowing_sub(a[i + 1], b[i + 1], b0);
+        const auto [v2, b2] = borrowing_sub(a[i + 2], b[i + 2], b1);
+        const auto [v3, b3] = borrowing_sub(a[i + 3], b[i + 3], b2);
+        dst[i + 0]          = v0;
+        dst[i + 1]          = v1;
+        dst[i + 2]          = v2;
+        dst[i + 3]          = v3;
+        borrow              = b3;
+    }
+    for (; i < common; ++i) {
+        const auto [v, br] = borrowing_sub(a[i], b[i], borrow);
+        dst[i]             = v;
+        borrow             = br;
+    }
+    while (i < total && borrow) {
+        const auto [v, br] = borrowing_sub(a[i], uint_multiprecision_t{0}, true);
+        dst[i]             = v;
+        borrow             = br;
+        ++i;
+    }
+    if (dst.data() != a.data()) {
+        for (; i < total; ++i) {
+            dst[i] = a[i];
+        }
+    }
+    return borrow;
+}
+
+// dst[0..n) = src[0..n) << bits for bits in [1, limb_width), returning the bits shifted out of the top
+// limb. Walks top-down, so it is valid when dst >= src (including dst == src) and the ranges do not
+// otherwise overlap.
+constexpr uint_multiprecision_t lshift_copy(uint_multiprecision_t* const       dst,
+                                            const uint_multiprecision_t* const src,
+                                            const std::size_t                  n,
+                                            const unsigned                     bits) noexcept {
+    constexpr unsigned limb_bits = width_v<uint_multiprecision_t>;
+    BEMAN_BIG_INT_DEBUG_ASSERT(bits >= 1 && bits < limb_bits);
+    if (n == 0) {
+        return 0;
+    }
+    const unsigned              back = limb_bits - bits;
+    const uint_multiprecision_t out  = static_cast<uint_multiprecision_t>(src[n - 1] >> back);
+    for (std::size_t i = n - 1; i > 0; --i) {
+        dst[i] = static_cast<uint_multiprecision_t>((src[i] << bits) | (src[i - 1] >> back));
+    }
+    dst[0] = static_cast<uint_multiprecision_t>(src[0] << bits);
+    return out;
+}
+
+// dst[0..n) = src[0..n) >> bits for bits in [1, limb_width), returning the bits shifted out of the bottom
+// limb (left-aligned in the returned limb). Walks bottom-up, so it is valid when dst <= src (including
+// dst == src) and the ranges do not otherwise overlap.
+constexpr uint_multiprecision_t rshift_copy(uint_multiprecision_t* const       dst,
+                                            const uint_multiprecision_t* const src,
+                                            const std::size_t                  n,
+                                            const unsigned                     bits) noexcept {
+    constexpr unsigned limb_bits = width_v<uint_multiprecision_t>;
+    BEMAN_BIG_INT_DEBUG_ASSERT(bits >= 1 && bits < limb_bits);
+    if (n == 0) {
+        return 0;
+    }
+    const unsigned              back = limb_bits - bits;
+    const uint_multiprecision_t out  = static_cast<uint_multiprecision_t>(src[0] << back);
+    for (std::size_t i = 0; i + 1 < n; ++i) {
+        dst[i] = static_cast<uint_multiprecision_t>((src[i] >> bits) | (src[i + 1] << back));
+    }
+    dst[n - 1] = static_cast<uint_multiprecision_t>(src[n - 1] >> bits);
+    return out;
+}
+
 } // namespace detail
 BEMAN_BIG_INT_END_NAMESPACE
 
