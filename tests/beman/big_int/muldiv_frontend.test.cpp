@@ -31,13 +31,23 @@ namespace muldiv_frontend_test {
 using limb_t  = uint_multiprecision_t;
 using limbs_t = std::vector<limb_t>;
 
+// Converts without a cast when the types already agree (-Wuseless-cast), and with one otherwise.
+template <class U>
+constexpr limb_t to_limb(const U v) noexcept {
+    if constexpr (std::is_same_v<U, limb_t>) {
+        return v;
+    } else {
+        return static_cast<limb_t>(v);
+    }
+}
+
 inline constexpr std::size_t limb_bits = static_cast<std::size_t>(std::numeric_limits<limb_t>::digits);
 
 // Random magnitude of exactly `n` limbs with a nonzero top limb; n == 0 gives the empty (zero) magnitude.
 inline limbs_t random_mag(const std::size_t n, std::mt19937_64& rng) {
     limbs_t v(n);
     for (auto& x : v) {
-        x = static_cast<limb_t>(rng());
+        x = to_limb(rng());
     }
     if (n != 0 && v.back() == 0) {
         v.back() = 1;
@@ -393,11 +403,7 @@ TEST(MulDivFrontend, CompoundWithIntegers) {
             const std::uint64_t vmag = v < 0 ? -static_cast<std::uint64_t>(v) : static_cast<std::uint64_t>(v);
             limbs_t             vm;
             for (std::size_t sh = 0; sh < 64; sh += limb_bits) {
-                if constexpr (std::is_same_v<limb_t, std::uint64_t>) {
-                    vm.push_back(vmag >> sh);
-                } else {
-                    vm.push_back(static_cast<limb_t>(vmag >> sh));
-                }
+                vm.push_back(to_limb(vmag >> sh));
             }
             while (vm.size() > 1 && vm.back() == 0) {
                 vm.pop_back();

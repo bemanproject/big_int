@@ -68,7 +68,8 @@ void check_add_sub(const ref& a, const ref& b) {
 template <class T>
 void check_integer_forms(const ref& a, long long v, unsigned long long u) {
     const T   ta = make<T>(a);
-    const ref rv = from_u64(v < 0 ? 0 - static_cast<unsigned long long>(v) : static_cast<unsigned long long>(v), v < 0);
+    const ref rv =
+        from_u64(v < 0 ? 0 - static_cast<unsigned long long>(v) : static_cast<unsigned long long>(v), v < 0);
     const ref ru = from_u64(u, false);
     SCOPED_TRACE("a=" + hex(a) + " v=" + std::to_string(v));
     EXPECT_TRUE(matches(ta + v, ref_add(a, rv)));
@@ -195,8 +196,8 @@ void wide_integer_operands() {
 // borrow, cancellation to zero, and results that change the limb count.
 template <class T>
 void single_limb_sweep() {
-    const limb ones = std::numeric_limits<limb>::max();
-    const limb half = limb{1} << (W - 1);
+    const limb ones   = std::numeric_limits<limb>::max();
+    const limb half   = limb{1} << (W - 1);
     const limb mags[] = {0, 1, 2, 3, half - 1, half, half + 1, ones - 1, ones};
     for (const limb ma : mags) {
         for (const limb mb : mags) {
@@ -314,7 +315,8 @@ constexpr bool cx_single_limb() {
     T e = -m;
     e -= m;
     return m + 1 == two_w && m + m == c && 1 + m == two_w && (T{0} - m) == -m && (m - m) == 0 &&
-           (m - m).representation().size() == 1 && c - m == m && d + 5 == m && -m + m == 0 && e == -c && -m - 1 == -two_w;
+           (m - m).representation().size() == 1 && c - m == m && d + 5 == m && -m + m == 0 && e == -c &&
+           -m - 1 == -two_w;
 }
 
 } // namespace front_end_test
@@ -329,7 +331,7 @@ namespace fe = BEMAN_BIG_INT_NAMESPACE::front_end_test;
 
 #define FRONT_END_TEST(SUFFIX, TYPE)                                                         \
     TEST(FrontEndAddSub##SUFFIX, Sweep) { fe::add_sub_sweep<TYPE>(); }                       \
-    TEST(FrontEndAddSub##SUFFIX, SingleLimb) { fe::single_limb_sweep<TYPE>(); }        \
+    TEST(FrontEndAddSub##SUFFIX, SingleLimb) { fe::single_limb_sweep<TYPE>(); }              \
     TEST(FrontEndAddSub##SUFFIX, Ripple) { fe::add_sub_ripple<TYPE>(); }                     \
     TEST(FrontEndAddSub##SUFFIX, IntegerOperands) { fe::integer_sweep<TYPE>(); }             \
     TEST(FrontEndAddSub##SUFFIX, WideIntegerOperands) { fe::wide_integer_operands<TYPE>(); } \
