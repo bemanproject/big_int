@@ -8,8 +8,8 @@
 //             results (which take select_on_container_copy_construction of an operand allocator) land on it
 //   wide256   basic_big_int<256, limb, counting_allocator<limb>>  (inline capacity of 4 64-bit limbs)
 // The measured counts are printed to stdout as "[alloc_count] ...". The expectations below are the item 1 targets
-// (see the front-end cost plan); cases that exceed their target at the baseline (cf1cf54) are marked pending and
-// skipped while `item1_pending` is true. Drop the constant (and the baseline columns) when the library changes land.
+// (see the front-end cost plan); with `item1_pending` true, cases that exceed their target at the baseline (cf1cf54)
+// are skipped instead of failing. The constant is false now that the front end changes have landed.
 //
 // Baseline counts measured at cf1cf54 (allocations per call, K = 64 after one warm-up call; `want` is the target the
 // case asserts; the cases whose baseline exceeds `want` are the pending ones):
@@ -27,15 +27,16 @@
 //   c = a; c *= 7 (8 limbs)               0               1         1     1
 //   c = a / b (8x4)                       1               2         2     2
 //   c = a % b (8x4)                       1               2         2     2
-//   div_rem_to_zero (8x4)                 <= 2            5         5     4
+//   div_rem_to_zero (8x4)                 <= 2            4         4     3
 //   c = a / b (2x1)                       0 (>= 2 inline) 1         1     0
 //   c = a; c /= b (8x4) [stretch]         0               3         3     2
 //   c = a; c %= b (8x4) [stretch]         0               2         2     2
 //   from_chars 2000 digits (reserved)     <= 2            2         2     2
 //
-// pending at the baseline: every row with a baseline above `want` (the compound `*=`, `/=` and `%=`, `a / b`, `a % b`
-// and div_rem_to_zero). The add/sub/shift/mul rows already meet their target: the item 1 gain there is in the copy and
-// zero-fill work, not the allocation count.
+// Every case is enforced (item1_pending is false). The div_rem_to_zero baseline counts the quotient (5 limbs), the
+// 22-limb scratch and the over-reserved remainder (9 limbs) plus one more on the counting environments for operands
+// that need normalising; an earlier version of this table (5, 5, 4) also counted the check's own temporaries. Set
+// `item1_pending` back to true to skip a case whose baseline count exceeds its target.
 
 #include <array>
 #include <cstddef>
@@ -64,7 +65,7 @@ using BEMAN_BIG_INT_NAMESPACE::test_util::counting_state;
 using limb = uint_multiprecision_t;
 
 // Cases that exceed their target at the baseline are skipped while this is true.
-constexpr bool item1_pending = true;
+constexpr bool item1_pending = false;
 
 constexpr int calls = 64; // K
 
@@ -159,6 +160,14 @@ double steady_allocs(Env& env, F&& f, const int k = calls) {
         f();
     }
     return static_cast<double>(env.count() - before) / static_cast<double>(k);
+}
+
+// Keeps a result observable without allocating.
+volatile std::size_t escape_sink = 0;
+
+template <class T>
+void escape_value(const T& x) {
+    escape_sink = x.size();
 }
 
 // Baseline (cf1cf54) count per environment, in the order counting, pmr, wide256.
@@ -336,16 +345,17 @@ TYPED_TEST(AllocCount, RemainderHeapResult) {
 
 TYPED_TEST(AllocCount, DivRemToZero) {
     TypeParam env;
-    using int_t     = typename TypeParam::int_t;
-    const int_t  a  = env.make(random_limbs(8, 19));
-    const int_t  b  = env.make(random_limbs(4, 20));
-    bool         ok = true;
+    using int_t   = typename TypeParam::int_t;
+    const int_t a = env.make(random_limbs(8, 19));
+    const int_t b = env.make(random_limbs(4, 20));
+    // The result is checked after the measurement so the check's own temporaries are not counted.
     const double n  = steady_allocs(env, [&] {
         const auto qr = div_rem_to_zero(a, b);
-        ok            = ok && qr.quotient * b + qr.remainder == a;
+        escape_value(qr.quotient);
     });
-    EXPECT_TRUE(ok);
-    ALLOC_EXPECT(TypeParam, "div_rem_to_zero (8x4)", n, 2.0, (baseline_counts{5.0, 5.0, 4.0}));
+    const auto   qr = div_rem_to_zero(a, b);
+    EXPECT_TRUE(qr.quotient * b + qr.remainder == a);
+    ALLOC_EXPECT(TypeParam, "div_rem_to_zero (8x4)", n, 2.0, (baseline_counts{4.0, 4.0, 3.0}));
 }
 
 // A two-limb dividend over a one-limb divisor, quotient two limbs: it fits inline only when the inline capacity is at
