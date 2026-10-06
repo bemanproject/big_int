@@ -39,10 +39,13 @@ constexpr limb to_limb(const U v) noexcept {
 inline constexpr unsigned W = static_cast<unsigned>(std::numeric_limits<limb>::digits);
 
 // Sign and trimmed little-endian magnitude (empty for zero).
+BEMAN_BIG_INT_DIAGNOSTIC_PUSH()
+BEMAN_BIG_INT_DIAGNOSTIC_IGNORED_GCC("-Wpadded")
 struct ref {
     bool              neg = false;
     std::vector<limb> mag;
 };
+BEMAN_BIG_INT_DIAGNOSTIC_POP()
 
 inline void trim(std::vector<limb>& v) {
     while (!v.empty() && v.back() == 0) {
