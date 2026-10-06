@@ -10,6 +10,14 @@ option(
     OFF
 )
 
+# Inline capacity (bits) of the big integer type behind every timed row: sweep_int = basic_big_int<BITS>. 64 is
+# big_int; the item 1 inline-capacity study builds 128, 256 and 512 as well.
+set(BEMAN_BIG_INT_SWEEP_INLINE_BITS
+    64
+    CACHE STRING
+    "Inline bits of the integer type timed by shape_sweep. Default: 64 (big_int). Values: { 64, 128, 256, 512 }."
+)
+
 add_executable(beman.big_int.benchmarks.shape_sweep shape_sweep.cpp)
 target_link_libraries(
     beman.big_int.benchmarks.shape_sweep
@@ -33,7 +41,9 @@ file(
 )
 target_compile_definitions(
     beman.big_int.benchmarks.shape_sweep
-    PRIVATE BEMAN_BIG_INT_SWEEP_VIA_CMAKE
+    PRIVATE
+        BEMAN_BIG_INT_SWEEP_VIA_CMAKE
+        BEMAN_BIG_INT_SWEEP_INLINE_BITS=${BEMAN_BIG_INT_SWEEP_INLINE_BITS}
 )
 target_include_directories(
     beman.big_int.benchmarks.shape_sweep

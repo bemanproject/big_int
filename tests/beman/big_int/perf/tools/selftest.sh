@@ -11,7 +11,7 @@ while IFS= read -r spec; do
     op=${spec%% *}
     shapes=${spec#* }
     # shellcheck disable=SC2086
-    if ! "$B" "$op" --rows auto,inplace,kernel,kernelip,gmp,gmpz --rounds 1 --round-ms 2 $shapes >/dev/null; then
+    if ! "$B" "$op" --rows auto,inplace,kernel,kernelip,floor,gmp,gmpz,builtin,copy --rounds 1 --round-ms 2 $shapes >/dev/null; then
         echo "selftest: FAILED $spec" >&2
         rc=1
     else
@@ -30,5 +30,6 @@ div 8x4
 tochars 1x10 4x10 16x10 64x10 256x10 16x16 2000x10
 fromchars 1x10 4x10 16x10 64x10 256x10 2000x10
 gcd 2x2 4x4 16x16 64x64 256x256 100x30
+vecsort 1000x1
 SPECS
 exit $rc

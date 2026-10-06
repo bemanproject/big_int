@@ -8,6 +8,8 @@
 
 #include <beman/big_int/detail/scratch_allocator.hpp>
 
+#include "util/util_counting_allocator.hpp"
+
 #include <gtest/gtest.h>
 
 #include <cstddef>
@@ -22,37 +24,8 @@ namespace {
 namespace detail = BEMAN_BIG_INT_NAMESPACE::detail;
 using uint_t     = BEMAN_BIG_INT_NAMESPACE::uint_multiprecision_t;
 
-struct counting_state {
-    std::map<std::type_index, std::size_t> allocations;
-    std::map<std::type_index, std::size_t> live_elements;
-};
-
-template <class T>
-struct counting_allocator {
-    using value_type = T;
-
-    counting_state* state = nullptr;
-
-    counting_allocator() = default;
-    explicit counting_allocator(counting_state* s) : state(s) {}
-    template <class U>
-    counting_allocator(const counting_allocator<U>& other) : state(other.state) {}
-
-    T* allocate(const std::size_t n) {
-        ++state->allocations[std::type_index(typeid(T))];
-        state->live_elements[std::type_index(typeid(T))] += n;
-        return std::allocator<T>{}.allocate(n);
-    }
-    void deallocate(T* p, const std::size_t n) noexcept {
-        state->live_elements[std::type_index(typeid(T))] -= n;
-        std::allocator<T>{}.deallocate(p, n);
-    }
-
-    template <class U>
-    bool operator==(const counting_allocator<U>& other) const {
-        return state == other.state;
-    }
-};
+using BEMAN_BIG_INT_NAMESPACE::test_util::counting_allocator;
+using BEMAN_BIG_INT_NAMESPACE::test_util::counting_state;
 
 TEST(ScratchHeap, HooksRouteThroughTheOwningAllocatorsRebinds) {
     counting_state                                        state;

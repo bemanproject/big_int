@@ -38,7 +38,7 @@ def spread(key):
 
 
 def shape_spread(op, la, lb):
-    s = [(spread((op, la, lb, p)), p) for p in ("auto", "inplace", "kernel", "gmp", "gmpz")]
+    s = [(spread((op, la, lb, p)), p) for p in ("auto", "inplace", "kernel", "floor", "gmp", "gmpz", "builtin", "copy")]
     s = [x for x in s if x[0] is not None]
     return max(s) if s else (None, "")
 
@@ -72,7 +72,7 @@ for m in meta:
     if m.startswith("# gap_sweep") or m.startswith("#const"):
         out.append("    " + m[:200])
 out.append("")
-out.append("Ratios: >1 means big_int is slower. inplace is per-op (already halved). Gap ns = auto - kernel (front end).\n")
+out.append("Ratios: >1 means big_int is slower. inplace is per-op (already halved). Gap ns: auto - kernel is the whole front end, auto - floor is what remains above one allocate/deallocate pair of the result size (API floor), inplace - kernel is the in-place front end.\n")
 gaps = []
 ops = []
 allspr = [(spread(k), k) for k in data if spread(k) is not None]
@@ -87,18 +87,31 @@ for k in order:
         ops.append(k[0])
 for op in ops:
     out.append(f"## {op}\n")
+    if op == "vecsort":
+        out.append("ns per element for copy-assign + sort + sum of N one-limb values (builtin = std::int64_t).\n")
+        out.append("| N | auto ns | builtin ns | auto/builtin | copy ns | auto-copy ns |")
+        out.append("|---:|---:|---:|---:|---:|---:|")
+        for _, la, lb in [k for k in order if k[0] == op]:
+            a_, b_, c_ = (med(op, la, lb, x) for x in ("auto", "builtin", "copy"))
+            d_ = None if a_ is None or c_ is None else a_ - c_
+            out.append(f"| {la} | {fmt(a_,2)} | {fmt(b_,2)} | {fmt(ratio(a_, b_))} | {fmt(c_,2)} | {fmt(d_,2)} |")
+        out.append("")
+        continue
     for b in ("small", "medium", "large"):
         shapes = [k for k in order if k[0] == op and band(op, k[1]) == b]
         if not shapes:
             continue
         out.append(f"**{b}**\n")
-        out.append("| shape | auto ns | gmpz ns | auto/gmpz | kernel/gmp | inplace/gmpz | auto-kernel ns | spread % (row) |")
-        out.append("|---|---:|---:|---:|---:|---:|---:|---:|")
+        out.append("| shape | auto ns | gmpz ns | auto/gmpz | kernel/gmp | inplace/gmpz | auto-kernel ns | floor ns | auto-floor ns | inplace-kernel ns | spread % (row) |")
+        out.append("|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|")
         for _, la, lb in shapes:
             a, kn, g, z, ip = (med(op, la, lb, x) for x in ("auto", "kernel", "gmp", "gmpz", "inplace"))
             r1, r2, r3 = ratio(a, z), ratio(kn, g), ratio(ip, z)
+            fl = med(op, la, lb, "floor")
             d = None if a is None or kn is None else a - kn
-            out.append(f"| {la}x{lb} | {fmt(a,1)} | {fmt(z,1)} | {fmt(r1)} | {fmt(r2)} | {fmt(r3)} | {fmt(d,1)} | {spr_txt(op, la, lb)} |")
+            d2 = None if a is None or fl is None else a - fl
+            d3 = None if ip is None or kn is None else ip - kn
+            out.append(f"| {la}x{lb} | {fmt(a,1)} | {fmt(z,1)} | {fmt(r1)} | {fmt(r2)} | {fmt(r3)} | {fmt(d,1)} | {fmt(fl,1)} | {fmt(d2,1)} | {fmt(d3,1)} | {spr_txt(op, la, lb)} |")
             if r1:
                 gaps.append((r1, "auto/gmpz", op, la, lb))
             if r2:

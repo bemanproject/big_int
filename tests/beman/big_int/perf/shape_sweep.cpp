@@ -14,6 +14,11 @@
 //   shl shr          NxS: N limbs shifted by S bits
 //   mul              AxB            sqr  N or NxN          div rem divrem  dividend x divisor
 //   tochars          NxBASE         fromchars  NxBASE (the decimal-or-other string of a random N-limb value)
+//   vecsort          NxL            N one-limb values (L = 1) in a vector: copy + sort + sum, ns per element (see
+//   run_vecsort)
+//
+// Every row that uses the library integer type uses sweep_int = basic_big_int<BEMAN_BIG_INT_SWEEP_INLINE_BITS>
+// (default 64, that is big_int); the #const line prints sweep_inline_bits and sweep_int_sizeof.
 //
 // Rows (CSV column 'path'; default 'auto'; rows of one shape run back to back):
 //   auto     the public big_int API into a pre-existing destination (c = a + b, ...)
@@ -22,6 +27,10 @@
 //   ladder
 //            (unsliced) and shares its timings with --rows unsliced. Kernels that work in place (shifts, gcd, tochars
 //            and gmp's get_str/gcd/set_str inputs) include the copy-in of their operands in the timed loop.
+//   floor    add sub shl shr mul sqr divrem: the kernel row plus one std::allocator allocate/deallocate pair of the
+//   result
+//            size (quotient and remainder for divrem), the API floor of `c = a op b`. No pair is charged for a result
+//            that fits the inline capacity of the integer type under test.
 //   kernelip shl/shr only: in-place pair shl then shr on one buffer, halved, no copy-in
 //   gmp      GMP mpn on preallocated buffers (needs -DBEMAN_BIG_INT_SWEEP_GMP, 64-bit limbs, -lgmp)
 //   gmpz     GMP mpz with the destination reused, operands loaded with mpz_import
@@ -128,6 +137,13 @@ namespace dt = ::BEMAN_BIG_INT_NAMESPACE::detail;
 
 using limb_t = bb::uint_multiprecision_t;
 using u64    = std::uint64_t;
+
+// The big integer type behind every timed row (auto, inplace, floor, vecsort, ...). The default 64 inline bits is
+// bb::big_int; -DBEMAN_BIG_INT_SWEEP_INLINE_BITS=128/256/512 is the inline-capacity study.
+#if !defined(BEMAN_BIG_INT_SWEEP_INLINE_BITS)
+    #define BEMAN_BIG_INT_SWEEP_INLINE_BITS 64
+#endif
+using sweep_int = bb::basic_big_int<BEMAN_BIG_INT_SWEEP_INLINE_BITS>;
 
 constexpr unsigned limb_bits = std::numeric_limits<limb_t>::digits;
 
@@ -285,6 +301,8 @@ std::string const_line() {
     kv(s, "SIMD_MUL", 0);
 #endif
     kv(s, "limb_bits", limb_bits);
+    kv(s, "sweep_inline_bits", BEMAN_BIG_INT_SWEEP_INLINE_BITS);
+    kv(s, "sweep_int_sizeof", sizeof(sweep_int));
 #if defined(NDEBUG)
     kv(s, "ndebug", 1);
 #else
@@ -368,7 +386,7 @@ u64 residue(const std::span<const limb_t> x, const u64 p) {
     return r;
 }
 
-bb::big_int make_big(const std::vector<limb_t>& v) { return bb::big_int(v.begin(), v.end()); }
+sweep_int make_big(const std::vector<limb_t>& v) { return sweep_int(v.begin(), v.end()); }
 
 [[noreturn]] void fail(const std::string& msg) {
     std::fprintf(stderr, "shape_sweep: FAIL: %s\n", msg.c_str());
@@ -506,9 +524,9 @@ void check_division(const char*                   what,
                     const std::size_t             lb,
                     const std::span<const limb_t> a,
                     const std::span<const limb_t> b,
-                    const bb::big_int&            q,
-                    const bb::big_int&            r,
-                    const bb::big_int&            divisor) {
+                    const sweep_int&              q,
+                    const sweep_int&              r,
+                    const sweep_int&              divisor) {
     for (const u64 p : {prime_a, prime_b}) {
         const u64 lhs =
             (mulmod(residue(q.representation(), p), residue(b, p), p) + residue(r.representation(), p)) % p;
@@ -613,6 +631,51 @@ void time_row(const options&    opt,
     print_row(opt, name, la, lb, t);
 }
 
+// The API floor of `c = a op b`: the kernel plus one std::allocator allocate/deallocate pair of the result size (two
+// pairs, held together, for divrem: quotient and remainder). It is what `c = a op b` costs once the front end is free.
+// A result that fits the inline capacity of sweep_int needs no heap block, so no pair is charged for it. On = false
+// compiles to nothing, so the kernel rows are unchanged.
+template <bool On>
+class api_floor {
+  public:
+    explicit api_floor([[maybe_unused]] const std::size_t n1, [[maybe_unused]] const std::size_t n2 = 0) {
+        if constexpr (On) {
+            std::allocator<limb_t> alloc;
+            m_n1 = n1 > sweep_int::inplace_capacity ? n1 : 0;
+            m_n2 = n2 > sweep_int::inplace_capacity ? n2 : 0;
+            if (m_n1 != 0) {
+                m_p1 = alloc.allocate(m_n1);
+                escape(m_p1);
+            }
+            if (m_n2 != 0) {
+                m_p2 = alloc.allocate(m_n2);
+                escape(m_p2);
+            }
+        }
+    }
+    ~api_floor() {
+        if constexpr (On) {
+            std::allocator<limb_t> alloc;
+            if (m_n2 != 0) {
+                escape(m_p2);
+                alloc.deallocate(m_p2, m_n2);
+            }
+            if (m_n1 != 0) {
+                escape(m_p1);
+                alloc.deallocate(m_p1, m_n1);
+            }
+        }
+    }
+    api_floor(const api_floor&)            = delete;
+    api_floor& operator=(const api_floor&) = delete;
+
+  private:
+    limb_t*     m_p1{nullptr};
+    limb_t*     m_p2{nullptr};
+    std::size_t m_n1{0};
+    std::size_t m_n2{0};
+};
+
 #if defined(BEMAN_BIG_INT_SWEEP_GMP)
 // GMP mpz operand/destination with the limbs readable through the hand-declared struct.
 struct zint {
@@ -650,14 +713,14 @@ void run_mul(const options& opt, const std::size_t la, const std::size_t lb) {
 
     for (const auto& row : opt.rows) {
         if (row == "auto") {
-            const bb::big_int a = make_big(va);
-            const bb::big_int b = make_big(vb);
+            const sweep_int a = make_big(va);
+            const sweep_int b = make_big(vb);
             {
-                const bb::big_int c = a * b;
+                const sweep_int c = a * b;
                 check_product("mul", la, lb, va, vb, c.representation());
             }
-            bb::big_int c;
-            auto        work = [&] {
+            sweep_int c;
+            auto      work = [&] {
                 c = a * b;
                 escape(&c);
                 escape(c.representation().data());
@@ -665,17 +728,18 @@ void run_mul(const options& opt, const std::size_t la, const std::size_t lb) {
             const timing t = measure(work, opt);
             check_product("mul (last timed product)", la, lb, va, vb, c.representation());
             print_row(opt, "auto", la, lb, t);
-        } else if (row == "sliced" || row == "unsliced" || row == "kernel") {
-            const std::string path = row == "kernel" ? "unsliced" : row;
+        } else if (row == "sliced" || row == "unsliced" || row == "kernel" || row == "floor") {
+            const bool        is_kernel = row == "kernel" || row == "floor";
+            const std::string path      = is_kernel ? "unsliced" : row;
             if (la < 2 || lb < 2) {
-                if (row == "kernel") {
+                if (is_kernel) {
                     skip_row(opt, row, "the tier ladder needs both operands of at least 2 limbs");
                     continue;
                 }
                 usage_error("--path " + row + " needs both operands of at least 2 limbs");
             }
 #if !defined(BEMAN_BIG_INT_HAS_SHAPE_DISPATCH)
-            if (row == "kernel") {
+            if (is_kernel) {
                 skip_row(opt, row, "needs BEMAN_BIG_INT_HAS_SHAPE_DISPATCH");
                 continue;
             }
@@ -684,25 +748,34 @@ void run_mul(const options& opt, const std::size_t la, const std::size_t lb) {
             std::allocator<limb_t>                              alloc;
             const dt::scratch_allocator<std::allocator<limb_t>> hooks(alloc);
             std::vector<limb_t>                                 result(la + lb);
-            std::size_t                                         n    = 0;
-            auto                                                work = [&] {
-                std::ranges::fill(result, limb_t{0});
-                n = fn(result, va, vb, hooks.heap());
-                escape(&n);
-                escape(result.data());
+            std::size_t                                         n  = 0;
+            const auto                                          go = [&](const auto floor_tag) {
+                constexpr bool floor_on = decltype(floor_tag)::value;
+                auto           work     = [&] {
+                    const api_floor<floor_on> pair(la + lb);
+                    std::ranges::fill(result, limb_t{0});
+                    n = fn(result, va, vb, hooks.heap());
+                    escape(&n);
+                    escape(result.data());
+                };
+                const auto verify = [&](const char* what) {
+                    check_product(what, la, lb, va, vb, result);
+                    if (n != trimmed_size(result)) {
+                        fail(path + " returned size " + std::to_string(n) + " but the trimmed size is " +
+                             std::to_string(trimmed_size(result)) + " at " + sh);
+                    }
+                };
+                work();
+                verify(path.c_str());
+                const timing t = measure(work, opt);
+                verify((path + " (last timed product)").c_str());
+                print_row(opt, row.c_str(), la, lb, t);
             };
-            const auto verify = [&](const char* what) {
-                check_product(what, la, lb, va, vb, result);
-                if (n != trimmed_size(result)) {
-                    fail(path + " returned size " + std::to_string(n) + " but the trimmed size is " +
-                         std::to_string(trimmed_size(result)) + " at " + sh);
-                }
-            };
-            work();
-            verify(path.c_str());
-            const timing t = measure(work, opt);
-            verify((path + " (last timed product)").c_str());
-            print_row(opt, row.c_str(), la, lb, t);
+            if (row == "floor") {
+                go(std::true_type{});
+            } else {
+                go(std::false_type{});
+            }
         } else if (row == "fft") {
             if constexpr (limb_bits != 64) {
                 usage_error("--path fft needs 64-bit limbs");
@@ -775,13 +848,13 @@ void run_sqr(const options& opt, const std::size_t n) {
 
     for (const auto& row : opt.rows) {
         if (row == "auto") {
-            const bb::big_int a = make_big(va);
+            const sweep_int a = make_big(va);
             {
-                const bb::big_int c = a * a; // same object on both sides selects the squaring path
+                const sweep_int c = a * a; // same object on both sides selects the squaring path
                 check_product("sqr", n, n, va, va, c.representation());
             }
-            bb::big_int c;
-            auto        work = [&] {
+            sweep_int c;
+            auto      work = [&] {
                 c = a * a;
                 escape(&c);
                 escape(c.representation().data());
@@ -789,7 +862,7 @@ void run_sqr(const options& opt, const std::size_t n) {
             const timing t = measure(work, opt);
             check_product("sqr (last timed product)", n, n, va, va, c.representation());
             print_row(opt, "auto", n, n, t);
-        } else if (row == "kernel") {
+        } else if (row == "kernel" || row == "floor") {
             if (n < 2) {
                 skip_row(opt, row, "the squaring ladder needs at least 2 limbs");
                 continue;
@@ -799,23 +872,32 @@ void run_sqr(const options& opt, const std::size_t n) {
             const dt::scratch_allocator<std::allocator<limb_t>> hooks(alloc);
             std::vector<limb_t>                                 result(2 * n);
             std::size_t                                         size = 0;
-            time_row(
-                opt,
-                "kernel",
-                n,
-                n,
-                [&] {
-                    std::ranges::fill(result, limb_t{0});
-                    size = dt::square_runtime(result, va, hooks.heap());
-                    escape(&size);
-                    escape(result.data());
-                },
-                [&] {
-                    check_product("kernel sqr", n, n, va, va, result);
-                    if (size != trimmed_size(result)) {
-                        fail("kernel sqr returned a wrong size at " + shape_str(n, n));
-                    }
-                });
+            const auto                                          go   = [&](const auto floor_tag) {
+                constexpr bool floor_on = decltype(floor_tag)::value;
+                time_row(
+                    opt,
+                    floor_on ? "floor" : "kernel",
+                    n,
+                    n,
+                    [&] {
+                        const api_floor<floor_on> pair(2 * n);
+                        std::ranges::fill(result, limb_t{0});
+                        size = dt::square_runtime(result, va, hooks.heap());
+                        escape(&size);
+                        escape(result.data());
+                    },
+                    [&] {
+                        check_product("kernel sqr", n, n, va, va, result);
+                        if (size != trimmed_size(result)) {
+                            fail("kernel sqr returned a wrong size at " + shape_str(n, n));
+                        }
+                    });
+            };
+            if (row == "floor") {
+                go(std::true_type{});
+            } else {
+                go(std::false_type{});
+            }
 #if defined(BEMAN_BIG_INT_SWEEP_GMP)
         } else if (row == "gmp") {
             const auto             ga = to_gmp(va);
@@ -864,13 +946,13 @@ void run_div(const options& opt, const std::size_t la, const std::size_t lb) {
     const auto      vb = random_limbs(rng, lb);
     const auto      sh = shape_str(la, lb);
 
-    const bb::big_int a = make_big(va);
-    const bb::big_int b = make_big(vb);
-    limbs             ref_q;
-    limbs             ref_r;
+    const sweep_int a = make_big(va);
+    const sweep_int b = make_big(vb);
+    limbs           ref_q;
+    limbs           ref_r;
     {
-        const bb::big_int q = a / b;
-        const bb::big_int r = a % b;
+        const sweep_int q = a / b;
+        const sweep_int r = a % b;
         check_division(opt.op.c_str(), la, lb, va, vb, q, r, b);
         ref_q = trimmed(q.representation());
         ref_r = trimmed(r.representation());
@@ -879,9 +961,9 @@ void run_div(const options& opt, const std::size_t la, const std::size_t lb) {
 
     for (const auto& row : opt.rows) {
         if (row == "auto") {
-            bb::big_int q;
-            bb::big_int r;
-            auto        work = [&] {
+            sweep_int q;
+            sweep_int r;
+            auto      work = [&] {
                 if (opt.op == "div") {
                     q = a / b;
                     escape(&q);
@@ -907,49 +989,62 @@ void run_div(const options& opt, const std::size_t la, const std::size_t lb) {
             }
             check_division((opt.op + " (last timed result)").c_str(), la, lb, va, vb, q, r, b);
             print_row(opt, "auto", la, lb, t);
-        } else if (row == "kernel") {
+        } else if (row == "kernel" || row == "floor") {
             if (!is_divrem) {
                 skip_row(opt, row, "kernel rows time quotient and remainder together, use divrem");
-            } else if (lb == 1) {
-                limbs  q(la);
-                limb_t rem = 0;
-                time_row(
-                    opt,
-                    "kernel",
-                    la,
-                    lb,
-                    [&] {
-                        rem = dt::divide_unsigned_short(q, va, vb[0]);
-                        escape(&rem);
-                        escape(q.data());
-                    },
-                    [&] {
-                        expect_same("kernel divrem quotient", sh, q, ref_q);
-                        expect_same("kernel divrem remainder", sh, std::span<const limb_t>{&rem, 1}, ref_r);
-                    });
+                continue;
+            }
+            const auto go = [&](const auto floor_tag) {
+                constexpr bool floor_on = decltype(floor_tag)::value;
+                const char*    name     = floor_on ? "floor" : "kernel";
+                if (lb == 1) {
+                    limbs  q(la);
+                    limb_t rem = 0;
+                    time_row(
+                        opt,
+                        name,
+                        la,
+                        lb,
+                        [&] {
+                            const api_floor<floor_on> pair(la, lb);
+                            rem = dt::divide_unsigned_short(q, va, vb[0]);
+                            escape(&rem);
+                            escape(q.data());
+                        },
+                        [&] {
+                            expect_same("kernel divrem quotient", sh, q, ref_q);
+                            expect_same("kernel divrem remainder", sh, std::span<const limb_t>{&rem, 1}, ref_r);
+                        });
+                } else {
+                    const std::size_t                             q_len = la - lb + 1;
+                    const std::size_t                             r_cap = la + 1;
+                    std::allocator<limb_t>                        alloc;
+                    dt::scratch_allocator<std::allocator<limb_t>> scratch(
+                        r_cap + dt::divide_unsigned_storage_size(la, lb), alloc);
+                    const std::span<limb_t> rem = scratch.allocate(r_cap);
+                    limbs                   q(q_len);
+                    time_row(
+                        opt,
+                        name,
+                        la,
+                        lb,
+                        [&] {
+                            const api_floor<floor_on> pair(q_len, lb);
+                            std::ranges::fill(q, limb_t{0});
+                            dt::divide_dispatch(q, rem, va, vb, scratch, alloc);
+                            escape(q.data());
+                            escape(rem.data());
+                        },
+                        [&] {
+                            expect_same("kernel divrem quotient", sh, q, ref_q);
+                            expect_same("kernel divrem remainder", sh, rem, ref_r);
+                        });
+                }
+            };
+            if (row == "floor") {
+                go(std::true_type{});
             } else {
-                const std::size_t                             q_len = la - lb + 1;
-                const std::size_t                             r_cap = la + 1;
-                std::allocator<limb_t>                        alloc;
-                dt::scratch_allocator<std::allocator<limb_t>> scratch(r_cap + dt::divide_unsigned_storage_size(la, lb),
-                                                                      alloc);
-                const std::span<limb_t>                       rem = scratch.allocate(r_cap);
-                limbs                                         q(q_len);
-                time_row(
-                    opt,
-                    "kernel",
-                    la,
-                    lb,
-                    [&] {
-                        std::ranges::fill(q, limb_t{0});
-                        dt::divide_dispatch(q, rem, va, vb, scratch, alloc);
-                        escape(q.data());
-                        escape(rem.data());
-                    },
-                    [&] {
-                        expect_same("kernel divrem quotient", sh, q, ref_q);
-                        expect_same("kernel divrem remainder", sh, rem, ref_r);
-                    });
+                go(std::false_type{});
             }
 #if defined(BEMAN_BIG_INT_SWEEP_GMP)
         } else if (row == "gmp") {
@@ -996,8 +1091,8 @@ void run_div(const options& opt, const std::size_t la, const std::size_t lb) {
                         escape(gr.data());
                     },
                     [&] {
-                        const bb::big_int gq_big(gq.begin(), gq.end());
-                        const bb::big_int gr_big(gr.begin(), gr.end());
+                        const sweep_int gq_big(gq.begin(), gq.end());
+                        const sweep_int gr_big(gr.begin(), gr.end());
                         check_division("gmp divrem", la, lb, va, vb, gq_big, gr_big, b);
                         expect_same("gmp divrem quotient", sh, from_gmp(gq, gq.size()), ref_q);
                         expect_same("gmp divrem remainder", sh, from_gmp(gr, gr.size()), ref_r);
@@ -1067,11 +1162,11 @@ void run_addsub(const options& opt, const std::size_t la, const std::size_t lb) 
     }
     const auto sh = shape_str(la, lb);
 
-    const bb::big_int a = make_big(va);
-    const bb::big_int b = make_big(vb);
-    limbs             ref;
+    const sweep_int a = make_big(va);
+    const sweep_int b = make_big(vb);
+    limbs           ref;
     {
-        const bb::big_int c = Add ? a + b : a - b;
+        const sweep_int c = Add ? a + b : a - b;
         check_addsub<Add>("api", sh, va, vb, trimmed(c.representation()));
         ref = trimmed(c.representation());
     }
@@ -1079,7 +1174,7 @@ void run_addsub(const options& opt, const std::size_t la, const std::size_t lb) 
 
     for (const auto& row : opt.rows) {
         if (row == "auto") {
-            bb::big_int c;
+            sweep_int c;
             time_row(
                 opt,
                 "auto",
@@ -1098,7 +1193,7 @@ void run_addsub(const options& opt, const std::size_t la, const std::size_t lb) 
         } else if (row == "inplace") {
             // One timed unit is two operations (c += b; c -= b, or the reverse for sub); per-op time is half.
             {
-                bb::big_int t = a;
+                sweep_int t = a;
                 if constexpr (Add) {
                     t += b;
                 } else {
@@ -1106,7 +1201,7 @@ void run_addsub(const options& opt, const std::size_t la, const std::size_t lb) 
                 }
                 expect_same("inplace first op", sh, t.representation(), ref);
             }
-            bb::big_int c = a;
+            sweep_int c = a;
             time_row(
                 opt,
                 "inplace",
@@ -1125,35 +1220,44 @@ void run_addsub(const options& opt, const std::size_t la, const std::size_t lb) 
                 },
                 [&] { expect_same("inplace pair", sh, c.representation(), va_ref); },
                 0.5);
-        } else if (row == "kernel") {
+        } else if (row == "kernel" || row == "floor") {
             limbs       res(la);
             bool        carry = false;
             std::size_t size  = 0;
-            time_row(
-                opt,
-                "kernel",
-                la,
-                lb,
-                [&] {
-                    if constexpr (Add) {
-                        carry = dt::add_unsigned_spans(res, va, vb);
-                        escape(&carry);
-                    } else {
-                        size = dt::subtract_unsigned_spans(res, va, vb);
-                        escape(&size);
-                    }
-                    escape(res.data());
-                },
-                [&] {
-                    limbs full = res;
-                    if (Add && carry) {
-                        full.push_back(1);
-                    }
-                    expect_same("kernel", sh, full, ref);
-                    if (!Add && size != trimmed_size(res)) {
-                        fail("kernel sub returned a wrong size at " + sh);
-                    }
-                });
+            const auto  go    = [&](const auto floor_tag) {
+                constexpr bool floor_on = decltype(floor_tag)::value;
+                time_row(
+                    opt,
+                    floor_on ? "floor" : "kernel",
+                    la,
+                    lb,
+                    [&] {
+                        const api_floor<floor_on> pair(Add ? la + 1 : la);
+                        if constexpr (Add) {
+                            carry = dt::add_unsigned_spans(res, va, vb);
+                            escape(&carry);
+                        } else {
+                            size = dt::subtract_unsigned_spans(res, va, vb);
+                            escape(&size);
+                        }
+                        escape(res.data());
+                    },
+                    [&] {
+                        limbs full = res;
+                        if (Add && carry) {
+                            full.push_back(1);
+                        }
+                        expect_same("kernel", sh, full, ref);
+                        if (!Add && size != trimmed_size(res)) {
+                            fail("kernel sub returned a wrong size at " + sh);
+                        }
+                    });
+            };
+            if (row == "floor") {
+                go(std::true_type{});
+            } else {
+                go(std::false_type{});
+            }
 #if defined(BEMAN_BIG_INT_SWEEP_GMP)
         } else if (row == "gmp") {
             const auto             ga = to_gmp(va);
@@ -1228,10 +1332,10 @@ void run_cmp(const options& opt, const std::size_t la, const std::size_t lb) {
     const int  want = va[0] < vb[0] ? -1 : 1;
     const auto sh   = shape_str(la, lb);
 
-    const bb::big_int a     = make_big(va);
-    const bb::big_int b     = make_big(vb);
-    int               s     = 0;
-    const auto        check = [&](const char* what) {
+    const sweep_int a     = make_big(va);
+    const sweep_int b     = make_big(vb);
+    int             s     = 0;
+    const auto      check = [&](const char* what) {
         if (s != want) {
             fail(std::string(what) + " cmp sign mismatch at " + sh);
         }
@@ -1346,10 +1450,10 @@ void run_shift(const options& opt, const std::size_t n, const std::size_t bits) 
     const unsigned    partial = static_cast<unsigned>(bits % limb_bits);
     const int         s       = static_cast<int>(bits);
 
-    const bb::big_int a = make_big(va);
-    limbs             ref;
+    const sweep_int a = make_big(va);
+    limbs           ref;
     {
-        const bb::big_int c = Left ? a << s : a >> s;
+        const sweep_int c = Left ? a << s : a >> s;
         check_shift<Left>("api", sh, va, bits, trimmed(c.representation()));
         ref = trimmed(c.representation());
     }
@@ -1357,7 +1461,7 @@ void run_shift(const options& opt, const std::size_t n, const std::size_t bits) 
 
     for (const auto& row : opt.rows) {
         if (row == "auto") {
-            bb::big_int c;
+            sweep_int c;
             time_row(
                 opt,
                 "auto",
@@ -1377,7 +1481,7 @@ void run_shift(const options& opt, const std::size_t n, const std::size_t bits) 
             // One timed unit is two operations, c <<= s; c >>= s for shl and c >>= s; c <<= s for shr (the latter
             // settles on a with its low S bits cleared); per-op time is half.
             {
-                bb::big_int t = a;
+                sweep_int t = a;
                 if constexpr (Left) {
                     t <<= s;
                 } else {
@@ -1385,7 +1489,7 @@ void run_shift(const options& opt, const std::size_t n, const std::size_t bits) 
                 }
                 expect_same("inplace first op", sh, t.representation(), ref);
             }
-            bb::big_int c = a;
+            sweep_int c = a;
             time_row(
                 opt,
                 "inplace",
@@ -1406,49 +1510,60 @@ void run_shift(const options& opt, const std::size_t n, const std::size_t bits) 
                     if constexpr (Left) {
                         expect_same("inplace pair", sh, c.representation(), va_ref);
                     } else {
-                        bb::big_int t = c;
+                        sweep_int t = c;
                         t >>= s;
                         expect_same("inplace pair", sh, t.representation(), ref);
                     }
                 },
                 0.5);
-        } else if (row == "kernel") {
+        } else if (row == "kernel" || row == "floor") {
             // The span kernels work in place, so the copy-in of the source is part of the timed loop.
-            if constexpr (Left) {
-                limbs       buf(n + whole + 1);
-                std::size_t size = 0;
-                time_row(
-                    opt,
-                    "kernel",
-                    n,
-                    bits,
-                    [&] {
-                        std::ranges::copy(va, buf.begin());
-                        size = dt::shift_left_bits(buf, n, bits);
-                        escape(&size);
-                        escape(buf.data());
-                    },
-                    [&] { expect_same("kernel", sh, std::span<const limb_t>{buf.data(), size}, ref); });
+            const auto go = [&](const auto floor_tag) {
+                constexpr bool floor_on = decltype(floor_tag)::value;
+                const char*    name     = floor_on ? "floor" : "kernel";
+                if constexpr (Left) {
+                    limbs       buf(n + whole + 1);
+                    std::size_t size = 0;
+                    time_row(
+                        opt,
+                        name,
+                        n,
+                        bits,
+                        [&] {
+                            const api_floor<floor_on> pair(n + whole + (partial != 0 ? 1 : 0));
+                            std::ranges::copy(va, buf.begin());
+                            size = dt::shift_left_bits(buf, n, bits);
+                            escape(&size);
+                            escape(buf.data());
+                        },
+                        [&] { expect_same("kernel", sh, std::span<const limb_t>{buf.data(), size}, ref); });
+                } else {
+                    // The same two steps as shift_right_bits (move down whole limbs, shift_right_n the rest), without
+                    // its debug assertion that every dropped bit is zero.
+                    const std::size_t m = n - whole;
+                    limbs             buf(m);
+                    limb_t            dropped = 0;
+                    time_row(
+                        opt,
+                        name,
+                        n,
+                        bits,
+                        [&] {
+                            const api_floor<floor_on> pair(m);
+                            std::copy(va.begin() + static_cast<std::ptrdiff_t>(whole), va.end(), buf.begin());
+                            if (partial != 0) {
+                                dropped = dt::shift_right_n(buf, partial);
+                                escape(&dropped);
+                            }
+                            escape(buf.data());
+                        },
+                        [&] { expect_same("kernel", sh, buf, ref); });
+                }
+            };
+            if (row == "floor") {
+                go(std::true_type{});
             } else {
-                // The same two steps as shift_right_bits (move down whole limbs, shift_right_n the rest), without its
-                // debug assertion that every dropped bit is zero.
-                const std::size_t m = n - whole;
-                limbs             buf(m);
-                limb_t            dropped = 0;
-                time_row(
-                    opt,
-                    "kernel",
-                    n,
-                    bits,
-                    [&] {
-                        std::copy(va.begin() + static_cast<std::ptrdiff_t>(whole), va.end(), buf.begin());
-                        if (partial != 0) {
-                            dropped = dt::shift_right_n(buf, partial);
-                            escape(&dropped);
-                        }
-                        escape(buf.data());
-                    },
-                    [&] { expect_same("kernel", sh, buf, ref); });
+                go(std::false_type{});
             }
         } else if (row == "kernelip") {
             if constexpr (!Left) {
@@ -1563,16 +1678,16 @@ void run_tochars(const options& opt, const std::size_t n, const std::size_t base
     const auto      sh  = shape_str(n, base_arg);
     const auto      cap = digit_capacity(n, base);
 
-    const bb::big_int a = make_big(va);
-    std::string       ref(cap, '\0');
+    const sweep_int a = make_big(va);
+    std::string     ref(cap, '\0');
     {
         const auto r = bb::to_chars(ref.data(), ref.data() + ref.size(), a, base);
         if (r.ec != std::errc{}) {
             fail("to_chars failed at " + sh);
         }
         ref.resize(static_cast<std::size_t>(r.ptr - ref.data()));
-        bb::big_int back;
-        const auto  fr = bb::from_chars(ref.data(), ref.data() + ref.size(), back, base);
+        sweep_int  back;
+        const auto fr = bb::from_chars(ref.data(), ref.data() + ref.size(), back, base);
         if (fr.ec != std::errc{}) {
             fail("from_chars failed on the to_chars output at " + sh);
         }
@@ -1670,8 +1785,8 @@ void run_fromchars(const options& opt, const std::size_t n, const std::size_t ba
     const auto      sh  = shape_str(n, base_arg);
     const limbs     ref = trimmed(va);
 
-    const bb::big_int a = make_big(va);
-    std::string       str(digit_capacity(n, base), '\0');
+    const sweep_int a = make_big(va);
+    std::string     str(digit_capacity(n, base), '\0');
     {
         const auto r = bb::to_chars(str.data(), str.data() + str.size(), a, base);
         if (r.ec != std::errc{}) {
@@ -1686,7 +1801,7 @@ void run_fromchars(const options& opt, const std::size_t n, const std::size_t ba
 
     for (const auto& row : opt.rows) {
         if (row == "auto") {
-            bb::big_int            c;
+            sweep_int              c;
             std::from_chars_result r{};
             time_row(
                 opt,
@@ -1789,11 +1904,11 @@ void run_gcd(const options& opt, const std::size_t la, const std::size_t lb) {
     vb[0] |= 1;
     const auto sh = shape_str(la, lb);
 
-    const bb::big_int a = make_big(va);
-    const bb::big_int b = make_big(vb);
-    limbs             ref;
+    const sweep_int a = make_big(va);
+    const sweep_int b = make_big(vb);
+    limbs           ref;
     {
-        const bb::big_int g = bb::gcd(a, b);
+        const sweep_int g = bb::gcd(a, b);
         if (g <= 0 || !((a % g) == 0) || !((b % g) == 0)) {
             fail("gcd result does not divide both operands at " + sh);
         }
@@ -1802,7 +1917,7 @@ void run_gcd(const options& opt, const std::size_t la, const std::size_t lb) {
 
     for (const auto& row : opt.rows) {
         if (row == "auto") {
-            bb::big_int c;
+            sweep_int c;
             time_row(
                 opt,
                 "auto",
@@ -1869,6 +1984,127 @@ void run_gcd(const options& opt, const std::size_t la, const std::size_t lb) {
                 },
                 [&] { expect_same("gmpz", sh, zc.get(), ref); });
 #endif
+        } else {
+            skip_row(opt, row, "not applicable");
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// vecsort: the container cost of the inline capacity. Shape NxL: a vector of N random one-limb values (L must be 1) of
+// mixed sign and magnitude below 2^63. One timed unit is copy-assigning the unsorted source into the work vector,
+// std::sort, and summing; the reported time is per element (ns), so the rows are comparable across inline sizes.
+//   auto     std::vector<sweep_int>        copy + sort + sum (the sum is a sweep_int, += per element)
+//   builtin  std::vector<std::int64_t>     the same with a wrapping uint64 sum, the reference
+//   copy     std::vector<sweep_int>        the copy-assign alone, to subtract from auto
+// ---------------------------------------------------------------------------
+
+void run_vecsort(const options& opt, const std::size_t n, const std::size_t value_limbs) {
+    if (value_limbs != 1) {
+        usage_error("vecsort needs NxL with L = 1 (one-limb values), got " + shape_str(n, value_limbs));
+    }
+    std::mt19937_64           rng(splitmix(opt.seed ^ splitmix(n * 1000003 + 1)));
+    std::vector<std::int64_t> raw(n);
+    for (auto& x : raw) {
+        const auto mag = static_cast<std::int64_t>(rng() >> 1);
+        x              = (rng() & 1) != 0 ? -mag : mag;
+    }
+    std::vector<std::int64_t> sorted = raw;
+    std::ranges::sort(sorted);
+    std::vector<sweep_int> src_big(raw.begin(), raw.end());
+    const auto             sh    = shape_str(n, 1);
+    const double           scale = 1.0 / static_cast<double>(n);
+
+#if defined(__SIZEOF_INT128__)
+    __int128 ref_sum = 0;
+    for (const auto x : raw) {
+        ref_sum += x;
+    }
+    const sweep_int want_total = (sweep_int(static_cast<std::int64_t>(ref_sum >> 64)) << 64) +
+                                 sweep_int(static_cast<std::uint64_t>(static_cast<unsigned __int128>(ref_sum)));
+    u64             want_wrap  = static_cast<u64>(static_cast<unsigned __int128>(ref_sum));
+#else
+    u64 want_wrap = 0;
+    for (const auto x : raw) {
+        want_wrap += static_cast<u64>(x);
+    }
+#endif
+
+    for (const auto& row : opt.rows) {
+        if (row == "auto") {
+            std::vector<sweep_int> work = src_big;
+            sweep_int              total;
+            time_row(
+                opt,
+                "auto",
+                n,
+                1,
+                [&] {
+                    work = src_big;
+                    std::sort(work.begin(), work.end());
+                    total = 0;
+                    for (const auto& v : work) {
+                        total += v;
+                    }
+                    escape(&total);
+                    escape(work.data());
+                },
+                [&] {
+                    for (std::size_t i = 0; i < n; ++i) {
+                        if (!(work[i] == sorted[i])) {
+                            fail("vecsort auto: element " + std::to_string(i) + " out of order at " + sh);
+                        }
+                    }
+#if defined(__SIZEOF_INT128__)
+                    if (!(total == want_total)) {
+                        fail("vecsort auto: wrong sum at " + sh);
+                    }
+#endif
+                },
+                scale);
+        } else if (row == "builtin") {
+            std::vector<std::int64_t> work  = raw;
+            u64                       total = 0;
+            time_row(
+                opt,
+                "builtin",
+                n,
+                1,
+                [&] {
+                    work = raw;
+                    std::sort(work.begin(), work.end());
+                    total = 0;
+                    for (const auto v : work) {
+                        total += static_cast<u64>(v);
+                    }
+                    escape(&total);
+                    escape(work.data());
+                },
+                [&] {
+                    if (work != sorted || total != want_wrap) {
+                        fail("vecsort builtin: wrong result at " + sh);
+                    }
+                },
+                scale);
+        } else if (row == "copy") {
+            std::vector<sweep_int> work = src_big;
+            time_row(
+                opt,
+                "copy",
+                n,
+                1,
+                [&] {
+                    work = src_big;
+                    escape(work.data());
+                },
+                [&] {
+                    for (std::size_t i = 0; i < n; ++i) {
+                        if (!(work[i] == raw[i])) {
+                            fail("vecsort copy: element " + std::to_string(i) + " differs at " + sh);
+                        }
+                    }
+                },
+                scale);
         } else {
             skip_row(opt, row, "not applicable");
         }
@@ -1948,8 +2184,9 @@ std::vector<std::string> split_commas(const std::string& s) {
 }
 
 const char* const all_ops[] = {
-    "mul", "sqr", "div", "rem", "divrem", "add", "sub", "shl", "shr", "cmp", "tochars", "fromchars", "gcd"};
-const char* const all_rows[] = {"auto", "inplace", "kernel", "kernelip", "gmp", "gmpz", "sliced", "unsliced", "fft"};
+    "mul", "sqr", "div", "rem", "divrem", "add", "sub", "shl", "shr", "cmp", "tochars", "fromchars", "gcd", "vecsort"};
+const char* const all_rows[] = {
+    "auto", "inplace", "kernel", "kernelip", "floor", "gmp", "gmpz", "sliced", "unsliced", "fft", "builtin", "copy"};
 
 bool one_of(const std::string& s, const auto& list) { return std::ranges::find(list, s) != std::end(list); }
 
@@ -1991,8 +2228,9 @@ options parse_args(const int argc, char** argv) {
         }
     }
     if (!one_of(opt.op, all_ops)) {
-        usage_error("usage: shape_sweep <mul|sqr|div|rem|divrem|add|sub|shl|shr|cmp|tochars|fromchars|gcd> "
-                    "[--rows auto,inplace,kernel,kernelip,gmp,gmpz,sliced,unsliced,fft] [--path ROW] [--rounds N] "
+        usage_error("usage: shape_sweep <mul|sqr|div|rem|divrem|add|sub|shl|shr|cmp|tochars|fromchars|gcd|vecsort> "
+                    "[--rows auto,inplace,kernel,kernelip,floor,gmp,gmpz,sliced,unsliced,fft,builtin,copy] "
+                    "[--path ROW] [--rounds N] "
                     "[--round-ms X] [--seed S] [--gmp] [--grid FILE] [SHAPE ...]");
     }
     if (opt.rounds == 0 || opt.round_ms <= 0.0) {
@@ -2080,6 +2318,8 @@ int main(int argc, char** argv) {
             run_fromchars(opt, la, lb);
         } else if (op == "gcd") {
             run_gcd(opt, la, lb);
+        } else if (op == "vecsort") {
+            run_vecsort(opt, la, lb);
         } else {
             run_div(opt, la, lb);
         }
