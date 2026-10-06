@@ -1158,6 +1158,8 @@ struct subsystem_signs {
     const std::size_t total  = a.size();
     bool              carry  = false;
     std::size_t       i      = 0;
+#if !defined(__GNUC__) || defined(__clang__)
+    // GCC re-materializes the carry flag per limb in an unrolled chain and runs the one-limb loop below faster.
     for (; i + 4 <= common; i += 4) {
         const auto [v0, c0] = carrying_add(a[i + 0], b[i + 0], carry);
         const auto [v1, c1] = carrying_add(a[i + 1], b[i + 1], c0);
@@ -1169,6 +1171,7 @@ struct subsystem_signs {
         dst[i + 3]          = v3;
         carry               = c3;
     }
+#endif
     for (; i < common; ++i) {
         const auto [v, c] = carrying_add(a[i], b[i], carry);
         dst[i]            = v;
@@ -1198,6 +1201,7 @@ struct subsystem_signs {
     const std::size_t total  = a.size();
     bool              borrow = false;
     std::size_t       i      = 0;
+#if !defined(__GNUC__) || defined(__clang__)
     for (; i + 4 <= common; i += 4) {
         const auto [v0, b0] = borrowing_sub(a[i + 0], b[i + 0], borrow);
         const auto [v1, b1] = borrowing_sub(a[i + 1], b[i + 1], b0);
@@ -1209,6 +1213,7 @@ struct subsystem_signs {
         dst[i + 3]          = v3;
         borrow              = b3;
     }
+#endif
     for (; i < common; ++i) {
         const auto [v, br] = borrowing_sub(a[i], b[i], borrow);
         dst[i]             = v;
