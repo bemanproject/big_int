@@ -724,6 +724,24 @@ class BEMAN_BIG_INT_TRIVIAL_ABI basic_big_int {
     constexpr uint_multiprecision_t
     divmod_in_place_short(uint_multiprecision_t divisor, bool divisor_neg, detail::division_op op);
 
+    // `*this *= b`, keeping the allocator. `b` may alias `*this`. A one-limb `b` multiplies in place; a product
+    // of at most 64 limbs is formed on the stack at run time; larger products go to a fresh buffer that replaces
+    // the old one only on success.
+    template <std::size_t extent_b>
+    constexpr void multiply_in_place(std::span<const uint_multiprecision_t, extent_b> b, bool b_neg);
+
+    // `*this /= divisor` or `*this %= divisor` for a multi-limb divisor in the schoolbook band, at run
+    // time and with all scratch on the stack: the dividend is divided where it sits, so nothing allocates.
+    // Returns false, leaving `*this` untouched, when the shape does not qualify.
+    template <std::size_t extent_b>
+    constexpr bool divide_in_place_small(std::span<const uint_multiprecision_t, extent_b> divisor,
+                                         bool                                             divisor_neg,
+                                         detail::division_op                              op);
+
+    // A value holding exactly the trimmed magnitude `mag` (non-empty), with allocator `a`.
+    [[nodiscard]] static constexpr basic_big_int
+    make_from_magnitude(std::span<const uint_multiprecision_t> mag, bool neg, const allocator_type& a);
+
     // Shared implementation behind copy-assign, move-assign, and the lvalue
     // branches of `operator+` / `operator-`.
     // Sets `*this` to the value of `src`.
@@ -2475,7 +2493,10 @@ constexpr void basic_big_int<b, L, A>::add_into(const std::span<const uint_multi
     clear_inline_tail(old_count);
 }
 
-// Computes `a * b` and stores the result into `*this`.
+// Computes `a * b` and stores the result into `*this`. The operands must not alias `*this`.
+// The product is written straight into `*this`'s storage (the multiply dispatchers need no pre-zeroed
+// result); a product one limb past the inline capacity is formed on the stack at run time, so that a
+// value that trims to fit inline never allocates.
 template <std::size_t b, class L, class A>
 template <std::size_t extent_a, std::size_t extent_b>
 constexpr void basic_big_int<b, L, A>::multiply_into(const std::span<const uint_multiprecision_t, extent_a> a,
@@ -2492,38 +2513,31 @@ constexpr void basic_big_int<b, L, A>::multiply_into(const std::span<const uint_
     }
 
     const std::size_t result_size = a_trimmed.size() + b_trimmed.size();
+    const size_type   old_count   = limb_count();
 
-    // Stack-buffer fast path: when both operand magnitudes fit in inplace storage,
-    // the product fits in `2 * inplace_capacity` limbs.
-    // Use a small stack buffer of limited size to try and keep things in inplace storage
-    // without blowing the stack
-    constexpr size_type stack_buf_limit = 64;
-    constexpr size_type stack_buf_size  = 2 * inplace_capacity;
-    if constexpr (stack_buf_size <= stack_buf_limit) {
-        if (a_trimmed.size() <= inplace_capacity && b_trimmed.size() <= inplace_capacity) {
-            limb_type                  stack_buf[stack_buf_size]{};
-            const std::span<limb_type> stack_span{stack_buf, result_size};
-            const std::size_t          sig = detail::multiply_dispatch(stack_span, a_trimmed, b_trimmed, m_alloc);
-            if (sig > inplace_capacity) {
-                grow(sig);
+    // Both operands are nonzero, so the product is nonzero and its sign is the xor of the operand signs.
+    if constexpr (inplace_capacity + 1 <= 64) {
+        if BEMAN_BIG_INT_IS_NOT_CONSTEVAL {
+            if (result_size == inplace_capacity + 1) {
+                limb_type         stack_buf[inplace_capacity + 1];
+                const std::size_t sig = detail::multiply_dispatch(
+                    std::span<limb_type>{stack_buf, result_size}, a_trimmed, b_trimmed, m_alloc);
+                limb_type* const dst = storage_for_overwrite(sig);
+                std::copy_n(stack_buf, sig, dst);
+                unchecked_set_limb_count(static_cast<std::uint32_t>(sig));
+                clear_inline_tail(old_count);
+                unchecked_set_sign(a_neg != b_neg);
+                return;
             }
-            auto* const dst = limb_ptr();
-            for (std::size_t i = 0; i < sig; ++i) {
-                dst[i] = stack_buf[i];
-            }
-            unchecked_set_limb_count(static_cast<std::uint32_t>(sig));
-            unchecked_set_sign(a_neg != b_neg && !unchecked_is_magnitude_zero());
-            return;
         }
     }
 
-    grow(result_size);
-    std::fill_n(limb_ptr(), result_size, limb_type{0});
-
-    std::span<uint_multiprecision_t> result_span{limb_ptr(), result_size};
-    const std::size_t                sig = detail::multiply_dispatch(result_span, a_trimmed, b_trimmed, m_alloc);
+    limb_type* const  dst = storage_for_overwrite(result_size);
+    const std::size_t sig =
+        detail::multiply_dispatch(std::span<limb_type>{dst, result_size}, a_trimmed, b_trimmed, m_alloc);
     unchecked_set_limb_count(static_cast<std::uint32_t>(sig));
-    unchecked_set_sign(a_neg != b_neg && !unchecked_is_magnitude_zero());
+    clear_inline_tail(old_count);
+    unchecked_set_sign(a_neg != b_neg);
 }
 
 template <std::size_t b, class L, class A>
@@ -2672,6 +2686,68 @@ constexpr auto basic_big_int<b, L, A>::operator-=(T&& rhs) -> basic_big_int&
     return *this;
 }
 
+// Multiplies in place, keeping the allocator and, below the large-product threshold, the capacity.
+template <std::size_t b, class L, class A>
+template <std::size_t extent_b>
+constexpr void basic_big_int<b, L, A>::multiply_in_place(const std::span<const uint_multiprecision_t, extent_b> b_span,
+                                                         const bool b_neg) {
+    const std::span<const uint_multiprecision_t> a_all{limb_ptr(), limb_count()};
+    const auto                                   a_trimmed = a_all.first(detail::trimmed_size_span(a_all));
+    const auto                                   b_trimmed = b_span.first(detail::trimmed_size_span(b_span));
+
+    if (detail::is_span_zero(a_trimmed) || detail::is_span_zero(b_trimmed)) {
+        set_zero();
+        return;
+    }
+
+    const bool        result_neg = is_negative() != b_neg;
+    const std::size_t la         = a_trimmed.size();
+    const std::size_t lb         = b_trimmed.size();
+
+    if (lb == 1) {
+        // `b` may alias our limbs, so take its value before anything moves.
+        const limb_type mul   = b_trimmed[0];
+        limb_type*      limbs = limb_ptr();
+        limb_type       carry = 0;
+        for (std::size_t i = 0; i < la; ++i) {
+            const auto [lo, hi] = detail::widening_mul(limbs[i], mul);
+            const auto [sum, c] = detail::carrying_add(lo, carry);
+            limbs[i]            = sum;
+            carry               = hi + static_cast<limb_type>(c);
+        }
+        if (carry != 0) {
+            grow(la + 1);
+            limb_ptr()[la] = carry;
+            unchecked_set_limb_count(static_cast<std::uint32_t>(la + 1));
+        }
+        unchecked_set_sign(result_neg);
+        return;
+    }
+
+    const std::size_t   result_size = la + lb;
+    constexpr size_type stack_limbs = 64;
+    if BEMAN_BIG_INT_IS_NOT_CONSTEVAL {
+        if (result_size <= stack_limbs) {
+            limb_type         stack_buf[stack_limbs];
+            const std::size_t sig =
+                detail::multiply_dispatch(std::span<limb_type>{stack_buf, result_size}, a_trimmed, b_trimmed, m_alloc);
+            // The operands are dead now, so growth may release the old buffer.
+            const size_type  old_count = limb_count();
+            limb_type* const dst       = storage_for_overwrite(sig);
+            std::copy_n(stack_buf, sig, dst);
+            unchecked_set_limb_count(static_cast<std::uint32_t>(sig));
+            clear_inline_tail(old_count);
+            unchecked_set_sign(result_neg);
+            return;
+        }
+    }
+
+    // Large product: build it in a fresh buffer, then adopt that buffer. `*this` is untouched if this throws.
+    basic_big_int product{m_alloc};
+    product.multiply_into(a_trimmed, is_negative(), b_trimmed, b_neg);
+    *this = std::move(product);
+}
+
 // Compound multiplication assignment.
 template <std::size_t b, class L, class A>
 template <class T>
@@ -2679,30 +2755,82 @@ constexpr auto basic_big_int<b, L, A>::operator*=(T&& rhs) -> basic_big_int&
     requires detail::common_big_int_type_with<T, basic_big_int>
 {
     if constexpr (detail::is_basic_big_int_v<std::remove_cvref_t<T>>) {
-        // Move *this to a temp so the old limbs become a read-only input,
-        // then multiply into a new *this.
-        const basic_big_int temp = std::move(*this);
-        *this                    = basic_big_int{};
-        // `rhs` may alias `*this` (e.g. `y *= y`).
-        // After the move, `rhs` still references the moved-from destination, so read both operands from `temp`.
-        if (std::addressof(rhs) == this) {
-            multiply_into(temp.representation(), temp.is_negative(), temp.representation(), temp.is_negative());
-            return *this;
-        }
-        multiply_into(temp.representation(), temp.is_negative(), rhs.representation(), rhs.is_negative());
+        // `rhs` may be `*this`: multiply_in_place reads both operands before writing.
+        multiply_in_place(rhs.representation(), rhs.is_negative());
     } else {
-        const basic_big_int temp = std::move(*this);
-        *this                    = basic_big_int{};
-        const auto rhs_limbs     = detail::to_limbs(detail::uabs(rhs));
-        multiply_into(
-            temp.representation(), temp.is_negative(), detail::to_fixed_span(rhs_limbs), detail::integer_signbit(rhs));
+        const auto rhs_limbs = detail::to_limbs(detail::uabs(rhs));
+        multiply_in_place(detail::to_fixed_span(rhs_limbs), detail::integer_signbit(rhs));
     }
     return *this;
 }
 
+template <std::size_t b, class L, class A>
+template <std::size_t extent_b>
+constexpr bool
+basic_big_int<b, L, A>::divide_in_place_small(const std::span<const uint_multiprecision_t, extent_b> divisor,
+                                              const bool                                             divisor_neg,
+                                              const detail::division_op                              op) {
+    if BEMAN_BIG_INT_IS_NOT_CONSTEVAL {
+        const std::span<const uint_multiprecision_t> dividend_all{limb_ptr(), limb_count()};
+        const auto        dividend = dividend_all.first(detail::trimmed_size_span(dividend_all));
+        const auto        d        = divisor.first(detail::trimmed_size_span(divisor));
+        const std::size_t n        = dividend.size();
+        const std::size_t m        = d.size();
+        if (m < 2 || n < m || detail::is_span_zero(dividend) || !detail::divide_takes_schoolbook(n, m)) {
+            return false;
+        }
+        const std::size_t q_cap = n - m + 1;
+        const std::size_t r_cap = n + 1;
+        const std::size_t need =
+            detail::divide_schoolbook_storage_size(n, m, true) + (op == detail::division_op::rem ? q_cap : 0);
+        if (need > detail::small_division_stack_limbs) {
+            return false;
+        }
+
+        limb_type                      stack_buf[detail::small_division_stack_limbs];
+        detail::scratch_allocator_base scratch(stack_buf, detail::small_division_stack_limbs);
+        limb_type* const               limbs     = limb_ptr();
+        const size_type                old_count = limb_count();
+        if (op == detail::division_op::div) {
+            // The schoolbook kernel copies the dividend into scratch before its first quotient write.
+            const std::span<uint_multiprecision_t> quot{limbs, q_cap};
+            detail::divide_dispatch_q(quot, dividend, d, scratch, m_alloc);
+            const std::size_t qsize = detail::trimmed_size_span(std::span<const uint_multiprecision_t>{limbs, q_cap});
+            unchecked_set_limb_count(static_cast<std::uint32_t>(qsize));
+            clear_inline_tail(old_count);
+            unchecked_set_sign(is_negative() != divisor_neg && !unchecked_is_magnitude_zero());
+        } else {
+            const bool                             neg       = is_negative();
+            const std::span<uint_multiprecision_t> quot_span = scratch.allocate(q_cap);
+            const std::span<uint_multiprecision_t> rem_span  = scratch.allocate(r_cap);
+            detail::divide_dispatch(quot_span, rem_span, dividend, d, scratch, m_alloc);
+            const std::size_t rsize = detail::trimmed_size_span(std::span<const uint_multiprecision_t>{rem_span});
+            std::copy_n(rem_span.data(), rsize, limbs);
+            unchecked_set_limb_count(static_cast<std::uint32_t>(rsize));
+            clear_inline_tail(old_count);
+            unchecked_set_sign(neg && !unchecked_is_magnitude_zero());
+        }
+        return true;
+    }
+    return false;
+}
+
+template <std::size_t b, class L, class A>
+constexpr auto basic_big_int<b, L, A>::make_from_magnitude(const std::span<const uint_multiprecision_t> mag,
+                                                           const bool                                   neg,
+                                                           const allocator_type& a) -> basic_big_int {
+    basic_big_int r{a};
+    limb_type*    dst = r.storage_for_overwrite(mag.size());
+    std::copy(mag.begin(), mag.end(), dst);
+    r.unchecked_set_limb_count(static_cast<std::uint32_t>(mag.size()));
+    r.unchecked_set_sign(neg && !r.unchecked_is_magnitude_zero());
+    return r;
+}
+
 // Single-limb divisor fast path from Knuth
-// Avoids allocating a remainder scratch buffer and a `t` buffer: we just stream the quotient through `*this`'s
-// limbs and carry a single remainder limb between iterations.
+// Avoids a scratch remainder buffer and a `t` buffer. The quotient streams through `*this`'s limbs when they
+// already have room; otherwise a run-time stack buffer takes it, so a quotient that trims to fit inline never
+// allocates. The remainder-only form needs no quotient at all.
 template <std::size_t b, class L, class A>
 template <std::size_t extent_a>
 constexpr uint_multiprecision_t
@@ -2713,13 +2841,15 @@ basic_big_int<b, L, A>::divmod_into_short(const std::span<const uint_multiprecis
                                           const detail::division_op                              op) {
     BEMAN_BIG_INT_ASSERT(divisor != 0);
 
-    const bool want_quotient = op != detail::division_op::rem;
-    const auto dividend_trim = dividend.first(detail::trimmed_size_span(dividend));
-    const bool result_neg    = want_quotient ? (dividend_neg != divisor_neg) : dividend_neg;
+    const bool      want_quotient = op != detail::division_op::rem;
+    const auto      dividend_trim = dividend.first(detail::trimmed_size_span(dividend));
+    const bool      result_neg    = want_quotient ? (dividend_neg != divisor_neg) : dividend_neg;
+    const size_type old_count     = limb_count();
 
     if (detail::is_span_zero(dividend_trim)) {
         limb_ptr()[0] = 0;
         unchecked_set_limb_count(1);
+        clear_inline_tail(old_count);
         unchecked_set_sign(false);
         return {};
     }
@@ -2729,25 +2859,45 @@ basic_big_int<b, L, A>::divmod_into_short(const std::span<const uint_multiprecis
         const uint_multiprecision_t d = dividend_trim[0];
         limb_ptr()[0]                 = want_quotient ? (d / divisor) : (d % divisor);
         unchecked_set_limb_count(1);
+        clear_inline_tail(old_count);
         unchecked_set_sign(result_neg && !unchecked_is_magnitude_zero());
         return op != detail::division_op::div ? d % divisor : 0;
     }
 
-    // Stream the quotient through *this's limb buffer,
-    // returning the scalar remainder.
-    grow(dividend_trim.size());
-    std::span<uint_multiprecision_t> quot_span{limb_ptr(), dividend_trim.size()};
-    const uint_multiprecision_t      remainder = detail::divide_unsigned_short(quot_span, dividend_trim, divisor);
+    const size_type n = dividend_trim.size();
 
-    if (want_quotient) {
-        const std::size_t qsize =
-            detail::trimmed_size_span(std::span<const uint_multiprecision_t>{limb_ptr(), dividend_trim.size()});
-        unchecked_set_limb_count(static_cast<std::uint32_t>(qsize));
-    } else {
-        limb_ptr()[0] = remainder;
+    if (!want_quotient) {
+        const uint_multiprecision_t remainder = detail::mod_unsigned_short(dividend_trim, divisor);
+        limb_ptr()[0]                         = remainder;
         unchecked_set_limb_count(1);
+        clear_inline_tail(old_count);
+        unchecked_set_sign(result_neg && !unchecked_is_magnitude_zero());
+        return remainder;
     }
 
+    const size_type     capacity    = is_representation_inplace() ? inplace_capacity : m_capacity;
+    constexpr size_type stack_limbs = 64;
+    if BEMAN_BIG_INT_IS_NOT_CONSTEVAL {
+        if (n > capacity && n <= stack_limbs) {
+            limb_type                   stack_buf[stack_limbs];
+            const uint_multiprecision_t remainder =
+                detail::divide_unsigned_short(std::span<uint_multiprecision_t>{stack_buf, n}, dividend_trim, divisor);
+            const size_type  qsize = detail::trimmed_size_span(std::span<const uint_multiprecision_t>{stack_buf, n});
+            limb_type* const dst   = storage_for_overwrite(qsize);
+            std::copy_n(stack_buf, qsize, dst);
+            unchecked_set_limb_count(static_cast<std::uint32_t>(qsize));
+            clear_inline_tail(old_count);
+            unchecked_set_sign(result_neg && !unchecked_is_magnitude_zero());
+            return remainder;
+        }
+    }
+
+    limb_type* const            dst = storage_for_overwrite(n);
+    const uint_multiprecision_t remainder =
+        detail::divide_unsigned_short(std::span<uint_multiprecision_t>{dst, n}, dividend_trim, divisor);
+    const size_type qsize = detail::trimmed_size_span(std::span<const uint_multiprecision_t>{dst, n});
+    unchecked_set_limb_count(static_cast<std::uint32_t>(qsize));
+    clear_inline_tail(old_count);
     unchecked_set_sign(result_neg && !unchecked_is_magnitude_zero());
     return remainder;
 }
@@ -2808,26 +2958,25 @@ constexpr auto basic_big_int<b, L, A>::divmod_into(const std::span<const uint_mu
             set_zero();
             return {};
         }
-
-        grow(dividend_trim.size());
-        std::copy(dividend_trim.begin(), dividend_trim.end(), limb_ptr());
-        unchecked_set_limb_count(static_cast<std::uint32_t>(dividend_trim.size()));
-        unchecked_set_sign(dividend_neg && !unchecked_is_magnitude_zero());
-        if (op == detail::division_op::rem) {
-            return {};
+        if (op == detail::division_op::div_rem) {
+            set_zero();
+            return make_from_magnitude(dividend_trim, dividend_neg, m_alloc);
         }
 
-        BEMAN_BIG_INT_DEBUG_ASSERT(op == detail::division_op::div_rem);
-        basic_big_int result = std::move(*this);
-        set_zero();
-        return result;
+        const size_type  old_count = limb_count();
+        limb_type* const dst       = storage_for_overwrite(dividend_trim.size());
+        std::copy(dividend_trim.begin(), dividend_trim.end(), dst);
+        unchecked_set_limb_count(static_cast<std::uint32_t>(dividend_trim.size()));
+        clear_inline_tail(old_count);
+        unchecked_set_sign(dividend_neg && !unchecked_is_magnitude_zero());
+        return {};
     }
 
     // Single-limb divisor fast path.
     if (divisor_trim.size() == 1) {
         const uint_multiprecision_t rem_limb =
             divmod_into_short(dividend_trim, dividend_neg, divisor_trim[0], divisor_neg, op);
-        if (rem_limb == 0) {
+        if (op != detail::division_op::div_rem || rem_limb == 0) {
             return {};
         }
         basic_big_int remainder{rem_limb, m_alloc};
@@ -2835,70 +2984,63 @@ constexpr auto basic_big_int<b, L, A>::divmod_into(const std::span<const uint_mu
         return remainder;
     }
 
-    // Multi-limb long division.
+    // Multi-limb long division. The quotient lands in `*this` (div, div_rem) or the remainder does (rem);
+    // everything else, including the div_rem remainder, lives in scratch and is copied out at its exact size.
     const std::size_t n_div = dividend_trim.size();
     const std::size_t m_div = divisor_trim.size();
     const std::size_t q_cap = n_div - m_div + 1;
     const std::size_t r_cap = n_div + 1;
-    const std::size_t t_cap = detail::divide_unsigned_storage_size(n_div, m_div);
+    const std::size_t scratch_limbs =
+        detail::divide_schoolbook_storage_size(n_div, m_div, true) + (op == detail::division_op::rem ? q_cap : 0);
+    const size_type old_count = limb_count();
 
-    if (op == detail::division_op::div) {
-        // Quotient only: the divide-and-conquer band can skip the remainder
-        // work entirely through the approximate-quotient path.
-        grow(q_cap);
-        std::fill_n(limb_ptr(), q_cap, limb_type{0});
+    const auto divide_with = [&](detail::scratch_allocator_base& scratch) -> basic_big_int {
+        if (op == detail::division_op::rem) {
+            // Quotient and remainder both in scratch; only the remainder is kept.
+            const std::span<uint_multiprecision_t> quot_span = scratch.allocate(q_cap);
+            const std::span<uint_multiprecision_t> rem_span  = scratch.allocate(r_cap);
+            detail::divide_dispatch(quot_span, rem_span, dividend_trim, divisor_trim, scratch, m_alloc);
+            const std::size_t rsize = detail::trimmed_size_span(std::span<const uint_multiprecision_t>{rem_span});
+            limb_type* const  dst   = storage_for_overwrite(rsize);
+            std::copy_n(rem_span.data(), rsize, dst);
+            unchecked_set_limb_count(static_cast<std::uint32_t>(rsize));
+            clear_inline_tail(old_count);
+            unchecked_set_sign(dividend_neg && !unchecked_is_magnitude_zero());
+            return {};
+        }
 
-        detail::scratch_allocator<allocator_type> scratch(r_cap + t_cap, m_alloc);
-        detail::divide_dispatch_q(
-            std::span<uint_multiprecision_t>{limb_ptr(), q_cap}, dividend_trim, divisor_trim, scratch, m_alloc);
-
-        const std::size_t qsize = detail::trimmed_size_span(std::span<const uint_multiprecision_t>{limb_ptr(), q_cap});
+        // Quotient only: the divide-and-conquer band can skip the remainder work through the
+        // approximate-quotient path. With div_rem the remainder is produced into scratch.
+        limb_type* const                       dst      = storage_for_overwrite(q_cap);
+        const std::span<uint_multiprecision_t> quot     = {dst, q_cap};
+        std::span<uint_multiprecision_t>       rem_span = {};
+        if (op == detail::division_op::div) {
+            detail::divide_dispatch_q(quot, dividend_trim, divisor_trim, scratch, m_alloc);
+        } else {
+            rem_span = scratch.allocate(r_cap);
+            detail::divide_dispatch(quot, rem_span, dividend_trim, divisor_trim, scratch, m_alloc);
+        }
+        const std::size_t qsize = detail::trimmed_size_span(std::span<const uint_multiprecision_t>{dst, q_cap});
         unchecked_set_limb_count(static_cast<std::uint32_t>(qsize));
+        clear_inline_tail(old_count);
         unchecked_set_sign(unrounded_quotient_neg && !unchecked_is_magnitude_zero());
-        return {};
+        if (op == detail::division_op::div) {
+            return {};
+        }
+        const std::size_t rsize = detail::trimmed_size_span(std::span<const uint_multiprecision_t>{rem_span});
+        return make_from_magnitude(
+            std::span<const uint_multiprecision_t>{rem_span.data(), rsize}, dividend_neg, m_alloc);
+    };
+
+    if BEMAN_BIG_INT_IS_NOT_CONSTEVAL {
+        if (scratch_limbs <= detail::small_division_stack_limbs) {
+            limb_type                      stack_buf[detail::small_division_stack_limbs];
+            detail::scratch_allocator_base scratch(stack_buf, detail::small_division_stack_limbs);
+            return divide_with(scratch);
+        }
     }
-
-    if (want_quotient) {
-        // *this will hold the quotient.
-        // Remainder and `t` go in scratch.
-        grow(q_cap);
-        std::fill_n(limb_ptr(), q_cap, limb_type{0});
-
-        detail::scratch_allocator<allocator_type> scratch(r_cap + t_cap, m_alloc);
-        const std::span<uint_multiprecision_t>    rem_span = scratch.allocate(r_cap);
-
-        detail::divide_dispatch(std::span<uint_multiprecision_t>{limb_ptr(), q_cap},
-                                rem_span,
-                                dividend_trim,
-                                divisor_trim,
-                                scratch,
-                                m_alloc);
-
-        const std::size_t qsize = detail::trimmed_size_span(std::span<const uint_multiprecision_t>{limb_ptr(), q_cap});
-        unchecked_set_limb_count(static_cast<std::uint32_t>(qsize));
-        unchecked_set_sign(unrounded_quotient_neg && !unchecked_is_magnitude_zero());
-
-        BEMAN_BIG_INT_DEBUG_ASSERT(op == detail::division_op::div_rem);
-        basic_big_int rem(rem_span.data(), rem_span.data() + rem_span.size(), m_alloc);
-        rem.unchecked_set_sign(dividend_neg && !rem.unchecked_is_magnitude_zero());
-        return rem;
-    }
-
-    // *this will hold the remainder.
-    // Quotient and `t` go in scratch.
-    grow(r_cap);
-    std::fill_n(limb_ptr(), r_cap, limb_type{0});
-
-    detail::scratch_allocator<allocator_type> scratch(q_cap + t_cap, m_alloc);
-    const std::span<uint_multiprecision_t>    quot_span = scratch.allocate(q_cap);
-
-    detail::divide_dispatch(
-        quot_span, std::span<uint_multiprecision_t>{limb_ptr(), r_cap}, dividend_trim, divisor_trim, scratch, m_alloc);
-
-    const std::size_t rsize = detail::trimmed_size_span(std::span<const uint_multiprecision_t>{limb_ptr(), r_cap});
-    unchecked_set_limb_count(static_cast<std::uint32_t>(rsize));
-    unchecked_set_sign(dividend_neg && !unchecked_is_magnitude_zero());
-    return {};
+    detail::scratch_allocator<allocator_type> scratch(scratch_limbs, m_alloc);
+    return divide_with(scratch);
 }
 
 // Simultaneously computes the quotient and remainder of a division,
@@ -3024,15 +3166,16 @@ constexpr auto basic_big_int<b, L, A>::operator/=(T&& rhs) -> basic_big_int&
             // storage when `&rhs == this`.
             if (&rhs == this) {
                 BEMAN_BIG_INT_ASSERT(!is_zero());
-                *this = basic_big_int{1};
+                set_zero();
+                limb_ptr()[0] = 1;
                 return *this;
             }
         }
         if (rhs.limb_count() == 1) {
             static_cast<void>(divmod_in_place_short(rhs.limb_ptr()[0], rhs.is_negative(), detail::division_op::div));
-        } else {
-            const basic_big_int temp = std::move(*this);
-            *this                    = basic_big_int{};
+        } else if (!divide_in_place_small(rhs.representation(), rhs.is_negative(), detail::division_op::div)) {
+            const basic_big_int temp(std::move(*this), m_alloc);
+            set_zero();
             divmod_into(temp.representation(),
                         temp.is_negative(),
                         rhs.representation(),
@@ -3044,9 +3187,10 @@ constexpr auto basic_big_int<b, L, A>::operator/=(T&& rhs) -> basic_big_int&
         if (detail::trimmed_size_span(rhs_limbs) == 1) {
             static_cast<void>(
                 divmod_in_place_short(rhs_limbs[0], detail::integer_signbit(rhs), detail::division_op::div));
-        } else {
-            const basic_big_int temp = std::move(*this);
-            *this                    = basic_big_int{};
+        } else if (!divide_in_place_small(
+                       detail::to_fixed_span(rhs_limbs), detail::integer_signbit(rhs), detail::division_op::div)) {
+            const basic_big_int temp(std::move(*this), m_alloc);
+            set_zero();
             divmod_into(temp.representation(),
                         temp.is_negative(),
                         detail::to_fixed_span(rhs_limbs),
@@ -3067,15 +3211,15 @@ constexpr auto basic_big_int<b, L, A>::operator%=(T&& rhs) -> basic_big_int&
             // Self-modulus: `std::move(*this)` below would zero `rhs` when &rhs == this.
             if (&rhs == this) {
                 BEMAN_BIG_INT_ASSERT(!is_zero());
-                *this = basic_big_int{};
+                set_zero();
                 return *this;
             }
         }
         if (rhs.limb_count() == 1) {
             static_cast<void>(divmod_in_place_short(rhs.limb_ptr()[0], rhs.is_negative(), detail::division_op::rem));
-        } else {
-            const basic_big_int temp = std::move(*this);
-            *this                    = basic_big_int{};
+        } else if (!divide_in_place_small(rhs.representation(), rhs.is_negative(), detail::division_op::rem)) {
+            const basic_big_int temp(std::move(*this), m_alloc);
+            set_zero();
             divmod_into(temp.representation(),
                         temp.is_negative(),
                         rhs.representation(),
@@ -3087,9 +3231,10 @@ constexpr auto basic_big_int<b, L, A>::operator%=(T&& rhs) -> basic_big_int&
         if (detail::trimmed_size_span(rhs_limbs) == 1) {
             static_cast<void>(
                 divmod_in_place_short(rhs_limbs[0], detail::integer_signbit(rhs), detail::division_op::rem));
-        } else {
-            const basic_big_int temp = std::move(*this);
-            *this                    = basic_big_int{};
+        } else if (!divide_in_place_small(
+                       detail::to_fixed_span(rhs_limbs), detail::integer_signbit(rhs), detail::division_op::rem)) {
+            const basic_big_int temp(std::move(*this), m_alloc);
+            set_zero();
             divmod_into(temp.representation(),
                         temp.is_negative(),
                         detail::to_fixed_span(rhs_limbs),
