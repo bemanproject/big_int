@@ -7,6 +7,7 @@
 // Guarding these includes is safe only because the .cppm supplies them in its
 // global module fragment before the purview include of this header.
 #ifndef BEMAN_BIG_INT_BUILD_MODULE
+    #include <cfloat>  // for LDBL_MANT_DIG, LDBL_MAX_EXP
     #include <climits> // for BITINT_MAXWIDTH
     #include <cstdint> // for INTPTR_MAX
     #include <version> // for __cpp_lib_*
@@ -23,7 +24,9 @@
 
     // Every feature-test, compiler-extension, and target-architecture macro the
     // library branches on is tested here and nowhere else; the rest of the library
-    // checks only the BEMAN_BIG_INT_HAS_* and BEMAN_BIG_INT_TARGET_* spellings below.
+    // checks only the BEMAN_BIG_INT_HAS_*, BEMAN_BIG_INT_TARGET_* and
+    // BEMAN_BIG_INT_LONG_DOUBLE_* spellings below, and the BEMAN_BIG_INT_BUILTIN_*
+    // and BEMAN_BIG_INT_INTRINSIC_* wrappers defined from them after this branch.
     // Each is defined to 1 when the feature is available and left undefined otherwise.
 
     // Language features
@@ -77,6 +80,18 @@
         #define BEMAN_BIG_INT_HAS_STDCPP_FLOAT128_T 1
     #endif
 
+    // long double format
+
+    #if !defined(LDBL_MANT_DIG) || !defined(LDBL_MAX_EXP)
+        #error Cannot determine the format of long double without LDBL_MANT_DIG and LDBL_MAX_EXP.
+    #elif LDBL_MANT_DIG == 64 && LDBL_MAX_EXP == 16384
+        #define BEMAN_BIG_INT_LONG_DOUBLE_X87_EXTENDED 1
+    #elif LDBL_MANT_DIG == 113 && LDBL_MAX_EXP == 16384
+        #define BEMAN_BIG_INT_LONG_DOUBLE_BINARY128 1
+    #elif LDBL_MANT_DIG == 53 && LDBL_MAX_EXP == 1024
+        #define BEMAN_BIG_INT_LONG_DOUBLE_BINARY64 1
+    #endif
+
     // Bit-precise integers (_BitInt)
 
     #ifdef BITINT_MAXWIDTH
@@ -106,6 +121,139 @@
     #ifdef __SIZEOF_INT128__
         #define BEMAN_BIG_INT_HAS_INT128_EXTENSION 1
     #endif
+
+    // Compiler builtins
+
+    // BEMAN_BIG_INT_HAS_BUILTIN_<NAME> means __builtin_<name> (or the type trait
+    // __<name>) exists; BEMAN_BIG_INT_HAS_CONSTEXPR_BUILTIN_<NAME> means it is also
+    // usable during constant evaluation. Only Clang can test the latter exactly, so
+    // on GCC the floating-point builtins, which it folds, count whenever they exist.
+    // The library calls them through the BEMAN_BIG_INT_BUILTIN_* wrappers defined
+    // from these below. The DETECT helpers are function-like and #undef'd below, so
+    // the CMake probe never records them.
+
+    #ifdef __has_builtin
+        #define BEMAN_BIG_INT_DETECT_BUILTIN(...) __has_builtin(__VA_ARGS__)
+    #else
+        #define BEMAN_BIG_INT_DETECT_BUILTIN(...) 0
+    #endif
+
+    #ifdef __has_constexpr_builtin
+        #define BEMAN_BIG_INT_DETECT_CONSTEXPR_BUILTIN(...) __has_constexpr_builtin(__VA_ARGS__)
+        #define BEMAN_BIG_INT_DETECT_CONSTEXPR_MATH_BUILTIN(...) __has_constexpr_builtin(__VA_ARGS__)
+    #else
+        #define BEMAN_BIG_INT_DETECT_CONSTEXPR_BUILTIN(...) 0
+        #define BEMAN_BIG_INT_DETECT_CONSTEXPR_MATH_BUILTIN(...) BEMAN_BIG_INT_DETECT_BUILTIN(__VA_ARGS__)
+    #endif
+
+    #if BEMAN_BIG_INT_DETECT_BUILTIN(__is_integral)
+        #define BEMAN_BIG_INT_HAS_BUILTIN_IS_INTEGRAL 1
+    #endif
+
+    // MSVC provides this one without __has_builtin.
+    #if defined(_MSC_VER) || BEMAN_BIG_INT_DETECT_BUILTIN(__builtin_is_constant_evaluated)
+        #define BEMAN_BIG_INT_HAS_BUILTIN_IS_CONSTANT_EVALUATED 1
+    #endif
+
+    #if BEMAN_BIG_INT_DETECT_BUILTIN(__builtin_constant_p)
+        #define BEMAN_BIG_INT_HAS_BUILTIN_CONSTANT_P 1
+    #endif
+
+    #if BEMAN_BIG_INT_DETECT_BUILTIN(__builtin_trap)
+        #define BEMAN_BIG_INT_HAS_BUILTIN_TRAP 1
+    #endif
+
+    #if BEMAN_BIG_INT_DETECT_BUILTIN(__builtin_add_overflow)
+        #define BEMAN_BIG_INT_HAS_BUILTIN_ADD_OVERFLOW 1
+    #endif
+
+    #if BEMAN_BIG_INT_DETECT_BUILTIN(__builtin_sub_overflow)
+        #define BEMAN_BIG_INT_HAS_BUILTIN_SUB_OVERFLOW 1
+    #endif
+
+    #if BEMAN_BIG_INT_DETECT_BUILTIN(__builtin_mul_overflow)
+        #define BEMAN_BIG_INT_HAS_BUILTIN_MUL_OVERFLOW 1
+    #endif
+
+    #if BEMAN_BIG_INT_DETECT_BUILTIN(__builtin_addc)
+        #define BEMAN_BIG_INT_HAS_BUILTIN_ADDC 1
+    #endif
+
+    #if BEMAN_BIG_INT_DETECT_BUILTIN(__builtin_subc)
+        #define BEMAN_BIG_INT_HAS_BUILTIN_SUBC 1
+    #endif
+
+    #if BEMAN_BIG_INT_DETECT_CONSTEXPR_BUILTIN(__builtin_addc)
+        #define BEMAN_BIG_INT_HAS_CONSTEXPR_BUILTIN_ADDC 1
+    #endif
+
+    #if BEMAN_BIG_INT_DETECT_CONSTEXPR_BUILTIN(__builtin_subc)
+        #define BEMAN_BIG_INT_HAS_CONSTEXPR_BUILTIN_SUBC 1
+    #endif
+
+    #if BEMAN_BIG_INT_DETECT_BUILTIN(__builtin_elementwise_fshl)
+        #define BEMAN_BIG_INT_HAS_BUILTIN_ELEMENTWISE_FSHL 1
+    #endif
+
+    #if BEMAN_BIG_INT_DETECT_BUILTIN(__builtin_elementwise_fshr)
+        #define BEMAN_BIG_INT_HAS_BUILTIN_ELEMENTWISE_FSHR 1
+    #endif
+
+    #if BEMAN_BIG_INT_DETECT_CONSTEXPR_MATH_BUILTIN(__builtin_signbit)
+        #define BEMAN_BIG_INT_HAS_CONSTEXPR_BUILTIN_SIGNBIT 1
+    #endif
+
+    #if BEMAN_BIG_INT_DETECT_CONSTEXPR_MATH_BUILTIN(__builtin_isfinite)
+        #define BEMAN_BIG_INT_HAS_CONSTEXPR_BUILTIN_ISFINITE 1
+    #endif
+
+    #if BEMAN_BIG_INT_DETECT_CONSTEXPR_MATH_BUILTIN(__builtin_copysign)
+        #define BEMAN_BIG_INT_HAS_CONSTEXPR_BUILTIN_COPYSIGN 1
+    #endif
+
+    #if BEMAN_BIG_INT_DETECT_CONSTEXPR_MATH_BUILTIN(__builtin_copysignf)
+        #define BEMAN_BIG_INT_HAS_CONSTEXPR_BUILTIN_COPYSIGNF 1
+    #endif
+
+    #if BEMAN_BIG_INT_DETECT_CONSTEXPR_MATH_BUILTIN(__builtin_copysignl)
+        #define BEMAN_BIG_INT_HAS_CONSTEXPR_BUILTIN_COPYSIGNL 1
+    #endif
+
+    #if BEMAN_BIG_INT_DETECT_CONSTEXPR_MATH_BUILTIN(__builtin_ldexp)
+        #define BEMAN_BIG_INT_HAS_CONSTEXPR_BUILTIN_LDEXP 1
+    #endif
+
+    #if BEMAN_BIG_INT_DETECT_CONSTEXPR_MATH_BUILTIN(__builtin_ldexpf)
+        #define BEMAN_BIG_INT_HAS_CONSTEXPR_BUILTIN_LDEXPF 1
+    #endif
+
+    #if BEMAN_BIG_INT_DETECT_CONSTEXPR_MATH_BUILTIN(__builtin_ldexpl)
+        #define BEMAN_BIG_INT_HAS_CONSTEXPR_BUILTIN_LDEXPL 1
+    #endif
+
+    #if BEMAN_BIG_INT_DETECT_CONSTEXPR_MATH_BUILTIN(__builtin_fabs)
+        #define BEMAN_BIG_INT_HAS_CONSTEXPR_BUILTIN_FABS 1
+    #endif
+
+    #if BEMAN_BIG_INT_DETECT_CONSTEXPR_MATH_BUILTIN(__builtin_fabsf)
+        #define BEMAN_BIG_INT_HAS_CONSTEXPR_BUILTIN_FABSF 1
+    #endif
+
+    #if BEMAN_BIG_INT_DETECT_CONSTEXPR_MATH_BUILTIN(__builtin_fabsl)
+        #define BEMAN_BIG_INT_HAS_CONSTEXPR_BUILTIN_FABSL 1
+    #endif
+
+    #if BEMAN_BIG_INT_DETECT_BUILTIN(__builtin_cpu_init)
+        #define BEMAN_BIG_INT_HAS_BUILTIN_CPU_INIT 1
+    #endif
+
+    #if BEMAN_BIG_INT_DETECT_BUILTIN(__builtin_cpu_supports)
+        #define BEMAN_BIG_INT_HAS_BUILTIN_CPU_SUPPORTS 1
+    #endif
+
+    #undef BEMAN_BIG_INT_DETECT_BUILTIN
+    #undef BEMAN_BIG_INT_DETECT_CONSTEXPR_BUILTIN
+    #undef BEMAN_BIG_INT_DETECT_CONSTEXPR_MATH_BUILTIN
 
     // Exceptions
 
@@ -142,6 +290,31 @@
 
     #if defined(__AVX512IFMA__) && defined(__AVX512VL__) && defined(__AVX512BW__) && defined(__AVX512VBMI__)
         #define BEMAN_BIG_INT_HAS_AVX512_IFMA 1
+    #endif
+
+    // MSVC intrinsics (<intrin.h>) and GNU x86 inline assembly. Clang-cl also
+    // defines _MSC_VER, but takes the __builtin_* paths wherever both exist.
+
+    // __umulh and __mulh
+    #if defined(_MSC_VER) && (defined(BEMAN_BIG_INT_TARGET_X86_64) || defined(BEMAN_BIG_INT_TARGET_AARCH64))
+        #define BEMAN_BIG_INT_HAS_INTRINSIC_UMULH 1
+    #endif
+
+    // _umul128 and _mul128, _udiv128, _addcarry_u64 and _subborrow_u64
+    #if defined(_MSC_VER) && defined(BEMAN_BIG_INT_TARGET_X86_64)
+        #define BEMAN_BIG_INT_HAS_INTRINSIC_UMUL128 1
+        #define BEMAN_BIG_INT_HAS_INTRINSIC_UDIV128 1
+        #define BEMAN_BIG_INT_HAS_INTRINSIC_ADDCARRY_U64 1
+    #endif
+
+    // _addcarry_u8/16/32 and _subborrow_u8/16/32; __cpuid, __cpuidex and _xgetbv
+    #if defined(_MSC_VER) && (defined(BEMAN_BIG_INT_TARGET_X86_64) || defined(BEMAN_BIG_INT_TARGET_X86_32))
+        #define BEMAN_BIG_INT_HAS_INTRINSIC_ADDCARRY 1
+        #define BEMAN_BIG_INT_HAS_INTRINSIC_CPUID 1
+    #endif
+
+    #if defined(__GNUC__) && (defined(BEMAN_BIG_INT_TARGET_X86_64) || defined(BEMAN_BIG_INT_TARGET_X86_32))
+        #define BEMAN_BIG_INT_HAS_X86_GNU_ASM 1
     #endif
 
     // Word size
@@ -241,26 +414,158 @@
     #define BEMAN_BIG_INT_GNUC __GNUC__
 #endif // __GNUC__
 
-// Builtin detection ===========================================================
+// Compiler builtins ===========================================================
 
-#ifdef __has_builtin
-    #define BEMAN_BIG_INT_HAS_BUILTIN(...) __has_builtin(__VA_ARGS__)
-#else
-    #define BEMAN_BIG_INT_HAS_BUILTIN(...) 0
-#endif // __has_builtin
+// The library calls compiler builtins and intrinsics only through these wrappers,
+// each defined only when feature detection found it, so a compiler that spells
+// one differently needs a new mapping here and nowhere else. Code tests the
+// wrapper itself with #ifdef, or BEMAN_BIG_INT_HAS_CONSTEXPR_BUILTIN_<NAME> where
+// it must also work during constant evaluation. The floating-point ones are only
+// ever needed there, so they are defined only when usable in constant evaluation.
 
-// In addition to BEMAN_BIG_INT_HAS_CONSTEXPR_BUILTIN, which is an exact test,
-// `BEMAN_BIG_INT_HAS_CONSTEXPR_BUILTIN_OR_BUILTIN` falls back onto `BEMAN_BIG_INT_HAS_BUILTIN`
-// if constexpr builtin testing is not available.
-// This is useful for GCC, which supports __has_builtin but not __has_constexpr_builtin,
-// and many GCC intrinsics are usable during constant evaluation.
-#ifdef __has_constexpr_builtin
-    #define BEMAN_BIG_INT_HAS_CONSTEXPR_BUILTIN(...) __has_constexpr_builtin(__VA_ARGS__)
-    #define BEMAN_BIG_INT_HAS_CONSTEXPR_BUILTIN_OR_BUILTIN(...) __has_constexpr_builtin(__VA_ARGS__)
-#else
-    #define BEMAN_BIG_INT_HAS_CONSTEXPR_BUILTIN(...) 0
-    #define BEMAN_BIG_INT_HAS_CONSTEXPR_BUILTIN_OR_BUILTIN(...) BEMAN_BIG_INT_HAS_BUILTIN(__VA_ARGS__)
-#endif // __has_constexpr_builtin
+// Every supported compiler has these, so they are always defined.
+#define BEMAN_BIG_INT_BUILTIN_FILE() __builtin_FILE()
+#define BEMAN_BIG_INT_BUILTIN_LINE() __builtin_LINE()
+#define BEMAN_BIG_INT_BUILTIN_FUNCTION() __builtin_FUNCTION()
+
+#ifdef BEMAN_BIG_INT_HAS_BUILTIN_IS_INTEGRAL
+    #define BEMAN_BIG_INT_BUILTIN_IS_INTEGRAL(...) __is_integral(__VA_ARGS__)
+#endif
+
+#ifdef BEMAN_BIG_INT_HAS_BUILTIN_IS_CONSTANT_EVALUATED
+    #define BEMAN_BIG_INT_BUILTIN_IS_CONSTANT_EVALUATED() __builtin_is_constant_evaluated()
+#endif
+
+#ifdef BEMAN_BIG_INT_HAS_BUILTIN_CONSTANT_P
+    #define BEMAN_BIG_INT_BUILTIN_CONSTANT_P(...) __builtin_constant_p(__VA_ARGS__)
+#endif
+
+#ifdef BEMAN_BIG_INT_HAS_BUILTIN_TRAP
+    #define BEMAN_BIG_INT_BUILTIN_TRAP() __builtin_trap()
+#endif
+
+#ifdef BEMAN_BIG_INT_HAS_BUILTIN_ADD_OVERFLOW
+    #define BEMAN_BIG_INT_BUILTIN_ADD_OVERFLOW(...) __builtin_add_overflow(__VA_ARGS__)
+#endif
+
+#ifdef BEMAN_BIG_INT_HAS_BUILTIN_SUB_OVERFLOW
+    #define BEMAN_BIG_INT_BUILTIN_SUB_OVERFLOW(...) __builtin_sub_overflow(__VA_ARGS__)
+#endif
+
+#ifdef BEMAN_BIG_INT_HAS_BUILTIN_MUL_OVERFLOW
+    #define BEMAN_BIG_INT_BUILTIN_MUL_OVERFLOW(...) __builtin_mul_overflow(__VA_ARGS__)
+#endif
+
+#ifdef BEMAN_BIG_INT_HAS_BUILTIN_ADDC
+    #define BEMAN_BIG_INT_BUILTIN_ADDC(...) __builtin_addc(__VA_ARGS__)
+    #define BEMAN_BIG_INT_BUILTIN_ADDCL(...) __builtin_addcl(__VA_ARGS__)
+    #define BEMAN_BIG_INT_BUILTIN_ADDCLL(...) __builtin_addcll(__VA_ARGS__)
+#endif
+
+#ifdef BEMAN_BIG_INT_HAS_BUILTIN_SUBC
+    #define BEMAN_BIG_INT_BUILTIN_SUBC(...) __builtin_subc(__VA_ARGS__)
+    #define BEMAN_BIG_INT_BUILTIN_SUBCL(...) __builtin_subcl(__VA_ARGS__)
+    #define BEMAN_BIG_INT_BUILTIN_SUBCLL(...) __builtin_subcll(__VA_ARGS__)
+#endif
+
+#ifdef BEMAN_BIG_INT_HAS_BUILTIN_ELEMENTWISE_FSHL
+    #define BEMAN_BIG_INT_BUILTIN_ELEMENTWISE_FSHL(...) __builtin_elementwise_fshl(__VA_ARGS__)
+#endif
+
+#ifdef BEMAN_BIG_INT_HAS_BUILTIN_ELEMENTWISE_FSHR
+    #define BEMAN_BIG_INT_BUILTIN_ELEMENTWISE_FSHR(...) __builtin_elementwise_fshr(__VA_ARGS__)
+#endif
+
+#ifdef BEMAN_BIG_INT_HAS_CONSTEXPR_BUILTIN_SIGNBIT
+    #define BEMAN_BIG_INT_BUILTIN_SIGNBIT(...) __builtin_signbit(__VA_ARGS__)
+#endif
+
+#ifdef BEMAN_BIG_INT_HAS_CONSTEXPR_BUILTIN_ISFINITE
+    #define BEMAN_BIG_INT_BUILTIN_ISFINITE(...) __builtin_isfinite(__VA_ARGS__)
+#endif
+
+#ifdef BEMAN_BIG_INT_HAS_CONSTEXPR_BUILTIN_COPYSIGN
+    #define BEMAN_BIG_INT_BUILTIN_COPYSIGN(...) __builtin_copysign(__VA_ARGS__)
+#endif
+
+#ifdef BEMAN_BIG_INT_HAS_CONSTEXPR_BUILTIN_COPYSIGNF
+    #define BEMAN_BIG_INT_BUILTIN_COPYSIGNF(...) __builtin_copysignf(__VA_ARGS__)
+#endif
+
+#ifdef BEMAN_BIG_INT_HAS_CONSTEXPR_BUILTIN_COPYSIGNL
+    #define BEMAN_BIG_INT_BUILTIN_COPYSIGNL(...) __builtin_copysignl(__VA_ARGS__)
+#endif
+
+#ifdef BEMAN_BIG_INT_HAS_CONSTEXPR_BUILTIN_LDEXP
+    #define BEMAN_BIG_INT_BUILTIN_LDEXP(...) __builtin_ldexp(__VA_ARGS__)
+#endif
+
+#ifdef BEMAN_BIG_INT_HAS_CONSTEXPR_BUILTIN_LDEXPF
+    #define BEMAN_BIG_INT_BUILTIN_LDEXPF(...) __builtin_ldexpf(__VA_ARGS__)
+#endif
+
+#ifdef BEMAN_BIG_INT_HAS_CONSTEXPR_BUILTIN_LDEXPL
+    #define BEMAN_BIG_INT_BUILTIN_LDEXPL(...) __builtin_ldexpl(__VA_ARGS__)
+#endif
+
+#ifdef BEMAN_BIG_INT_HAS_CONSTEXPR_BUILTIN_FABS
+    #define BEMAN_BIG_INT_BUILTIN_FABS(...) __builtin_fabs(__VA_ARGS__)
+#endif
+
+#ifdef BEMAN_BIG_INT_HAS_CONSTEXPR_BUILTIN_FABSF
+    #define BEMAN_BIG_INT_BUILTIN_FABSF(...) __builtin_fabsf(__VA_ARGS__)
+#endif
+
+#ifdef BEMAN_BIG_INT_HAS_CONSTEXPR_BUILTIN_FABSL
+    #define BEMAN_BIG_INT_BUILTIN_FABSL(...) __builtin_fabsl(__VA_ARGS__)
+#endif
+
+#ifdef BEMAN_BIG_INT_HAS_BUILTIN_CPU_INIT
+    #define BEMAN_BIG_INT_BUILTIN_CPU_INIT() __builtin_cpu_init()
+#endif
+
+#ifdef BEMAN_BIG_INT_HAS_BUILTIN_CPU_SUPPORTS
+    #define BEMAN_BIG_INT_BUILTIN_CPU_SUPPORTS(...) __builtin_cpu_supports(__VA_ARGS__)
+#endif
+
+// The module interface unit includes <intrin.h> in its global module fragment.
+#if defined(BEMAN_BIG_INT_MSVC) && !defined(BEMAN_BIG_INT_BUILD_MODULE)
+    #include <intrin.h>
+#endif
+
+#ifdef BEMAN_BIG_INT_HAS_INTRINSIC_UMULH
+    #define BEMAN_BIG_INT_INTRINSIC_MULH(...) __mulh(__VA_ARGS__)
+    #define BEMAN_BIG_INT_INTRINSIC_UMULH(...) __umulh(__VA_ARGS__)
+#endif
+
+#ifdef BEMAN_BIG_INT_HAS_INTRINSIC_UMUL128
+    #define BEMAN_BIG_INT_INTRINSIC_MUL128(...) _mul128(__VA_ARGS__)
+    #define BEMAN_BIG_INT_INTRINSIC_UMUL128(...) _umul128(__VA_ARGS__)
+#endif
+
+#ifdef BEMAN_BIG_INT_HAS_INTRINSIC_UDIV128
+    #define BEMAN_BIG_INT_INTRINSIC_UDIV128(...) _udiv128(__VA_ARGS__)
+#endif
+
+#ifdef BEMAN_BIG_INT_HAS_INTRINSIC_ADDCARRY
+    #define BEMAN_BIG_INT_INTRINSIC_ADDCARRY_U8(...) _addcarry_u8(__VA_ARGS__)
+    #define BEMAN_BIG_INT_INTRINSIC_ADDCARRY_U16(...) _addcarry_u16(__VA_ARGS__)
+    #define BEMAN_BIG_INT_INTRINSIC_ADDCARRY_U32(...) _addcarry_u32(__VA_ARGS__)
+    #define BEMAN_BIG_INT_INTRINSIC_SUBBORROW_U8(...) _subborrow_u8(__VA_ARGS__)
+    #define BEMAN_BIG_INT_INTRINSIC_SUBBORROW_U16(...) _subborrow_u16(__VA_ARGS__)
+    #define BEMAN_BIG_INT_INTRINSIC_SUBBORROW_U32(...) _subborrow_u32(__VA_ARGS__)
+#endif
+
+#ifdef BEMAN_BIG_INT_HAS_INTRINSIC_ADDCARRY_U64
+    #define BEMAN_BIG_INT_INTRINSIC_ADDCARRY_U64(...) _addcarry_u64(__VA_ARGS__)
+    #define BEMAN_BIG_INT_INTRINSIC_SUBBORROW_U64(...) _subborrow_u64(__VA_ARGS__)
+#endif
+
+#ifdef BEMAN_BIG_INT_HAS_INTRINSIC_CPUID
+    #define BEMAN_BIG_INT_INTRINSIC_CPUID(...) __cpuid(__VA_ARGS__)
+    #define BEMAN_BIG_INT_INTRINSIC_CPUIDEX(...) __cpuidex(__VA_ARGS__)
+    #define BEMAN_BIG_INT_INTRINSIC_XGETBV(...) _xgetbv(__VA_ARGS__)
+#endif
 
 // Undefine min()/max() for MSVC ===============================================
 #ifdef min
@@ -490,15 +795,17 @@ concept character_type =                                     //
     std::is_same_v<T, char> || std::is_same_v<T, wchar_t> || //
     std::is_same_v<T, char8_t> || std::is_same_v<T, char16_t> || std::is_same_v<T, char32_t>;
 
-#if BEMAN_BIG_INT_HAS_BUILTIN(__is_integral)
+#ifdef BEMAN_BIG_INT_BUILTIN_IS_INTEGRAL
     #ifdef BEMAN_BIG_INT_HAS_BITINT
-static_assert(__is_integral(bit_int<32>) && __is_integral(bit_int<32>),
+static_assert(BEMAN_BIG_INT_BUILTIN_IS_INTEGRAL(bit_int<32>) && BEMAN_BIG_INT_BUILTIN_IS_INTEGRAL(bit_uint<32>),
               "Bad compiler builtin __is_integral rejects _BitInt.");
     #endif
-static_assert(__is_integral(int) && __is_integral(const volatile unsigned int));
-static_assert(__is_integral(char) && __is_integral(signed char) && __is_integral(unsigned char));
+static_assert(BEMAN_BIG_INT_BUILTIN_IS_INTEGRAL(int) &&
+              BEMAN_BIG_INT_BUILTIN_IS_INTEGRAL(const volatile unsigned int));
+static_assert(BEMAN_BIG_INT_BUILTIN_IS_INTEGRAL(char) && BEMAN_BIG_INT_BUILTIN_IS_INTEGRAL(signed char) &&
+              BEMAN_BIG_INT_BUILTIN_IS_INTEGRAL(unsigned char));
 template <class T>
-concept integral = __is_integral(T);
+concept integral = BEMAN_BIG_INT_BUILTIN_IS_INTEGRAL(T);
 #elif defined(BEMAN_BIG_INT_HAS_BITINT)
 // If bit-precise integers do exist but we don't have a builtin __is_integral,
 // we need to create our own concept for integral types that also includes _BitInt.
@@ -755,12 +1062,12 @@ namespace detail {
 // builtins carry the same caller location with no consteval machinery and
 // exist on GCC, Clang, and MSVC.
 [[noreturn]] inline void assert_fail(const char* const source,
-                                     const char* const file     = __builtin_FILE(),
-                                     const int         line     = __builtin_LINE(),
-                                     const char* const function = __builtin_FUNCTION()) {
+                                     const char* const file     = BEMAN_BIG_INT_BUILTIN_FILE(),
+                                     const int         line     = BEMAN_BIG_INT_BUILTIN_LINE(),
+                                     const char* const function = BEMAN_BIG_INT_BUILTIN_FUNCTION()) {
     std::fprintf(stderr, "%s:%d Assertion failed: %s\nSee: %s\n", file, line, source, function);
-#if BEMAN_BIG_INT_HAS_BUILTIN(__builtin_trap)
-    __builtin_trap();
+#ifdef BEMAN_BIG_INT_BUILTIN_TRAP
+    BEMAN_BIG_INT_BUILTIN_TRAP();
 #else
     std::abort();
 #endif
@@ -789,13 +1096,13 @@ BEMAN_BIG_INT_END_NAMESPACE
         // In MSVC, all code following `if !consteval` is considered unreachable.
         // The warning is also impossible to suppress, so NEVER use `if !consteval` on MSVC.
         // https://developercommunity.microsoft.com/t/Code-following-if-consteval-is-unreac/11073119
-        #define BEMAN_BIG_INT_IS_NOT_CONSTEVAL (!__builtin_is_constant_evaluated())
+        #define BEMAN_BIG_INT_IS_NOT_CONSTEVAL (!BEMAN_BIG_INT_BUILTIN_IS_CONSTANT_EVALUATED())
     #else
         #define BEMAN_BIG_INT_IS_NOT_CONSTEVAL !consteval
     #endif // BEMAN_BIG_INT_MSVC
-#elif BEMAN_BIG_INT_HAS_BUILTIN(__builtin_is_constant_evaluated)
-    #define BEMAN_BIG_INT_IS_CONSTEVAL (__builtin_is_constant_evaluated())
-    #define BEMAN_BIG_INT_IS_NOT_CONSTEVAL (!__builtin_is_constant_evaluated())
+#elif defined(BEMAN_BIG_INT_BUILTIN_IS_CONSTANT_EVALUATED)
+    #define BEMAN_BIG_INT_IS_CONSTEVAL (BEMAN_BIG_INT_BUILTIN_IS_CONSTANT_EVALUATED())
+    #define BEMAN_BIG_INT_IS_NOT_CONSTEVAL (!BEMAN_BIG_INT_BUILTIN_IS_CONSTANT_EVALUATED())
 #else
     #ifndef BEMAN_BIG_INT_BUILD_MODULE
         #include <type_traits>
@@ -820,8 +1127,8 @@ BEMAN_BIG_INT_END_NAMESPACE
 
 // Constant propagation detection ==============================================
 
-#if BEMAN_BIG_INT_HAS_BUILTIN(__builtin_constant_p)
-    #define BEMAN_BIG_INT_IS_CONSTANT_PROPAGATED(...) __builtin_constant_p(__VA_ARGS__)
+#ifdef BEMAN_BIG_INT_BUILTIN_CONSTANT_P
+    #define BEMAN_BIG_INT_IS_CONSTANT_PROPAGATED(...) BEMAN_BIG_INT_BUILTIN_CONSTANT_P(__VA_ARGS__)
 #else
     #define BEMAN_BIG_INT_IS_CONSTANT_PROPAGATED(...) (void(__VA_ARGS__), false)
 #endif

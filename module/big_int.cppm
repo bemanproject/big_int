@@ -5,8 +5,8 @@ module;
 
 // Tier A - platform headers, always textual regardless of import std. Only two,
 // and only on MSVC: <__msvc_int128.hpp> supplies std::_Signed128/std::_Unsigned128
-// for detail::int128_t, and <intrin.h> supplies the widening-multiply / bit-scan
-// intrinsics detail/wide_ops.hpp uses on that compiler.
+// for detail::int128_t, and <intrin.h> supplies the intrinsics detail/config.hpp
+// wraps on that compiler.
 //
 // Deliberately NOT included here: <immintrin.h> and <arm_neon.h>. Those are
 // reachable only from src/ntt_fp_avx2.cpp and src/ntt_fp_neon.cpp, which are
@@ -17,7 +17,7 @@ module;
 // actively wrong.
 #ifdef _MSC_VER
     #include <__msvc_int128.hpp> // std::_Signed128 / std::_Unsigned128
-    #include <intrin.h>          // widening-multiply / bit-scan intrinsics (detail/wide_ops.hpp)
+    #include <intrin.h>          // intrinsics wrapped by detail/config.hpp
 #endif
 
 // Tier B - macro-carrying headers. These stay textual even under `import std`
@@ -26,7 +26,7 @@ module;
 // active.
 #include <version> // every __cpp_lib_* feature test detail/config.hpp branches on
 #include <cassert> // parity with the sibling Boost modules
-#include <cfloat>  // LDBL_MANT_DIG / LDBL_MAX_EXP (detail/floats.hpp has a hard #error without them)
+#include <cfloat>  // LDBL_MANT_DIG / LDBL_MAX_EXP (detail/config.hpp has a hard #error without them)
 #include <climits> // BITINT_MAXWIDTH (selects whether _BitInt support exists), CHAR_BIT
 #include <cstdint> // INTPTR_MAX / INT64_MAX / INT32_MAX (selects the limb width, hence the ABI)
 #include <cstdio>  // stderr, which `import std` deliberately does not provide

@@ -14,10 +14,6 @@
 
 #include <cstdlib>
 
-#if BEMAN_BIG_INT_NTT_FP_X86 && defined(_MSC_VER)
-    #include <intrin.h>
-#endif
-
 BEMAN_BIG_INT_BEGIN_NAMESPACE
 namespace detail {
 
@@ -33,19 +29,19 @@ namespace {
 
 #if BEMAN_BIG_INT_NTT_FP_X86
 [[nodiscard]] bool cpu_has_avx2_fma() noexcept {
-    #if defined(__GNUC__) || defined(__clang__)
-    __builtin_cpu_init();
-    return __builtin_cpu_supports("avx2") != 0 && __builtin_cpu_supports("fma") != 0;
-    #elif defined(_MSC_VER)
+    #if defined(BEMAN_BIG_INT_BUILTIN_CPU_INIT) && defined(BEMAN_BIG_INT_BUILTIN_CPU_SUPPORTS)
+    BEMAN_BIG_INT_BUILTIN_CPU_INIT();
+    return BEMAN_BIG_INT_BUILTIN_CPU_SUPPORTS("avx2") != 0 && BEMAN_BIG_INT_BUILTIN_CPU_SUPPORTS("fma") != 0;
+    #elif defined(BEMAN_BIG_INT_INTRINSIC_CPUID)
     int regs[4];
-    __cpuid(regs, 1);
+    BEMAN_BIG_INT_INTRINSIC_CPUID(regs, 1);
     const bool fma     = (regs[2] & (1 << 12)) != 0;
     const bool osxsave = (regs[2] & (1 << 27)) != 0;
-    __cpuidex(regs, 7, 0);
+    BEMAN_BIG_INT_INTRINSIC_CPUIDEX(regs, 7, 0);
     const bool avx2 = (regs[1] & (1 << 5)) != 0;
     bool       ymm  = false;
     if (osxsave) {
-        const unsigned long long xcr0 = _xgetbv(0);
+        const unsigned long long xcr0 = BEMAN_BIG_INT_INTRINSIC_XGETBV(0);
         ymm                           = (xcr0 & 0x6u) == 0x6u; // XMM + YMM state enabled by the OS
     }
     return fma && avx2 && ymm;

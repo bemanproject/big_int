@@ -227,8 +227,8 @@ CMake writes a generated header, `beman/big_int/detail/config_generated.hpp`,
 under the build directory's `generated/include` and installs it with the other
 headers. It holds the options above together with the result of the library's
 feature detection (standard library features, `_BitInt` and `__int128`
-support, exceptions, the target architecture and its instruction set
-extensions), which CMake runs once at configure time with the compiler, language
+support, compiler builtins and intrinsics, the `long double` format, exceptions,
+the target architecture and its instruction set extensions), which CMake runs once at configure time with the compiler, language
 standard and `CMAKE_CXX_FLAGS` of the build. `detail/config.hpp` includes it
 instead of detecting anything itself whenever it is on the include path, so the
 compiled library and every translation unit that uses it agree on all of these.

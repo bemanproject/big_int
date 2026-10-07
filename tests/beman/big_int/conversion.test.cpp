@@ -246,7 +246,7 @@ TEST(Conversion, ToLongDoubleThreeLimbTieWithStickyBit) {
 
     // This is just to verify that the test itself is valid,
     // assuming that _BitInt -> long double conversions are implemented correctly.
-#if LDBL_MANT_DIG == 64 && BEMAN_BIG_INT_BITINT_MAXWIDTH >= 192
+#if defined(BEMAN_BIG_INT_LONG_DOUBLE_X87_EXTENDED) && BEMAN_BIG_INT_BITINT_MAXWIDTH >= 192
     BEMAN_BIG_INT_DIAGNOSTIC_PUSH()
     BEMAN_BIG_INT_DIAGNOSTIC_IGNORED_GCC("-Wfloat-equal")
     BEMAN_BIG_INT_DIAGNOSTIC_IGNORED_CLANG("-Wfloat-equal")

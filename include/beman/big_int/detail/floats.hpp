@@ -8,7 +8,6 @@
     #include <bit>
     #include <type_traits>
     #include <cmath>
-    #include <cfloat>
     #include <limits>
     #include <cstdint>
     #include <span>
@@ -110,11 +109,7 @@ struct x87_extended_float_bits {
     std::uint16_t sign_and_exponent;
 };
 
-#if !defined(LDBL_MANT_DIG) || !defined(LDBL_MAX_EXP)
-    #error Cannot define ieee_traits<long double> without LDBL_MANT_DIG and LDBL_MAX_EXP.
-#endif
-
-#if LDBL_MANT_DIG == 64 && LDBL_MAX_EXP == 16384
+#ifdef BEMAN_BIG_INT_LONG_DOUBLE_X87_EXTENDED
 template <>
 struct ieee_traits<long double> {
     using bits_type                        = x87_extended_float_bits;
@@ -125,7 +120,7 @@ struct ieee_traits<long double> {
     static constexpr int  bias             = 16383;
     static constexpr bool explicit_int_bit = true;
 };
-#elif LDBL_MANT_DIG == 113 && LDBL_MAX_EXP == 16384
+#elif defined(BEMAN_BIG_INT_LONG_DOUBLE_BINARY128)
 template <>
 struct ieee_traits<long double> {
     using bits_type                        = uint128_t;
@@ -136,7 +131,7 @@ struct ieee_traits<long double> {
     static constexpr int  bias             = 16383;
     static constexpr bool explicit_int_bit = false;
 };
-#elif LDBL_MANT_DIG == 53 && LDBL_MAX_EXP == 1024
+#elif defined(BEMAN_BIG_INT_LONG_DOUBLE_BINARY64)
 template <>
 struct ieee_traits<long double> : ieee_traits<double> {};
 #else
@@ -147,8 +142,8 @@ template <cv_unqualified_floating_point F>
 [[nodiscard]] constexpr bool constexpr_signbit(const F x) noexcept {
 #ifdef BEMAN_BIG_INT_HAS_CPP_LIB_CONSTEXPR_CMATH
     return std::signbit(x);
-#elif BEMAN_BIG_INT_HAS_CONSTEXPR_BUILTIN_OR_BUILTIN(__builtin_signbit)
-    return static_cast<bool>(__builtin_signbit(x));
+#elif defined(BEMAN_BIG_INT_HAS_CONSTEXPR_BUILTIN_SIGNBIT)
+    return static_cast<bool>(BEMAN_BIG_INT_BUILTIN_SIGNBIT(x));
 #else
     if BEMAN_BIG_INT_IS_CONSTEVAL {
         using bits_t      = typename ieee_traits<F>::bits_type;
@@ -169,8 +164,8 @@ template <cv_unqualified_floating_point F>
 [[nodiscard]] constexpr bool constexpr_isfinite(const F x) noexcept {
 #ifdef BEMAN_BIG_INT_HAS_CPP_LIB_CONSTEXPR_CMATH
     return std::isfinite(x);
-#elif BEMAN_BIG_INT_HAS_CONSTEXPR_BUILTIN_OR_BUILTIN(__builtin_isfinite)
-    return static_cast<bool>(__builtin_isfinite(x));
+#elif defined(BEMAN_BIG_INT_HAS_CONSTEXPR_BUILTIN_ISFINITE)
+    return static_cast<bool>(BEMAN_BIG_INT_BUILTIN_ISFINITE(x));
 #else
     if BEMAN_BIG_INT_IS_CONSTEVAL {
         BEMAN_BIG_INT_DIAGNOSTIC_PUSH()
@@ -188,20 +183,20 @@ template <cv_unqualified_floating_point F>
 [[nodiscard]] constexpr F constexpr_copysign(const F x, const F s) noexcept {
 #ifdef BEMAN_BIG_INT_HAS_CPP_LIB_CONSTEXPR_CMATH
     return std::copysign(x, s);
-#elif BEMAN_BIG_INT_HAS_CONSTEXPR_BUILTIN_OR_BUILTIN(__builtin_copysign)
-    if constexpr (std::is_same_v<decltype(__builtin_copysign(x, s)), F>) {
+#elif defined(BEMAN_BIG_INT_HAS_CONSTEXPR_BUILTIN_COPYSIGN)
+    if constexpr (std::is_same_v<decltype(BEMAN_BIG_INT_BUILTIN_COPYSIGN(x, s)), F>) {
         // The builtin is either generic or F is double.
-        return __builtin_copysign(x, s);
+        return BEMAN_BIG_INT_BUILTIN_COPYSIGN(x, s);
     } else {
         if BEMAN_BIG_INT_IS_CONSTEVAL {
-    #if BEMAN_BIG_INT_HAS_CONSTEXPR_BUILTIN_OR_BUILTIN(__builtin_copysignf)
+    #ifdef BEMAN_BIG_INT_HAS_CONSTEXPR_BUILTIN_COPYSIGNF
             if constexpr (std::is_same_v<F, float>) {
-                return __builtin_copysignf(x, s);
+                return BEMAN_BIG_INT_BUILTIN_COPYSIGNF(x, s);
             }
     #endif
-    #if BEMAN_BIG_INT_HAS_CONSTEXPR_BUILTIN_OR_BUILTIN(__builtin_copysignl)
+    #ifdef BEMAN_BIG_INT_HAS_CONSTEXPR_BUILTIN_COPYSIGNL
             if constexpr (std::is_same_v<F, long double>) {
-                return __builtin_copysignl(x, s);
+                return BEMAN_BIG_INT_BUILTIN_COPYSIGNL(x, s);
             }
     #endif
             return constexpr_signbit(x) == constexpr_signbit(s) ? x : -x;
@@ -239,20 +234,20 @@ template <cv_unqualified_floating_point F>
 [[nodiscard]] constexpr F constexpr_ldexp(const F x, const int exp) noexcept {
 #ifdef BEMAN_BIG_INT_HAS_CPP_LIB_CONSTEXPR_CMATH
     return std::ldexp(x, exp);
-#elif BEMAN_BIG_INT_HAS_CONSTEXPR_BUILTIN_OR_BUILTIN(__builtin_ldexp)
-    if constexpr (std::is_same_v<decltype(__builtin_ldexp(x, exp)), F>) {
+#elif defined(BEMAN_BIG_INT_HAS_CONSTEXPR_BUILTIN_LDEXP)
+    if constexpr (std::is_same_v<decltype(BEMAN_BIG_INT_BUILTIN_LDEXP(x, exp)), F>) {
         // The builtin is either generic or F is double.
-        return __builtin_ldexp(x, exp);
+        return BEMAN_BIG_INT_BUILTIN_LDEXP(x, exp);
     } else {
         if BEMAN_BIG_INT_IS_CONSTEVAL {
-    #if BEMAN_BIG_INT_HAS_CONSTEXPR_BUILTIN_OR_BUILTIN(__builtin_ldexpf)
+    #ifdef BEMAN_BIG_INT_HAS_CONSTEXPR_BUILTIN_LDEXPF
             if constexpr (std::is_same_v<F, float>) {
-                return __builtin_ldexpf(x, exp);
+                return BEMAN_BIG_INT_BUILTIN_LDEXPF(x, exp);
             }
     #endif
-    #if BEMAN_BIG_INT_HAS_CONSTEXPR_BUILTIN_OR_BUILTIN(__builtin_ldexpl)
+    #ifdef BEMAN_BIG_INT_HAS_CONSTEXPR_BUILTIN_LDEXPL
             if constexpr (std::is_same_v<F, long double>) {
-                return __builtin_ldexpl(x, exp);
+                return BEMAN_BIG_INT_BUILTIN_LDEXPL(x, exp);
             }
     #endif
             return consteval_ldexp(x, exp);
@@ -273,20 +268,20 @@ template <cv_unqualified_floating_point F>
 [[nodiscard]] constexpr F constexpr_fabs(const F x) noexcept {
 #ifdef BEMAN_BIG_INT_HAS_CPP_LIB_CONSTEXPR_CMATH
     return std::fabs(x);
-#elif BEMAN_BIG_INT_HAS_CONSTEXPR_BUILTIN_OR_BUILTIN(__builtin_fabs)
-    if constexpr (std::is_same_v<decltype(__builtin_fabs(x)), F>) {
+#elif defined(BEMAN_BIG_INT_HAS_CONSTEXPR_BUILTIN_FABS)
+    if constexpr (std::is_same_v<decltype(BEMAN_BIG_INT_BUILTIN_FABS(x)), F>) {
         // The builtin is either generic or F is double.
-        return __builtin_fabs(x);
+        return BEMAN_BIG_INT_BUILTIN_FABS(x);
     } else {
         if BEMAN_BIG_INT_IS_CONSTEVAL {
-    #if BEMAN_BIG_INT_HAS_CONSTEXPR_BUILTIN_OR_BUILTIN(__builtin_fabsf)
+    #ifdef BEMAN_BIG_INT_HAS_CONSTEXPR_BUILTIN_FABSF
             if constexpr (std::is_same_v<F, float>) {
-                return __builtin_fabsf(x);
+                return BEMAN_BIG_INT_BUILTIN_FABSF(x);
             }
     #endif
-    #if BEMAN_BIG_INT_HAS_CONSTEXPR_BUILTIN_OR_BUILTIN(__builtin_fabsl)
+    #ifdef BEMAN_BIG_INT_HAS_CONSTEXPR_BUILTIN_FABSL
             if constexpr (std::is_same_v<F, long double>) {
-                return __builtin_fabsl(x);
+                return BEMAN_BIG_INT_BUILTIN_FABSL(x);
             }
     #endif
             return constexpr_signbit(x) ? -x : x;
