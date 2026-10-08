@@ -1,0 +1,18 @@
+# SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
+# SPDX-License-Identifier: BSL-1.0
+
+# On each published GitHub release, renders port/*.in with the tag's version and
+# tarball SHA512 and pushes the port to the Beman vcpkg registry.
+name: vcpkg registry release
+
+on:
+  release:
+    types: [published]
+
+jobs:
+  vcpkg-release:
+    uses: bemanproject/infra-workflows/.github/workflows/reusable-beman-vcpkg-release.yml@1.7.4
+    with:
+      port_name: beman-big-int
+    secrets:
+      VCPKG_REGISTRY_TOKEN: ${{ secrets.VCPKG_REGISTRY_TOKEN }}

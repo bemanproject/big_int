@@ -11,18 +11,8 @@ project(
     beman.big_int
     DESCRIPTION "Reference implementation of std::big_int"
     LANGUAGES CXX
-    VERSION 0.1.0
+    VERSION 0.1.1
 )
-
-include(FetchContent)
-FetchContent_Declare(
-    googletest
-    URL
-        https://github.com/google/googletest/archive/03597a01ee50ed33e9dfd640b249b4be3799d395.zip
-)
-# For Windows: Prevent overriding the parent project's compiler/linker settings
-set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
-FetchContent_MakeAvailable(googletest)
 
 # [CMAKE.SKIP_TESTS]
 option(
@@ -613,6 +603,19 @@ endif()
 beman_install_library(beman.big_int TARGETS ${BEMAN_BIG_INT_INSTALL_TARGETS})
 
 if(BEMAN_BIG_INT_BUILD_TESTS)
+    # Fetched only for the tests, so a package build (vcpkg, Conan) needs no
+    # network access, and kept out of this project's install.
+    include(FetchContent)
+    FetchContent_Declare(
+        googletest
+        URL
+            https://github.com/google/googletest/archive/03597a01ee50ed33e9dfd640b249b4be3799d395.zip
+    )
+    # For Windows: Prevent overriding the parent project's compiler/linker settings
+    set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
+    set(INSTALL_GTEST OFF CACHE BOOL "" FORCE)
+    FetchContent_MakeAvailable(googletest)
+
     enable_testing()
     add_subdirectory(tests/beman/big_int)
 

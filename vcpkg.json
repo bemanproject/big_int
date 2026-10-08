@@ -1,0 +1,5 @@
+{
+  "$comment": "Developer manifest. The library has no dependencies; the tests fetch GoogleTest and Boost.Multiprecision with FetchContent. The released port is rendered from port/.",
+  "name": "beman-big-int",
+  "version-semver": "0.1.1"
+}

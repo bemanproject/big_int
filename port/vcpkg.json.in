@@ -1,0 +1,25 @@
+{
+  "name": "beman-big-int",
+  "version-semver": "@VERSION@",
+  "description": "Reference implementation of std::big_int, the arbitrary-precision integer proposed for C++29",
+  "homepage": "https://github.com/bemanproject/big_int",
+  "license": "Apache-2.0 WITH LLVM-exception OR BSL-1.0",
+  "dependencies": [
+    {
+      "name": "vcpkg-cmake",
+      "host": true
+    },
+    {
+      "name": "vcpkg-cmake-config",
+      "host": true
+    }
+  ],
+  "features": {
+    "modules": {
+      "description": "Also build and install the beman.big_int C++ named module (beman::big_int_module); not supported by AppleClang"
+    },
+    "simd-mul": {
+      "description": "Use the double-precision FP NTT with NEON/AVX2 kernels for FFT-sized multiplication (BEMAN_BIG_INT_SIMD_MUL)"
+    }
+  }
+}
