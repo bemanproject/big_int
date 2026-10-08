@@ -47,9 +47,10 @@ once a value outgrows the inplace buffer and the optimization no longer applies.
 [#benchmarks_small_value_build]
 === Building and running
 
-Google Benchmark is pulled in with CMake `FetchContent` (just like GoogleTest),
-gated behind the `BEMAN_BIG_INT_BUILD_BENCHMARKS` option. It is off by default and
-only meaningful in a release build, so dedicated release presets enable it:
+Google Benchmark is found with `find_package` (just like GoogleTest), and the
+presets fetch it at the version pinned in `lockfile.json`. It is gated behind the
+`BEMAN_BIG_INT_BUILD_BENCHMARKS` option, which is off by default and only
+meaningful in a release build, so dedicated release presets enable it:
 
 [source,bash]
 ----

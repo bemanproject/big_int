@@ -20,10 +20,17 @@ This project requires at least the following to build:
 
 * A pass:[C++] compiler that conforms to the pass:[C++23] standard or greater
 * CMake 3.30 or later
-* (Test only) GoogleTest
+* (Test only) GoogleTest and Boost.Multiprecision
+* (Benchmarks only) Google Benchmark
 
 You can disable building tests by setting the CMake option
 `BEMAN_BIG_INT_BUILD_TESTS` to `OFF` when configuring the project.
+
+The build locates these with `find_package`, so any installation CMake can find
+works, including one from vcpkg (the repository's `vcpkg.json` lists them). The
+CMake presets instead fetch them at the versions pinned in `lockfile.json`; see the
+https://github.com/bemanproject/big_int/blob/main/CONTRIBUTING.md[Contributing Guidelines]
+to do the same without a preset.
 
 [#build_and_usage_platforms]
 === Tested platforms

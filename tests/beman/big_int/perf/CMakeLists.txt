@@ -88,29 +88,17 @@ if(BEMAN_BIG_INT_SHAPE_SWEEP_ONLY)
     return()
 endif()
 
-include(FetchContent)
-
-# Pull in Google Benchmark for the big_int-vs-builtin micro-benchmarks, mirroring
-# how the top-level build fetches GoogleTest. Only fetched when
+# Google Benchmark for the big_int-vs-builtin micro-benchmarks, found like
+# GoogleTest (see the top-level CMakeLists). Only needed when
 # BEMAN_BIG_INT_BUILD_BENCHMARKS is enabled (this directory is added from the
-# top-level CMakeLists under that option).
-set(BENCHMARK_ENABLE_TESTING OFF CACHE BOOL "" FORCE)
-set(BENCHMARK_ENABLE_GTEST_TESTS OFF CACHE BOOL "" FORCE)
-set(BENCHMARK_ENABLE_INSTALL OFF CACHE BOOL "" FORCE)
-set(BENCHMARK_INSTALL_DOCS OFF CACHE BOOL "" FORCE)
-# Google Benchmark builds itself with -Werror by default, which can break on
-# newer compilers than its release was tested against; turn it off.
-set(BENCHMARK_ENABLE_WERROR OFF CACHE BOOL "" FORCE)
-
-FetchContent_Declare(
-    googlebenchmark
-    URL https://github.com/google/benchmark/archive/refs/tags/v1.9.5.tar.gz
-    URL_HASH
-        SHA256=9631341c82bac4a288bef951f8b26b41f69021794184ece969f8473977eaa340
-    DOWNLOAD_EXTRACT_TIMESTAMP TRUE
-    SYSTEM
-)
-FetchContent_MakeAvailable(googlebenchmark)
+# top-level CMakeLists under that option). lockfile.json turns off its tests,
+# install and -Werror; when it supplies it as a subproject, mark it SYSTEM as an
+# installed package would be.
+find_package(benchmark REQUIRED)
+get_target_property(_bigint_benchmark benchmark::benchmark ALIASED_TARGET)
+if(_bigint_benchmark)
+    set_target_properties(${_bigint_benchmark} PROPERTIES SYSTEM ON)
+endif()
 
 # Benchmark sources use the `.gbench.cpp` suffix so they are never confused with
 # the standalone GMP/boost comparison programs (`*.perf.cpp`, `*.limbs.cpp`) that

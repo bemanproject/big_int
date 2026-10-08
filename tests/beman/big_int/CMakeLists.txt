@@ -2,7 +2,6 @@
 # SPDX-License-Identifier: BSL-1.0
 
 include(GoogleTest)
-include(FetchContent)
 
 option(
     BEMAN_BIG_INT_FUZZ
@@ -12,20 +11,14 @@ option(
 
 file(GLOB TEST_SOURCES "*.test.cpp")
 
-# Pull in Boost.Multiprecision for parity tests that cross-check beman::big_int
-# against boost::cpp_int.
-# The standalone release of this library is self-contained
-
-FetchContent_Declare(
-    boost_multiprecision
-    URL
-        https://github.com/boostorg/multiprecision/archive/refs/tags/Boost_1_89_0.tar.gz
-    URL_HASH
-        SHA256=d6000cc58594fead142eee4bf3a1aec39bf144dcb6accd8f4b8e6d780d258482
-    DOWNLOAD_EXTRACT_TIMESTAMP TRUE
-    SYSTEM
-)
-FetchContent_MakeAvailable(boost_multiprecision)
+# Boost.Multiprecision, for parity tests that cross-check beman::big_int against
+# boost::cpp_int. When lockfile.json supplies it as a subproject, mark it SYSTEM
+# as an installed package would be, so the warning set below skips its headers.
+find_package(boost_multiprecision REQUIRED)
+get_target_property(_bigint_boost_mp Boost::multiprecision ALIASED_TARGET)
+if(_bigint_boost_mp)
+    set_target_properties(${_bigint_boost_mp} PROPERTIES SYSTEM ON)
+endif()
 
 # The project's test warning set.
 function(beman_big_int_test_warnings test_target)

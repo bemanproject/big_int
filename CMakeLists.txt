@@ -603,18 +603,11 @@ endif()
 beman_install_library(beman.big_int TARGETS ${BEMAN_BIG_INT_INSTALL_TARGETS})
 
 if(BEMAN_BIG_INT_BUILD_TESTS)
-    # Fetched only for the tests, so a package build (vcpkg, Conan) needs no
-    # network access, and kept out of this project's install.
-    include(FetchContent)
-    FetchContent_Declare(
-        googletest
-        URL
-            https://github.com/google/googletest/archive/03597a01ee50ed33e9dfd640b249b4be3799d395.zip
-    )
-    # For Windows: Prevent overriding the parent project's compiler/linker settings
-    set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
-    set(INSTALL_GTEST OFF CACHE BOOL "" FORCE)
-    FetchContent_MakeAvailable(googletest)
+    # [CMAKE.USE_FIND_PACKAGE] Test dependencies come from the environment, or
+    # from lockfile.json with
+    # -DCMAKE_PROJECT_TOP_LEVEL_INCLUDES=./infra/cmake/use-fetch-content.cmake
+    # (as the presets do).
+    find_package(GTest REQUIRED)
 
     enable_testing()
     add_subdirectory(tests/beman/big_int)
