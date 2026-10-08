@@ -6,9 +6,7 @@
 
 #include <gtest/gtest.h>
 
-#include <version>
-
-#if __has_include(<format>) && defined(__cpp_lib_format) && __cpp_lib_format >= 201907L
+#ifdef BEMAN_BIG_INT_HAS_CPP_LIB_FORMAT
 
     #include <boost/multiprecision/cpp_int.hpp>
 

@@ -267,9 +267,9 @@ macro in your own translation unit has no effect. Set them when the module
 itself is configured and built -- for example as compile definitions on the
 `beman.big_int_module` target -- not at the point of use.
 
-`BEMAN_BIG_INT_SIMD_MUL` needs no such care: this project's CMake applies it
-as a `PUBLIC` compile definition on the `beman.big_int` target, and the
-module target links that target, so turning the option on when the library is
+`BEMAN_BIG_INT_SIMD_MUL` needs no such care: this project's CMake records it
+in the generated `detail/config_generated.hpp`, which the interface unit
+includes when the module is built, so turning the option on when the library is
 configured reaches every consumer of the module automatically.
 
 === `detail` is not exported

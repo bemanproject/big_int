@@ -51,7 +51,7 @@ template <class C, class X>
                                             ? std::size_t{1} + minus_sign_size
                                             : detail::approximate_ceil_div_log2(width - 1, base) + 1 + minus_sign_size;
 
-#ifdef __cpp_lib_string_resize_and_overwrite
+#ifdef BEMAN_BIG_INT_HAS_CPP_LIB_STRING_RESIZE_AND_OVERWRITE
     std::string narrow;
     // `resize_and_overwrite` invokes the operation exactly once, so forwarding
     // from inside the lambda hands `x` over at most once.

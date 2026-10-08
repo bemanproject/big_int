@@ -27,9 +27,9 @@ target_sources(
             FILES "${CMAKE_CURRENT_SOURCE_DIR}/big_int.cppm"
 )
 
-# Also carries BEMAN_BIG_INT_SIMD_MUL, which is PUBLIC on beman.big_int and
-# selects the multiplication tier inside a header: the module and the library it
-# wraps must agree on that choice.
+# Also carries the include path of detail/config_generated.hpp, which records
+# BEMAN_BIG_INT_SIMD_MUL and the other build options: the module and the library
+# it wraps must agree on them.
 target_link_libraries(beman.big_int_module PUBLIC beman::big_int)
 
 target_compile_features(beman.big_int_module PUBLIC cxx_std_23)

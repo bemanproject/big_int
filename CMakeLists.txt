@@ -97,8 +97,8 @@ target_compile_features(beman.big_int PUBLIC cxx_std_23)
 # [CMAKE.NAMESPACE]
 # The namespace the library is declared in (BEMAN_BIG_INT_NAMESPACE in
 # detail/config.hpp), e.g. mylib::big_int for a project that wraps it. The
-# compiled sources and every consumer must agree on it, so a non-default value is
-# propagated PUBLICly.
+# compiled sources and every consumer must agree on it, so it is recorded in
+# config_generated.hpp (see below).
 set(BEMAN_BIG_INT_NAMESPACE
     "beman::big_int"
     CACHE STRING
@@ -115,19 +115,13 @@ if(
         "mylib::big_int, got '${BEMAN_BIG_INT_NAMESPACE}'."
     )
 endif()
-if(NOT BEMAN_BIG_INT_NAMESPACE STREQUAL "beman::big_int")
-    target_compile_definitions(
-        beman.big_int
-        PUBLIC "BEMAN_BIG_INT_NAMESPACE=${BEMAN_BIG_INT_NAMESPACE}"
-    )
-endif()
 
 # [CMAKE.X86_64_BMI2_ADX]
 # x86-64 only: both the generic and BMI2+ADX schoolbook kernels are always
-# built, but which one the library calls is chosen at compile time (see
-# detail/config.hpp). AUTO leaves that choice to the compiler's own
-# __BMI2__/__ADX__ feature macros (set by -march=native, -march=broadwell or
-# newer, znver*, or -mbmi2 -madx). ON forces the BMI2/ADX kernels: the
+# built, but which one the library calls is chosen at compile time and recorded
+# in config_generated.hpp. AUTO checks the compiler's own __BMI2__/__ADX__
+# feature macros under this build's flags (set by -march=native,
+# -march=broadwell or newer, znver*, or -mbmi2 -madx). ON forces the BMI2/ADX kernels: the
 # resulting binary requires a CPU with both BMI2 and ADX (Intel Broadwell+ or
 # AMD Zen+), or it dies with an illegal instruction -- this is also how MSVC
 # opts in, since it defines neither __BMI2__ nor __ADX__. OFF forces the
@@ -220,28 +214,7 @@ if(
             src/multiply_long_runtime_x86_64_avx512_ifma.s
             src/square_long_runtime_x86_64_avx512_ifma.s
     )
-    if(_bigint_bmi2_adx_mode STREQUAL "ON")
-        target_compile_definitions(
-            beman.big_int
-            PUBLIC BEMAN_BIG_INT_X86_64_BMI2_ADX=1
-        )
-    elseif(_bigint_bmi2_adx_mode STREQUAL "OFF")
-        target_compile_definitions(
-            beman.big_int
-            PUBLIC BEMAN_BIG_INT_X86_64_BMI2_ADX=0
-        )
-    endif()
-    if(_bigint_avx512_ifma_mode STREQUAL "ON")
-        target_compile_definitions(
-            beman.big_int
-            PUBLIC BEMAN_BIG_INT_X86_64_AVX512_IFMA=1
-        )
-    elseif(_bigint_avx512_ifma_mode STREQUAL "OFF")
-        target_compile_definitions(
-            beman.big_int
-            PUBLIC BEMAN_BIG_INT_X86_64_AVX512_IFMA=0
-        )
-    endif()
+    set(_bigint_x86_64_kernels TRUE)
 elseif(
     (
         CMAKE_CXX_COMPILER_ID STREQUAL "GNU"
@@ -269,28 +242,7 @@ elseif(MSVC AND CMAKE_CXX_COMPILER_ARCHITECTURE_ID STREQUAL "x64")
             src/multiply_long_runtime_x86_64_avx512_ifma.asm
             src/square_long_runtime_x86_64_avx512_ifma.asm
     )
-    if(_bigint_bmi2_adx_mode STREQUAL "ON")
-        target_compile_definitions(
-            beman.big_int
-            PUBLIC BEMAN_BIG_INT_X86_64_BMI2_ADX=1
-        )
-    elseif(_bigint_bmi2_adx_mode STREQUAL "OFF")
-        target_compile_definitions(
-            beman.big_int
-            PUBLIC BEMAN_BIG_INT_X86_64_BMI2_ADX=0
-        )
-    endif()
-    if(_bigint_avx512_ifma_mode STREQUAL "ON")
-        target_compile_definitions(
-            beman.big_int
-            PUBLIC BEMAN_BIG_INT_X86_64_AVX512_IFMA=1
-        )
-    elseif(_bigint_avx512_ifma_mode STREQUAL "OFF")
-        target_compile_definitions(
-            beman.big_int
-            PUBLIC BEMAN_BIG_INT_X86_64_AVX512_IFMA=0
-        )
-    endif()
+    set(_bigint_x86_64_kernels TRUE)
 elseif(MSVC AND CMAKE_CXX_COMPILER_ARCHITECTURE_ID STREQUAL "ARM64")
     # ASM_MARMASM requires CMake >= 3.26; the project minimum (3.30) already covers it.
     enable_language(ASM_MARMASM)
@@ -299,6 +251,173 @@ elseif(MSVC AND CMAKE_CXX_COMPILER_ARCHITECTURE_ID STREQUAL "ARM64")
         PRIVATE
             src/multiply_long_runtime_aarch64_generic.asm
             src/square_long_runtime_aarch64_generic.asm
+    )
+endif()
+
+# Feature detection for config_generated.hpp. The probe compiles the non-CMake
+# detection in detail/config.hpp (the #else of its __has_include, whose
+# BEMAN_BIG_INT_* macros are collected here) once with this build's compiler,
+# standard and flags. Each macro's value is embedded as a string in the probe
+# binary and read back, the way CMake itself detects compiler properties, so the
+# detection logic lives only in config.hpp. NO_CACHE reruns it on every
+# configure, so a changed CMAKE_CXX_FLAGS is never answered from a stale result.
+set(_bigint_config_hpp
+    "${CMAKE_CURRENT_SOURCE_DIR}/include/beman/big_int/detail/config.hpp"
+)
+set_property(
+    DIRECTORY
+    APPEND
+    PROPERTY CMAKE_CONFIGURE_DEPENDS "${_bigint_config_hpp}"
+)
+block(
+    SCOPE_FOR VARIABLES
+    PROPAGATE
+        _bigint_config_features
+        _bigint_compiler_bmi2_adx
+        _bigint_compiler_avx512_ifma
+)
+    file(READ "${_bigint_config_hpp}" _config)
+    string(
+        FIND "${_config}"
+        "#if __has_include(<beman/big_int/detail/config_generated.hpp>)"
+        _begin
+    )
+    if(_begin EQUAL -1)
+        message(
+            FATAL_ERROR
+            "beman.big_int: detail/config.hpp has no config_generated.hpp branch"
+        )
+    endif()
+    string(SUBSTRING "${_config}" ${_begin} -1 _config)
+    # Nested directives are indented, so the first unindented #endif closes it.
+    string(FIND "${_config}" "\n#endif" _end)
+    string(SUBSTRING "${_config}" 0 ${_end} _config)
+    string(
+        REGEX MATCHALL "#[ ]*define[ ]+BEMAN_BIG_INT_[A-Za-z0-9_]+"
+        _defines
+        "${_config}"
+    )
+    set(_macros "")
+    foreach(_define IN LISTS _defines)
+        string(REGEX REPLACE "^#[ ]*define[ ]+" "" _macro "${_define}")
+        list(APPEND _macros "${_macro}")
+    endforeach()
+    list(REMOVE_DUPLICATES _macros)
+    # Build options: set from the CMake options below instead.
+    list(
+        REMOVE_ITEM _macros
+        BEMAN_BIG_INT_X86_64_BMI2_ADX
+        BEMAN_BIG_INT_X86_64_AVX512_IFMA
+    )
+
+    set(_probe "#include <beman/big_int/detail/config.hpp>\n")
+    string(APPEND _probe "#define BEMAN_BIG_INT_PROBE_STR(...) #__VA_ARGS__\n")
+    string(
+        APPEND _probe
+        "#define BEMAN_BIG_INT_PROBE_VALUE(...) BEMAN_BIG_INT_PROBE_STR(__VA_ARGS__)\n"
+    )
+    string(APPEND _probe "extern const char beman_big_int_probe[];\n")
+    string(
+        APPEND _probe
+        "const char beman_big_int_probe[] = \"BEMAN_BIG_INT_PROBE\"\n"
+    )
+    foreach(_macro IN LISTS _macros)
+        string(
+            APPEND _probe
+            "#ifdef ${_macro}\n\"[${_macro}=\" BEMAN_BIG_INT_PROBE_VALUE(${_macro}) \"]\"\n#endif\n"
+        )
+    endforeach()
+    string(
+        APPEND _probe
+        ";\nint main(int argc, char**) { return beman_big_int_probe[argc]; }\n"
+    )
+
+    # The library is C++23 at minimum; a newer CMAKE_CXX_STANDARD is honored.
+    set(_std 23)
+    if(
+        DEFINED CMAKE_CXX_STANDARD
+        AND NOT CMAKE_CXX_STANDARD MATCHES "^(98|11|14|17|20|23)$"
+    )
+        set(_std "${CMAKE_CXX_STANDARD}")
+    endif()
+    if(CMAKE_BUILD_TYPE)
+        set(CMAKE_TRY_COMPILE_CONFIGURATION "${CMAKE_BUILD_TYPE}")
+    endif()
+    set(_binary
+        "${CMAKE_CURRENT_BINARY_DIR}/CMakeFiles/beman_big_int_probe.bin"
+    )
+    try_compile(
+        _compiled
+        SOURCE_FROM_CONTENT config_probe.cpp "${_probe}"
+        CMAKE_FLAGS "-DINCLUDE_DIRECTORIES=${CMAKE_CURRENT_SOURCE_DIR}/include"
+        CXX_STANDARD ${_std}
+        CXX_STANDARD_REQUIRED ON
+        NO_CACHE
+        OUTPUT_VARIABLE _output
+        COPY_FILE "${_binary}"
+    )
+    if(NOT _compiled)
+        message(
+            FATAL_ERROR
+            "beman.big_int: the configuration probe failed to compile:\n${_output}"
+        )
+    endif()
+    file(STRINGS "${_binary}" _strings REGEX "BEMAN_BIG_INT_PROBE")
+    list(REMOVE_DUPLICATES _strings)
+    list(LENGTH _strings _count)
+    if(NOT _count EQUAL 1)
+        message(
+            FATAL_ERROR
+            "beman.big_int: expected one configuration probe result, found ${_count}. "
+            "A build for several architectures at once (e.g. CMAKE_OSX_ARCHITECTURES "
+            "with more than one entry) is not supported."
+        )
+    endif()
+
+    set(_bigint_config_features "")
+    set(_found "")
+    foreach(_macro IN LISTS _macros)
+        if(_strings MATCHES "\\[${_macro}=([^]]*)\\]")
+            list(APPEND _found "${_macro}")
+            if(CMAKE_MATCH_1 STREQUAL "")
+                string(APPEND _bigint_config_features "#define ${_macro}\n")
+            else()
+                string(
+                    APPEND _bigint_config_features
+                    "#define ${_macro} ${CMAKE_MATCH_1}\n"
+                )
+            endif()
+        endif()
+    endforeach()
+    set(_bigint_compiler_bmi2_adx 0)
+    set(_bigint_compiler_avx512_ifma 0)
+    if("BEMAN_BIG_INT_HAS_BMI2_ADX" IN_LIST _found)
+        set(_bigint_compiler_bmi2_adx 1)
+        if("BEMAN_BIG_INT_HAS_AVX512_IFMA" IN_LIST _found)
+            set(_bigint_compiler_avx512_ifma 1)
+        endif()
+    endif()
+endblock()
+
+# Resolve the x86-64 kernel choices to 0/1 for config_generated.hpp. AUTO takes
+# what the probe found, i.e. the compiler's own feature macros under this
+# build's flags (e.g. -march=native in CMAKE_CXX_FLAGS).
+set(_bigint_config_bmi2_adx 0)
+set(_bigint_config_avx512_ifma 0)
+if(_bigint_x86_64_kernels)
+    if(_bigint_bmi2_adx_mode STREQUAL "ON")
+        set(_bigint_config_bmi2_adx 1)
+    elseif(_bigint_bmi2_adx_mode STREQUAL "AUTO")
+        set(_bigint_config_bmi2_adx ${_bigint_compiler_bmi2_adx})
+    endif()
+    if(_bigint_avx512_ifma_mode STREQUAL "ON")
+        set(_bigint_config_avx512_ifma 1)
+    elseif(_bigint_avx512_ifma_mode STREQUAL "AUTO")
+        set(_bigint_config_avx512_ifma ${_bigint_compiler_avx512_ifma})
+    endif()
+    message(
+        STATUS
+        "beman.big_int: x86-64 BMI2/ADX kernels ${_bigint_config_bmi2_adx}, AVX-512 IFMA kernels ${_bigint_config_avx512_ifma}"
     )
 endif()
 
@@ -319,9 +438,7 @@ option(
 
 if(BEMAN_BIG_INT_SIMD_MUL)
     # The dispatch lives in a header (mul_impl.hpp), so the library and every
-    # consumer must agree on the path: propagate the macro PUBLICly.
-    target_compile_definitions(beman.big_int PUBLIC BEMAN_BIG_INT_SIMD_MUL)
-
+    # consumer must agree on the path: config_generated.hpp records it.
     target_sources(
         beman.big_int
         PRIVATE src/ntt_fp_scalar.cpp src/ntt_fp_dispatch.cpp src/fft_mul_fp.cpp
@@ -376,6 +493,25 @@ target_sources(
         FILE_SET HEADERS
             BASE_DIRS "${CMAKE_CURRENT_SOURCE_DIR}/include"
             FILES "${CMAKE_CURRENT_SOURCE_DIR}/include/beman/big_int.hpp"
+)
+
+# config_generated.hpp records the options above for detail/config.hpp, so the
+# compiled library, the module and every consumer, installed ones included, agree
+# on them. It is generated outside the source include/ tree, so a build that does
+# not use CMake never picks up a stale copy.
+set(_bigint_generated_include "${CMAKE_CURRENT_BINARY_DIR}/generated/include")
+configure_file(
+    include/beman/big_int/detail/config_generated.hpp.in
+    "${_bigint_generated_include}/beman/big_int/detail/config_generated.hpp"
+    @ONLY
+)
+target_sources(
+    beman.big_int
+    PUBLIC
+        FILE_SET HEADERS
+            BASE_DIRS "${_bigint_generated_include}"
+            FILES
+                "${_bigint_generated_include}/beman/big_int/detail/config_generated.hpp"
 )
 
 set_target_properties(

@@ -115,7 +115,7 @@ big_int_64 large_b() { return (big_int_64{0xDEADBEEFCAFEBABEull} << 192) | big_i
 // ----------------------------------------------------------------------------
 BENCHMARK_CAPTURE(add, int64, std::int64_t{k64_add_a}, std::int64_t{k64_add_b});
 BENCHMARK_CAPTURE(add, big_int_64bit, big_int_64{k64_add_a}, big_int_64{k64_add_b});
-#ifdef __SIZEOF_INT128__
+#ifdef BEMAN_BIG_INT_HAS_INT128_EXTENSION
 BENCHMARK_CAPTURE(add, int128, compose<__int128>(k128_a_hi, k128_a_lo), compose<__int128>(k128_b_hi, k128_b_lo));
 BENCHMARK_CAPTURE(add,
                   big_int_128bit,
@@ -129,7 +129,7 @@ BENCHMARK_CAPTURE(add, big_int_large, large_a(), large_b());
 // ----------------------------------------------------------------------------
 BENCHMARK_CAPTURE(subtract, int64, std::int64_t{k64_add_a}, std::int64_t{k64_add_b});
 BENCHMARK_CAPTURE(subtract, big_int_64bit, big_int_64{k64_add_a}, big_int_64{k64_add_b});
-#ifdef __SIZEOF_INT128__
+#ifdef BEMAN_BIG_INT_HAS_INT128_EXTENSION
 BENCHMARK_CAPTURE(subtract, int128, compose<__int128>(k128_a_hi, k128_a_lo), compose<__int128>(k128_b_hi, k128_b_lo));
 BENCHMARK_CAPTURE(subtract,
                   big_int_128bit,
@@ -143,7 +143,7 @@ BENCHMARK_CAPTURE(subtract, big_int_large, large_a(), large_b());
 // ----------------------------------------------------------------------------
 BENCHMARK_CAPTURE(multiply, int64, std::int64_t{k64_mul_a}, std::int64_t{k64_mul_b});
 BENCHMARK_CAPTURE(multiply, big_int_64bit, big_int_64{k64_mul_a}, big_int_64{k64_mul_b});
-#ifdef __SIZEOF_INT128__
+#ifdef BEMAN_BIG_INT_HAS_INT128_EXTENSION
 BENCHMARK_CAPTURE(multiply, int128, static_cast<__int128>(k128_mul_a), static_cast<__int128>(k128_mul_b));
 BENCHMARK_CAPTURE(multiply, big_int_128bit, big_int_128{k128_mul_a}, big_int_128{k128_mul_b});
 #endif
@@ -154,7 +154,7 @@ BENCHMARK_CAPTURE(multiply, big_int_large, large_a(), large_b());
 // ----------------------------------------------------------------------------
 BENCHMARK_CAPTURE(divide, int64, std::int64_t{k64_div_a}, std::int64_t{k64_div_b});
 BENCHMARK_CAPTURE(divide, big_int_64bit, big_int_64{k64_div_a}, big_int_64{k64_div_b});
-#ifdef __SIZEOF_INT128__
+#ifdef BEMAN_BIG_INT_HAS_INT128_EXTENSION
 BENCHMARK_CAPTURE(divide, int128, compose<__int128>(k128_a_hi, k128_a_lo), static_cast<__int128>(k128_div_b));
 BENCHMARK_CAPTURE(divide, big_int_128bit, compose<big_int_128>(k128_a_hi, k128_a_lo), big_int_128{k128_div_b});
 #endif

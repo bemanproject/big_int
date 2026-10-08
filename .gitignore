@@ -5,6 +5,10 @@
 /compile_commands.json
 /build
 
+# CMake generates this from detail/config_generated.hpp.in (which is tracked);
+# ignored anywhere, e.g. an in-source build's generated/include.
+config_generated.hpp
+
 # ignore emacs temp files
 *~
 \#*\#

@@ -22,10 +22,6 @@
     #include <span>
     #include <utility>
     #include <type_traits>
-
-    #if __has_include(<stdfloat>)
-        #include <stdfloat>
-    #endif
 #endif // BEMAN_BIG_INT_BUILD_MODULE
 
 #include <beman/big_int/detail/config.hpp>
@@ -123,7 +119,7 @@ template <std::size_t b, class L, class A, class T>
 inline constexpr bool is_implicit_constructible_from = detail::signed_or_unsigned<std::remove_cvref_t<T>> ||
                                                        std::is_same_v<std::remove_cvref_t<T>, basic_big_int<b, L, A>>;
 
-#if defined(__cpp_lib_allocate_at_least) && __cpp_lib_allocate_at_least >= 202302L
+#ifdef BEMAN_BIG_INT_HAS_CPP_LIB_ALLOCATE_AT_LEAST
 using std::allocation_result;
 #else
 template <class Pointer, class SizeType = std::size_t>
@@ -131,7 +127,7 @@ struct allocation_result {
     Pointer  ptr;
     SizeType count;
 };
-#endif // __cpp_lib_allocate_at_least
+#endif // BEMAN_BIG_INT_HAS_CPP_LIB_ALLOCATE_AT_LEAST
 
 [[noreturn]] inline void throw_length_error() {
 #ifdef BEMAN_BIG_INT_ALLOW_EXCEPTIONS
@@ -448,7 +444,7 @@ class BEMAN_BIG_INT_TRIVIAL_ABI basic_big_int {
         requires detail::signed_or_unsigned<std::iter_value_t<I>>
     constexpr basic_big_int(I begin, S end, const allocator_type& a = allocator_type());
 
-#if defined(__cpp_lib_containers_ranges) && __cpp_lib_containers_ranges >= 202202L
+#ifdef BEMAN_BIG_INT_HAS_CPP_LIB_CONTAINERS_RANGES
     template <std::ranges::input_range R>
         requires detail::signed_or_unsigned<std::ranges::range_value_t<R>>
     constexpr basic_big_int(std::from_range_t, R&& r, const allocator_type& a = allocator_type())
@@ -3387,7 +3383,7 @@ template <std::size_t b, class L, class A>
 constexpr auto basic_big_int<b, L, A>::alloc_limbs_from(allocator_type& a, const size_type n) -> alloc_result {
     BEMAN_BIG_INT_ASSERT(n != 0);
     check_length(n);
-#if defined(__cpp_lib_allocate_at_least) && __cpp_lib_allocate_at_least >= 202302L
+#ifdef BEMAN_BIG_INT_HAS_CPP_LIB_ALLOCATE_AT_LEAST
     if constexpr (detail::traits_has_allocate_at_least<alloc_traits, A>) {
         return alloc_traits::allocate_at_least(a, n);
     } else {
@@ -3459,18 +3455,18 @@ basic_big_int<b, L, A>::copy_n_to_allocation(const limb_type* const p, const siz
     BEMAN_BIG_INT_ASSERT(p != nullptr);
     BEMAN_BIG_INT_ASSERT(out.ptr != nullptr);
     BEMAN_BIG_INT_ASSERT(n <= out.count);
-// If __cpp_lib_raw_memory_algorithms is available,
+// If the constexpr raw memory algorithms are available,
 // we don't need to differentiate between constant evaluation and runtime.
 // Even when we need this fallback case,
 // it is always important that all elements in the allocation are initialized
 // because we don't keep track of "requested" vs "received" capacity
 // (these may not be the same with allocate_at_least).
-#if !defined(__cpp_lib_raw_memory_algorithms) || __cpp_lib_raw_memory_algorithms < 202411L
+#ifndef BEMAN_BIG_INT_HAS_CPP_LIB_RAW_MEMORY_ALGORITHMS
     if BEMAN_BIG_INT_IS_NOT_CONSTEVAL {
 #endif
         std::uninitialized_copy_n(p, n, out.ptr);
         std::uninitialized_value_construct_n(out.ptr + n, out.count - n);
-#if !defined(__cpp_lib_raw_memory_algorithms) || __cpp_lib_raw_memory_algorithms < 202411L
+#ifndef BEMAN_BIG_INT_HAS_CPP_LIB_RAW_MEMORY_ALGORITHMS
     } else {
         for (size_type i = 0; i < n; ++i) {
             std::construct_at(out.ptr + i, p[i]);

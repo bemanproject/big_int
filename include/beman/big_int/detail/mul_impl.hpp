@@ -787,7 +787,7 @@ inline constexpr std::size_t fft_mul_model_den    = 64;
 inline constexpr std::size_t square_fft_min_limbs = 8000;
 inline constexpr std::size_t square_fft_model_num = 75;
 inline constexpr std::size_t square_fft_model_den = 512;
-    #elif defined(__x86_64__) || defined(_M_X64) || defined(__amd64__)
+    #elif defined(BEMAN_BIG_INT_TARGET_X86_64)
 inline constexpr std::size_t fft_mul_min_limbs    = 6000;
 inline constexpr std::size_t fft_mul_model_num    = 1;
 inline constexpr std::size_t fft_mul_model_den    = 0;
@@ -841,7 +841,7 @@ inline constexpr std::size_t fft_mul_model_den    = 64;
 inline constexpr std::size_t square_fft_min_limbs = 3000;
 inline constexpr std::size_t square_fft_model_num = 10;
 inline constexpr std::size_t square_fft_model_den = 64;
-#elif defined(__x86_64__) || defined(_M_X64) || defined(__amd64__)
+#elif defined(BEMAN_BIG_INT_TARGET_X86_64)
 inline constexpr std::size_t fft_mul_min_limbs    = 24000;
 inline constexpr std::size_t fft_mul_model_num    = 1;
 inline constexpr std::size_t fft_mul_model_den    = 0;
@@ -1031,7 +1031,7 @@ inline constexpr std::size_t fft_cyclic_cutoff = 2048;
     #endif
 #elif defined(BEMAN_BIG_INT_SIMD_MUL)
 inline constexpr std::size_t fft_cyclic_cutoff = 8192;
-#elif defined(__x86_64__) || defined(_M_X64) || defined(__amd64__)
+#elif defined(BEMAN_BIG_INT_TARGET_X86_64)
 inline constexpr std::size_t fft_cyclic_cutoff = 36864;
 #else
 inline constexpr std::size_t fft_cyclic_cutoff = 2048;

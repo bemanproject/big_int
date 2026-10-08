@@ -10,12 +10,6 @@
 
 #include <beman/big_int/detail/config.hpp>
 
-#ifdef BEMAN_BIG_INT_MSVC
-    #ifndef BEMAN_BIG_INT_BUILD_MODULE
-        #include <intrin.h>
-    #endif
-#endif
-
 BEMAN_BIG_INT_BEGIN_NAMESPACE
 namespace detail {
 
@@ -201,24 +195,12 @@ constexpr T high_mul(const T x, const T y) noexcept {
     } else {
             // MSVC intrinsics are not usable during constant evaluation, so fall through
             // to the portable path when we're in a consteval context.
-    #if defined(BEMAN_BIG_INT_MSVC)
+    #ifdef BEMAN_BIG_INT_INTRINSIC_UMULH
         if BEMAN_BIG_INT_IS_NOT_CONSTEVAL {
             if constexpr (std::is_signed_v<T>) {
-                return __mulh(x, y);
+                return BEMAN_BIG_INT_INTRINSIC_MULH(x, y);
             } else {
-                return __umulh(x, y);
-            }
-        }
-    #elif defined(_M_AMD64)
-        if BEMAN_BIG_INT_IS_NOT_CONSTEVAL {
-            if constexpr (std::is_signed_v<T>) {
-                __int64 result;
-                void(_mul128(x, y, &result));
-                return result;
-            } else {
-                unsigned __int64 result;
-                void(_umul128(x, y, &result));
-                return result;
+                return BEMAN_BIG_INT_INTRINSIC_UMULH(x, y);
             }
         }
     #endif
@@ -252,17 +234,17 @@ template <signed_or_unsigned T>
         const auto product = static_cast<wider_t<T>>(x) * static_cast<wider_t<T>>(y);
         return wide<T>::from_int(product);
     } else {
-    #if defined(_M_AMD64)
+    #ifdef BEMAN_BIG_INT_INTRINSIC_UMUL128
         // MSVC intrinsics are not usable during constant evaluation, so fall through
         // to the portable path when we're in a consteval context.
         if BEMAN_BIG_INT_IS_NOT_CONSTEVAL {
             if constexpr (std::is_signed_v<T>) {
-                __int64 high;
-                __int64 low = _mul128(x, y, &high);
+                std::int64_t high;
+                std::int64_t low = BEMAN_BIG_INT_INTRINSIC_MUL128(x, y, &high);
                 return {low, high};
             } else {
-                unsigned __int64 high;
-                unsigned __int64 low = _umul128(x, y, &high);
+                std::uint64_t high;
+                std::uint64_t low = BEMAN_BIG_INT_INTRINSIC_UMUL128(x, y, &high);
                 return {low, high};
             }
         }
@@ -288,8 +270,8 @@ BEMAN_BIG_INT_DIAGNOSTIC_IGNORED_GCC("-Wuseless-cast")
 template <signed_or_unsigned T>
 [[nodiscard]] constexpr T funnel_shl(const wide<T> x, const unsigned s) {
     BEMAN_BIG_INT_DEBUG_ASSERT(s < width_v<T>);
-#if BEMAN_BIG_INT_HAS_BUILTIN(__builtin_elementwise_fshl)
-    return __builtin_elementwise_fshl(x.high_bits, x.low_bits, static_cast<T>(s));
+#ifdef BEMAN_BIG_INT_BUILTIN_ELEMENTWISE_FSHL
+    return BEMAN_BIG_INT_BUILTIN_ELEMENTWISE_FSHL(x.high_bits, x.low_bits, static_cast<T>(s));
 #else
     if (s == 0) {
         return x.high_bits;
@@ -305,8 +287,8 @@ BEMAN_BIG_INT_DIAGNOSTIC_POP()
 template <signed_or_unsigned T>
 [[nodiscard]] constexpr T funnel_shr(const wide<T> x, const unsigned s) {
     BEMAN_BIG_INT_DEBUG_ASSERT(s < width_v<T>);
-#if BEMAN_BIG_INT_HAS_BUILTIN(__builtin_elementwise_fshr)
-    return __builtin_elementwise_fshr(x.high_bits, x.low_bits, static_cast<T>(s));
+#ifdef BEMAN_BIG_INT_BUILTIN_ELEMENTWISE_FSHR
+    return BEMAN_BIG_INT_BUILTIN_ELEMENTWISE_FSHR(x.high_bits, x.low_bits, static_cast<T>(s));
 #else
     // It usually makes sense to implement this in terms of a right-shift of a wider type.
     // However, the 128-bit version optimizes poorly;
@@ -336,9 +318,9 @@ struct overflow_result {
 
 template <signed_or_unsigned T>
 [[nodiscard]] constexpr overflow_result<T> overflowing_add(const T x, const T y) noexcept {
-#if BEMAN_BIG_INT_HAS_BUILTIN(__builtin_add_overflow)
+#ifdef BEMAN_BIG_INT_BUILTIN_ADD_OVERFLOW
     T    value;
-    bool overflow = __builtin_add_overflow(x, y, &value);
+    bool overflow = BEMAN_BIG_INT_BUILTIN_ADD_OVERFLOW(x, y, &value);
     return {.value = value, .overflow = overflow};
 #else
     if constexpr (std::is_unsigned_v<T>) {
@@ -350,14 +332,14 @@ template <signed_or_unsigned T>
         const auto value = static_cast<T>(wide);
         return {.value = value, .overflow = wide != value};
     }
-#endif // __builtin_add_overflow
+#endif // BEMAN_BIG_INT_BUILTIN_ADD_OVERFLOW
 }
 
 template <signed_or_unsigned T>
 [[nodiscard]] constexpr overflow_result<T> overflowing_sub(const T x, const T y) noexcept {
-#if BEMAN_BIG_INT_HAS_BUILTIN(__builtin_sub_overflow)
+#ifdef BEMAN_BIG_INT_BUILTIN_SUB_OVERFLOW
     T    value;
-    bool overflow = __builtin_sub_overflow(x, y, &value);
+    bool overflow = BEMAN_BIG_INT_BUILTIN_SUB_OVERFLOW(x, y, &value);
     return {.value = value, .overflow = overflow};
 #else
     if constexpr (std::is_unsigned_v<T>) {
@@ -367,19 +349,19 @@ template <signed_or_unsigned T>
         const auto value = static_cast<T>(wide);
         return {.value = value, .overflow = wide != value};
     }
-#endif // __builtin_sub_overflow
+#endif // BEMAN_BIG_INT_BUILTIN_SUB_OVERFLOW
 }
 
 template <unsigned_integer T>
 [[nodiscard]] constexpr overflow_result<T> overflowing_mul(const T x, const T y) noexcept {
-#if BEMAN_BIG_INT_HAS_BUILTIN(__builtin_mul_overflow)
+#ifdef BEMAN_BIG_INT_BUILTIN_MUL_OVERFLOW
     T    value;
-    bool overflow = __builtin_mul_overflow(x, y, &value);
+    bool overflow = BEMAN_BIG_INT_BUILTIN_MUL_OVERFLOW(x, y, &value);
     return {.value = value, .overflow = overflow};
 #else
     const T value = x * y;
     return {.value = value, .overflow = x != 0 && value / x != y};
-#endif // __builtin_mul_overflow
+#endif // BEMAN_BIG_INT_BUILTIN_MUL_OVERFLOW
 }
 
 template <class T>
@@ -398,8 +380,8 @@ carrying_add_portable(const T x, const T y, const bool carry = false) noexcept {
 
 template <unsigned_integer T>
 [[nodiscard]] constexpr carry_result<T> carrying_add(const T x, const T y, const bool carry = false) noexcept {
-#if BEMAN_BIG_INT_HAS_BUILTIN(__builtin_addc)
-    #if BEMAN_BIG_INT_HAS_CONSTEXPR_BUILTIN(__builtin_addc)
+#ifdef BEMAN_BIG_INT_BUILTIN_ADDC
+    #ifdef BEMAN_BIG_INT_HAS_CONSTEXPR_BUILTIN_ADDC
     if constexpr (true)
     #else
     if BEMAN_BIG_INT_IS_NOT_CONSTEVAL
@@ -407,15 +389,15 @@ template <unsigned_integer T>
     {
         if constexpr (width_v<T> == width_v<unsigned>) {
             unsigned carry_out;
-            unsigned value = __builtin_addc(x, y, carry, &carry_out);
+            unsigned value = BEMAN_BIG_INT_BUILTIN_ADDC(x, y, carry, &carry_out);
             return {.value = value, .carry = carry_out != 0};
         } else if constexpr (width_v<T> == width_v<unsigned long>) {
             unsigned long carry_out;
-            unsigned long value = __builtin_addcl(x, y, carry, &carry_out);
+            unsigned long value = BEMAN_BIG_INT_BUILTIN_ADDCL(x, y, carry, &carry_out);
             return {.value = value, .carry = carry_out != 0};
         } else if constexpr (width_v<T> == width_v<unsigned long long>) {
             unsigned long long carry_out;
-            unsigned long long value = __builtin_addcll(x, y, carry, &carry_out);
+            unsigned long long value = BEMAN_BIG_INT_BUILTIN_ADDCLL(x, y, carry, &carry_out);
             return {.value = value, .carry = carry_out != 0};
         } else {
             return carrying_add_portable(x, y, carry);
@@ -423,7 +405,7 @@ template <unsigned_integer T>
     } else {
         return carrying_add_portable(x, y, carry);
     }
-#elif defined(BEMAN_BIG_INT_MSVC) && (defined(_M_AMD64) || defined(_M_IX86))
+#elif defined(BEMAN_BIG_INT_INTRINSIC_ADDCARRY_U32)
     if BEMAN_BIG_INT_IS_NOT_CONSTEVAL {
         // Theoretically we could use the ADX intrinsic, but then the user always has to compile for it
         // This is more portable.
@@ -431,21 +413,25 @@ template <unsigned_integer T>
         // across the `if constexpr` chain.
         if constexpr (width_v<T> == 8) {
             std::uint8_t        value;
-            const unsigned char carry_out = _addcarry_u8(static_cast<unsigned char>(carry), x, y, &value);
+            const unsigned char carry_out =
+                BEMAN_BIG_INT_INTRINSIC_ADDCARRY_U8(static_cast<unsigned char>(carry), x, y, &value);
             return {.value = value, .carry = carry_out != 0};
         } else if constexpr (width_v<T> == 16) {
             std::uint16_t       value;
-            const unsigned char carry_out = _addcarry_u16(static_cast<unsigned char>(carry), x, y, &value);
+            const unsigned char carry_out =
+                BEMAN_BIG_INT_INTRINSIC_ADDCARRY_U16(static_cast<unsigned char>(carry), x, y, &value);
             return {.value = value, .carry = carry_out != 0};
         } else if constexpr (width_v<T> == 32) {
             std::uint32_t       value;
-            const unsigned char carry_out = _addcarry_u32(static_cast<unsigned char>(carry), x, y, &value);
+            const unsigned char carry_out =
+                BEMAN_BIG_INT_INTRINSIC_ADDCARRY_U32(static_cast<unsigned char>(carry), x, y, &value);
             return {.value = value, .carry = carry_out != 0};
         }
-    #ifdef _M_AMD64
+    #ifdef BEMAN_BIG_INT_INTRINSIC_ADDCARRY_U64
         else if constexpr (width_v<T> == 64) {
             std::uint64_t       value;
-            const unsigned char carry_out = _addcarry_u64(static_cast<unsigned char>(carry), x, y, &value);
+            const unsigned char carry_out =
+                BEMAN_BIG_INT_INTRINSIC_ADDCARRY_U64(static_cast<unsigned char>(carry), x, y, &value);
             return {.value = value, .carry = carry_out != 0};
         }
     #endif
@@ -478,8 +464,8 @@ borrowing_sub_portable(const T x, const T y, const bool borrow = false) noexcept
 
 template <unsigned_integer T>
 [[nodiscard]] constexpr borrow_result<T> borrowing_sub(const T x, const T y, const bool borrow = false) noexcept {
-#if BEMAN_BIG_INT_HAS_BUILTIN(__builtin_subc)
-    #if BEMAN_BIG_INT_HAS_CONSTEXPR_BUILTIN(__builtin_subc)
+#ifdef BEMAN_BIG_INT_BUILTIN_SUBC
+    #ifdef BEMAN_BIG_INT_HAS_CONSTEXPR_BUILTIN_SUBC
     if constexpr (true)
     #else
     if BEMAN_BIG_INT_IS_NOT_CONSTEVAL
@@ -487,15 +473,15 @@ template <unsigned_integer T>
     {
         if constexpr (width_v<T> == width_v<unsigned>) {
             unsigned borrow_out;
-            unsigned value = __builtin_subc(x, y, borrow, &borrow_out);
+            unsigned value = BEMAN_BIG_INT_BUILTIN_SUBC(x, y, borrow, &borrow_out);
             return {.value = value, .borrow = borrow_out != 0};
         } else if constexpr (width_v<T> == width_v<unsigned long>) {
             unsigned long borrow_out;
-            unsigned long value = __builtin_subcl(x, y, borrow, &borrow_out);
+            unsigned long value = BEMAN_BIG_INT_BUILTIN_SUBCL(x, y, borrow, &borrow_out);
             return {.value = value, .borrow = borrow_out != 0};
         } else if constexpr (width_v<T> == width_v<unsigned long long>) {
             unsigned long long borrow_out;
-            unsigned long long value = __builtin_subcll(x, y, borrow, &borrow_out);
+            unsigned long long value = BEMAN_BIG_INT_BUILTIN_SUBCLL(x, y, borrow, &borrow_out);
             return {.value = value, .borrow = borrow_out != 0};
         } else {
             return borrowing_sub_portable(x, y, borrow);
@@ -503,31 +489,35 @@ template <unsigned_integer T>
     } else {
         return borrowing_sub_portable(x, y, borrow);
     }
-#elif defined(BEMAN_BIG_INT_MSVC) && (defined(_M_AMD64) || defined(_M_IX86))
+#elif defined(BEMAN_BIG_INT_INTRINSIC_SUBBORROW_U32)
     if BEMAN_BIG_INT_IS_NOT_CONSTEVAL {
         // Mirror the `carrying_add` MSVC path using the matching `_subborrow_*` intrinsics.
         // Each branch returns directly, so we don't share uninitialized state across the
         // `if constexpr` chain.
         if constexpr (width_v<T> == 8) {
             std::uint8_t        value;
-            const unsigned char borrow_out = _subborrow_u8(static_cast<unsigned char>(borrow), x, y, &value);
+            const unsigned char borrow_out =
+                BEMAN_BIG_INT_INTRINSIC_SUBBORROW_U8(static_cast<unsigned char>(borrow), x, y, &value);
             return {.value = value, .borrow = borrow_out != 0};
         } else if constexpr (width_v<T> == 16) {
             std::uint16_t       value;
-            const unsigned char borrow_out = _subborrow_u16(static_cast<unsigned char>(borrow), x, y, &value);
+            const unsigned char borrow_out =
+                BEMAN_BIG_INT_INTRINSIC_SUBBORROW_U16(static_cast<unsigned char>(borrow), x, y, &value);
             return {.value = value, .borrow = borrow_out != 0};
         } else if constexpr (width_v<T> == 32) {
             std::uint32_t       value;
-            const unsigned char borrow_out = _subborrow_u32(static_cast<unsigned char>(borrow), x, y, &value);
+            const unsigned char borrow_out =
+                BEMAN_BIG_INT_INTRINSIC_SUBBORROW_U32(static_cast<unsigned char>(borrow), x, y, &value);
             return {.value = value, .borrow = borrow_out != 0};
         }
-    #ifdef _M_AMD64
+    #ifdef BEMAN_BIG_INT_INTRINSIC_SUBBORROW_U64
         else if constexpr (width_v<T> == 64) {
             std::uint64_t       value;
-            const unsigned char borrow_out = _subborrow_u64(static_cast<unsigned char>(borrow), x, y, &value);
+            const unsigned char borrow_out =
+                BEMAN_BIG_INT_INTRINSIC_SUBBORROW_U64(static_cast<unsigned char>(borrow), x, y, &value);
             return {.value = value, .borrow = borrow_out != 0};
         }
-    #endif // _M_AMD64
+    #endif // BEMAN_BIG_INT_INTRINSIC_SUBBORROW_U64
         else {
             return borrowing_sub_portable(x, y, borrow);
         }
@@ -595,7 +585,7 @@ template <unsigned_integer T>
     if constexpr (width_v<T> == 64) {
         if BEMAN_BIG_INT_IS_NOT_CONSTEVAL {
             if (!BEMAN_BIG_INT_IS_CONSTANT_PROPAGATED(y)) {
-    #if defined(BEMAN_BIG_INT_GNUC) && (defined(__x86_64__) || defined(__i386__))
+    #ifdef BEMAN_BIG_INT_HAS_X86_GNU_ASM
                 T q, r;
                 // volatile is load-bearing: a non-volatile asm counts as
                 // pure, and GCC at -O2 speculatively hoisted this above a
@@ -605,9 +595,10 @@ template <unsigned_integer T>
                 // This has happened with GCC-14 in release mode
                 __asm__ volatile("div %[d]" : "=a"(q), "=d"(r) : "a"(x.low_bits), "d"(x.high_bits), [d] "r"(y) : "cc");
                 return {.quotient = q, .remainder = r};
-    #elif defined(_WIN32) && defined(_M_X64)
+    #elif defined(BEMAN_BIG_INT_INTRINSIC_UDIV128)
                 T r;
-                T q = _udiv128(static_cast<T>(x.high_bits), static_cast<T>(x.low_bits), static_cast<T>(y), &r);
+                T q = BEMAN_BIG_INT_INTRINSIC_UDIV128(
+                    static_cast<T>(x.high_bits), static_cast<T>(x.low_bits), static_cast<T>(y), &r);
                 return {.quotient = static_cast<T>(q), .remainder = static_cast<T>(r)};
     #endif
             }

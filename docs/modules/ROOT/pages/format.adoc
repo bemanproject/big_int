@@ -249,7 +249,8 @@ Where the library is built with exceptions disabled, there is nothing to throw:
 each of the conditions above calls `std::abort()` instead. The mode is deduced
 in `<beman/big_int/detail/config.hpp>` from `__EXCEPTIONS` and, on MSVC,
 `_CPPUNWIND`, and is recorded as `BEMAN_BIG_INT_ALLOW_EXCEPTIONS` or
-`BEMAN_BIG_INT_NO_EXCEPTIONS`. This matches how the rest of the library
+`BEMAN_BIG_INT_NO_EXCEPTIONS`; a CMake build deduces it once, from the flags the
+library is built with (see xref:build_and_usage.adoc#build_and_usage_config[Build configuration]). This matches how the rest of the library
 reports a length limit; see
 xref:big_int_type.adoc#big_int_type_length_limit[the length limit].
 
