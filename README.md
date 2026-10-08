@@ -47,6 +47,11 @@ SIMD-accelerated multiplication, installation, CMake integration, and basic
 usage, see the
 [Build and Usage](https://bemanproject.github.io/big_int/build_and_usage.html) documentation.
 
+`beman.big_int` is also packaged for vcpkg, as the port `beman-big-int` in the
+[Beman vcpkg registry](https://github.com/bemanproject/vcpkg-registry), and for
+Conan, through the [`conanfile.py`](conanfile.py) recipe at the repository root.
+See [Package managers](https://bemanproject.github.io/big_int/build_and_usage.html#build_and_usage_package_managers).
+
 ## Development
 
 See the [Contributing Guidelines](CONTRIBUTING.md).

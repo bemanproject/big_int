@@ -41,6 +41,7 @@ jobs:
             -DCMAKE_BUILD_TYPE=Debug \
             -DCMAKE_C_COMPILER=clang \
             -DCMAKE_CXX_COMPILER=clang++ \
+            -DCMAKE_PROJECT_TOP_LEVEL_INCLUDES=./infra/cmake/use-fetch-content.cmake \
             -DBEMAN_BIG_INT_BUILD_TESTS=ON \
             -DBEMAN_BIG_INT_FUZZ=ON
 

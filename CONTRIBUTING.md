@@ -60,8 +60,9 @@ Instead of installing the project's dependencies via a package manager, you can 
 configure beman.big_int to fetch them automatically via CMake FetchContent.
 
 To do so, specify
-`-DCMAKE_PROJECT_TOP_LEVEL_INCLUDES=./infra/cmake/use-fetch-content.cmake`. This will
-bring in GoogleTest automatically along with any other dependency the project may require.
+`-DCMAKE_PROJECT_TOP_LEVEL_INCLUDES=./infra/cmake/use-fetch-content.cmake` (the CMake
+presets already do). This will bring in GoogleTest and Boost.Multiprecision for the tests,
+and Google Benchmark when `BEMAN_BIG_INT_BUILD_BENCHMARKS` is on.
 
 Example commands:
 

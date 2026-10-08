@@ -5,6 +5,10 @@
 /compile_commands.json
 /build
 
+# Conan writes these when it builds test_package (conan create / conan test).
+/test_package/build
+/test_package/CMakeUserPresets.json
+
 # CMake generates this from detail/config_generated.hpp.in (which is tracked);
 # ignored anywhere, e.g. an in-source build's generated/include.
 config_generated.hpp

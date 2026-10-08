@@ -1,0 +1,48 @@
+# SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
+# SPDX-License-Identifier: BSL-1.0
+
+# Rendered into the Beman vcpkg registry on each release by
+# .github/workflows/vcpkg-release.yml, which fills in the version and SHA512 of
+# the tagged release.
+# The multiplication and division kernels are compiled, and the library exports
+# no DLL interface, so it is built as a static library on every triplet.
+vcpkg_check_linkage(ONLY_STATIC_LIBRARY)
+
+vcpkg_from_github(
+    OUT_SOURCE_PATH SOURCE_PATH
+    REPO bemanproject/big_int
+    REF "v@VERSION@"
+    SHA512 @SHA512@
+    HEAD_REF main
+)
+
+vcpkg_check_features(
+    OUT_FEATURE_OPTIONS FEATURE_OPTIONS
+    FEATURES
+        modules     BEMAN_BIG_INT_BUILD_MODULE
+        simd-mul    BEMAN_BIG_INT_SIMD_MUL
+)
+
+vcpkg_cmake_configure(
+    SOURCE_PATH "${SOURCE_PATH}"
+    OPTIONS
+        ${FEATURE_OPTIONS}
+        -DBEMAN_BIG_INT_BUILD_TESTS=OFF
+        -DBEMAN_BIG_INT_BUILD_EXAMPLES=OFF
+        -DBEMAN_BIG_INT_BUILD_BENCHMARKS=OFF
+)
+
+vcpkg_cmake_install()
+
+vcpkg_cmake_config_fixup(
+    PACKAGE_NAME beman.big_int
+    CONFIG_PATH lib/cmake/beman.big_int
+)
+
+file(
+    REMOVE_RECURSE
+    "${CURRENT_PACKAGES_DIR}/debug/include"
+    "${CURRENT_PACKAGES_DIR}/debug/share"
+)
+
+vcpkg_install_copyright(FILE_LIST "${SOURCE_PATH}/LICENSE" "${SOURCE_PATH}/LICENSE-BOOST")

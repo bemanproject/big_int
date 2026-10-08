@@ -11,8 +11,10 @@ and only search the repo when information here is incomplete or has become incor
 - Type: CMake-based C++ library with tests and examples.
 - Main language: C++23 (supports C++23/C++26 in CI matrix).
 - Build system: CMake presets + Ninja.
-- Test framework: GoogleTest via CMake `FetchContent`.
-- Additional test dependency: Boost.Multiprecision (fetched in test CMake).
+- Test framework: GoogleTest via `find_package(GTest)`.
+- Additional test dependency: Boost.Multiprecision via `find_package(boost_multiprecision)`.
+- Dependencies come from the environment, or from `lockfile.json` through
+  `-DCMAKE_PROJECT_TOP_LEVEL_INCLUDES=./infra/cmake/use-fetch-content.cmake` (set by the presets).
 - Lint/format: pre-commit hooks (`clang-format`, `gersemi`, `codespell`, YAML/whitespace checks).
 - CI: GitHub Actions workflows in `.github/workflows/`, mostly through reusable workflows from `bemanproject/infra-workflows`.
 
@@ -83,7 +85,7 @@ Validated result: all hooks passed (`clang-format`, `gersemi`, `codespell`, whit
   - Observed: `cmake --workflow --preset gcc-release` timed out at 1 second tool timeout.
   - Mitigation: for workflow builds/tests, use >=120s timeout in constrained runners; ~10-11s was observed for full configure/build/test in this environment.
 
-- `FetchContent` emits deprecation warnings from vendored googletest CMake minimum versions.
+- The googletest pinned in `lockfile.json` emits CMake deprecation warnings for its old minimum version.
   - Observed during configure; not fatal.
   - Mitigation: treat as upstream dependency warning unless CI policy changes.
 

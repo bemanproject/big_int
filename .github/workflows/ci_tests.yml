@@ -209,7 +209,43 @@ jobs:
       - run: cmake --build build/msvc-release
       - run: ctest --preset msvc-release -j4
 
+  # Renders port/*.in against this checkout and installs it as an overlay port
+  # for each feature combination, then builds the repository with the vcpkg
+  # toolchain and the root vcpkg.json.
+  vcpkg-ci:
+    uses: bemanproject/infra-workflows/.github/workflows/reusable-beman-vcpkg-ci.yml@1.7.4
+    with:
+      port_name: beman-big-int
+      feature_combinations: |
+        [
+          {"features": {}},
+          {"features": {"modules": true}},
+          {"features": {"simd-mul": true}}
+        ]
+
+  # Builds the Conan package from conanfile.py and runs test_package against it.
+  conan:
+    strategy:
+      fail-fast: false
+      matrix:
+        runner: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.runner }}
+    name: "Conan: ${{ matrix.runner }}"
+    steps:
+      - uses: actions/checkout@v6
+      - uses: lukka/get-cmake@latest
+        with:
+          cmakeVersion: 4.3.3
+      # The runner's default GCC 13 is older than the supported minimum.
+      - if: runner.os == 'Linux'
+        run: |
+          echo "CC=gcc-14" >> "$GITHUB_ENV"
+          echo "CXX=g++-14" >> "$GITHUB_ENV"
+      - run: pipx install conan
+      - run: conan profile detect
+      - run: conan create . -s compiler.cppstd=23 --build=missing
+
   create-issue-when-fault:
-    needs: [preset-test, build-and-test, msvc-arm64, ifma-sde-linux, ifma-sde-windows]
+    needs: [preset-test, build-and-test, msvc-arm64, ifma-sde-linux, ifma-sde-windows, vcpkg-ci, conan]
     if: failure() && github.event_name == 'schedule'
     uses: bemanproject/infra-workflows/.github/workflows/reusable-beman-create-issue-when-fault.yml@1.7.4

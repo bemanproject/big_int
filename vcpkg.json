@@ -1,0 +1,17 @@
+{
+  "$comment": "Developer manifest for the tests (and, with the benchmarks feature, the benchmarks); lockfile.json pins the same dependencies for infra/cmake/use-fetch-content.cmake. The released port is rendered from port/.",
+  "name": "beman-big-int",
+  "version-semver": "0.1.1",
+  "dependencies": [
+    "boost-multiprecision",
+    "gtest"
+  ],
+  "features": {
+    "benchmarks": {
+      "description": "Google Benchmark, for BEMAN_BIG_INT_BUILD_BENCHMARKS",
+      "dependencies": [
+        "benchmark"
+      ]
+    }
+  }
+}

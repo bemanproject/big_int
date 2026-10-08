@@ -20,10 +20,17 @@ This project requires at least the following to build:
 
 * A pass:[C++] compiler that conforms to the pass:[C++23] standard or greater
 * CMake 3.30 or later
-* (Test only) GoogleTest
+* (Test only) GoogleTest and Boost.Multiprecision
+* (Benchmarks only) Google Benchmark
 
 You can disable building tests by setting the CMake option
 `BEMAN_BIG_INT_BUILD_TESTS` to `OFF` when configuring the project.
+
+The build locates these with `find_package`, so any installation CMake can find
+works, including one from vcpkg (the repository's `vcpkg.json` lists them). The
+CMake presets instead fetch them at the versions pinned in `lockfile.json`; see the
+https://github.com/bemanproject/big_int/blob/main/CONTRIBUTING.md[Contributing Guidelines]
+to do the same without a preset.
 
 [#build_and_usage_platforms]
 === Tested platforms
@@ -287,6 +294,72 @@ This will generate the following directory structure:
             |-- beman.big_int-config.cmake
             \-- beman.big_int-targets.cmake
 ----
+
+[#build_and_usage_package_managers]
+== Package managers
+
+Both packages build the library as a static library, with tests, examples and
+benchmarks off, and define the same `beman::big_int` CMake target as an installed
+build (see xref:#build_and_usage_cmake[CMake configuration]). The x86-64 kernel
+options stay at `AUTO`, so the BMI2/ADX and AVX-512 IFMA kernels are selected only
+when the package manager's compiler flags target them (for example `-march=native`
+in a vcpkg triplet's `VCPKG_CXX_FLAGS` or a Conan profile's
+`tools.build:cxxflags`).
+
+[#build_and_usage_vcpkg]
+=== vcpkg
+
+`beman.big_int` is published to the Beman project's
+https://github.com/bemanproject/vcpkg-registry[vcpkg registry] as the port
+`beman-big-int`. Add that registry to your project's `vcpkg-configuration.json`
+(this repository's own
+https://github.com/bemanproject/big_int/blob/main/vcpkg-configuration.json[`vcpkg-configuration.json`]
+shows how), then depend on the port in your `vcpkg.json`:
+
+[source,json]
+----
+{
+  "dependencies": [ "beman-big-int" ]
+}
+----
+
+The port has two optional features:
+
+* `simd-mul` builds with `BEMAN_BIG_INT_SIMD_MUL` (see
+  xref:#build_and_usage_simd[SIMD-accelerated multiplication]).
+* `modules` also builds and installs the named module and its
+  `beman::big_int_module` target (see
+  xref:#build_and_usage_modules[the pass:[C++] named module]); it is not
+  available with AppleClang.
+
+[#build_and_usage_conan]
+=== Conan
+
+The repository root holds a Conan 2 recipe, `conanfile.py`, and its
+`test_package`. To build the package into your local Conan cache from a
+checkout:
+
+[source,bash]
+----
+conan create . -s compiler.cppstd=23 --build=missing
+----
+
+Then require it from your own recipe or `conanfile.txt` and use the `CMakeDeps`
+generator:
+
+[source]
+----
+[requires]
+beman-big-int/0.1.1
+
+[generators]
+CMakeDeps
+CMakeToolchain
+----
+
+The recipe needs `compiler.cppstd` to be 23 or later and offers the option
+`simd_mul` (default `False`), which builds with `BEMAN_BIG_INT_SIMD_MUL`. The
+named module is not packaged for Conan.
 
 [#build_and_usage_cmake]
 == CMake configuration
