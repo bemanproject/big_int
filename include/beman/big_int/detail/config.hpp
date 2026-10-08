@@ -424,16 +424,16 @@
 // ever needed there, so they are defined only when usable in constant evaluation.
 
 // Every supported compiler has these, so they are always defined.
-#define BEMAN_BIG_INT_BUILTIN_FILE() __builtin_FILE()
-#define BEMAN_BIG_INT_BUILTIN_LINE() __builtin_LINE()
-#define BEMAN_BIG_INT_BUILTIN_FUNCTION() __builtin_FUNCTION()
+#define BEMAN_BIG_INT_BUILTIN_FILE(...) __builtin_FILE(__VA_ARGS__)
+#define BEMAN_BIG_INT_BUILTIN_LINE(...) __builtin_LINE(__VA_ARGS__)
+#define BEMAN_BIG_INT_BUILTIN_FUNCTION(...) __builtin_FUNCTION(__VA_ARGS__)
 
 #ifdef BEMAN_BIG_INT_HAS_BUILTIN_IS_INTEGRAL
     #define BEMAN_BIG_INT_BUILTIN_IS_INTEGRAL(...) __is_integral(__VA_ARGS__)
 #endif
 
 #ifdef BEMAN_BIG_INT_HAS_BUILTIN_IS_CONSTANT_EVALUATED
-    #define BEMAN_BIG_INT_BUILTIN_IS_CONSTANT_EVALUATED() __builtin_is_constant_evaluated()
+    #define BEMAN_BIG_INT_BUILTIN_IS_CONSTANT_EVALUATED(...) __builtin_is_constant_evaluated(__VA_ARGS__)
 #endif
 
 #ifdef BEMAN_BIG_INT_HAS_BUILTIN_CONSTANT_P
@@ -441,7 +441,7 @@
 #endif
 
 #ifdef BEMAN_BIG_INT_HAS_BUILTIN_TRAP
-    #define BEMAN_BIG_INT_BUILTIN_TRAP() __builtin_trap()
+    #define BEMAN_BIG_INT_BUILTIN_TRAP(...) __builtin_trap(__VA_ARGS__)
 #endif
 
 #ifdef BEMAN_BIG_INT_HAS_BUILTIN_ADD_OVERFLOW
@@ -521,7 +521,7 @@
 #endif
 
 #ifdef BEMAN_BIG_INT_HAS_BUILTIN_CPU_INIT
-    #define BEMAN_BIG_INT_BUILTIN_CPU_INIT() __builtin_cpu_init()
+    #define BEMAN_BIG_INT_BUILTIN_CPU_INIT(...) __builtin_cpu_init(__VA_ARGS__)
 #endif
 
 #ifdef BEMAN_BIG_INT_HAS_BUILTIN_CPU_SUPPORTS
