@@ -1080,7 +1080,13 @@ BEMAN_BIG_INT_END_NAMESPACE
 // GCOVR_EXCL_STOP
 // LCOV_EXCL_STOP
 
+// BEMAN_BIG_INT_DEBUG is defined when NDEBUG is not. Debug-only code, such as
+// BEMAN_BIG_INT_DEBUG_ASSERT, tests it instead of NDEBUG.
 #ifndef NDEBUG
+    #define BEMAN_BIG_INT_DEBUG 1
+#endif
+
+#ifdef BEMAN_BIG_INT_DEBUG
     #define BEMAN_BIG_INT_DEBUG_ASSERT(...) BEMAN_BIG_INT_ASSERT(__VA_ARGS__)
 #else
     // The requires expression makes sure that we still check for expression validity,

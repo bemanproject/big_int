@@ -9,7 +9,9 @@
 # uses --rounds 3, gcd 65536 uses --rounds 1. Output: one CSV (op,path,la,lb,reps,rounds,median_ns,min_ns,
 # round_ms_actual) with the '#const' line kept once at the top, after '# gap_sweep' comment lines.
 # Works on macOS bash 3.2 and Ubuntu bash. --bands is for partial runs (default all three).
-# Ops: add sub shl shr cmp mul sqr divrem tochars fromchars gcd (default all).
+# Ops: add sub shl shr cmp mul sqr divrem tochars fromchars gcd (default all), and vecsort (container cost of the inline
+# capacity, only when named in --ops). The floor row (kernel plus one allocate/deallocate pair of the result size) is
+# run for add sub shl shr mul sqr divrem.
 set -eu
 
 if [ "$#" -lt 2 ]; then
@@ -80,32 +82,32 @@ sweep() {
 }
 
 if want add; then
-    sweep add auto,inplace,kernel,gmp,gmpz "1x1 2x2 4x4 8x8 16x16" "64x64 256x256 1024x1024 2000x2000 1024x1" \
+    sweep add auto,inplace,kernel,floor,gmp,gmpz "1x1 2x2 4x4 8x8 16x16" "64x64 256x256 1024x1024 2000x2000 1024x1" \
         "16384x16384 131072x131072 1048576x1048576"
 fi
 if want sub; then
-    sweep sub auto,inplace,kernel,gmp,gmpz "1x1 2x2 4x4 8x8 16x16" "64x64 256x256 1024x1024 2000x2000 1024x1" \
+    sweep sub auto,inplace,kernel,floor,gmp,gmpz "1x1 2x2 4x4 8x8 16x16" "64x64 256x256 1024x1024 2000x2000 1024x1" \
         "16384x16384 131072x131072 1048576x1048576"
 fi
 if want shl; then
-    sweep shl auto,inplace,kernel,kernelip,gmp,gmpz "1x13 4x13 16x13" "256x13 2000x13 2000x77" "131072x13 1048576x13"
+    sweep shl auto,inplace,kernel,kernelip,floor,gmp,gmpz "1x13 4x13 16x13" "256x13 2000x13 2000x77" "131072x13 1048576x13"
 fi
 if want shr; then
-    sweep shr auto,inplace,kernel,gmp,gmpz "1x13 4x13 16x13" "256x13 2000x13 2000x77" "131072x13 1048576x13"
+    sweep shr auto,inplace,kernel,floor,gmp,gmpz "1x13 4x13 16x13" "256x13 2000x13 2000x77" "131072x13 1048576x13"
 fi
 if want cmp; then
     sweep cmp auto,kernel,gmp,gmpz "1 4 16" "256 2000" "131072"
 fi
 if want mul; then
-    sweep mul auto,kernel,gmp,gmpz "1x1 2x2 3x3 4x4 6x6 8x8 12x12 16x16" \
+    sweep mul auto,kernel,floor,gmp,gmpz "1x1 2x2 3x3 4x4 6x6 8x8 12x12 16x16" \
         "32x32 64x64 128x128 256x256 512x512 1000x1000 2000x2000 2000x100" \
         "4096x4096 16384x16384 65536x65536 262144x262144 1048576x1048576 262144x8192"
 fi
 if want sqr; then
-    sweep sqr auto,kernel,gmp,gmpz "4 16" "64 512 2000" "16384 262144 1048576"
+    sweep sqr auto,kernel,floor,gmp,gmpz "4 16" "64 512 2000" "16384 262144 1048576"
 fi
 if want divrem; then
-    sweep divrem auto,kernel,gmp,gmpz "2x1 8x4 32x16" "128x64 512x256 2000x1000 4000x2000 2000x100 65536x1" \
+    sweep divrem auto,kernel,floor,gmp,gmpz "2x1 8x4 32x16" "128x64 512x256 2000x1000 4000x2000 2000x100 65536x1" \
         "16384x8192 131072x65536 1048576x524288"
 fi
 if want tochars; then
@@ -119,5 +121,9 @@ fi
 if want gcd; then
     sweep gcd auto,kernel,gmp,gmpz "2x2 4x4 16x16" "64x64 256x256 1024x1024 2000x2000" "16384x16384"
     if band large; then run gcd auto,kernel,gmp,gmpz 1 65536x65536; fi
+fi
+if want vecsort; then
+    # Not in the default op list: the shape is N values of one limb, medium band; rows are per element.
+    if band medium; then run vecsort auto,builtin,copy 9 100000x1; fi
 fi
 echo "[gap_sweep] $(date +%H:%M:%S) done: $OUT" >&2

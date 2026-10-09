@@ -620,6 +620,13 @@ class BEMAN_BIG_INT_TRIVIAL_ABI basic_big_int {
     constexpr void                              free_limbs(pointer p, size_type n);
     constexpr void                              free_storage();
     constexpr void                              grow(size_type limbs_needed);
+    // Ensures room for `n` limbs and discards the contents (no copy, no zero-fill). Does not change the limb
+    // count or sign. The caller writes the limbs, sets the count, and zeroes any in-place tail
+    // (see `clear_inline_tail`). No operand of the caller may alias `*this`.
+    [[nodiscard]] constexpr limb_type* storage_for_overwrite(size_type n);
+    // For in-place storage, zeroes the limbs in [limb_count(), old_count). Keeps the invariant
+    // that in-place limbs past the limb count are zero, which `inplace_to_bit_uint` relies on.
+    constexpr void clear_inline_tail(size_type old_count) noexcept;
     constexpr void copy_n_to_allocation(const limb_type* p, size_type n, alloc_result out);
     // Copies the limbs of `x` into a freshly constructed `*this` whose control word already matches `x`.
     constexpr void copy_limbs_from(const basic_big_int& x);
@@ -643,6 +650,10 @@ class BEMAN_BIG_INT_TRIVIAL_ABI basic_big_int {
 
     constexpr void shift_left(shift_type s);
     constexpr void shift_right(shift_type s);
+    // `*this = (src, neg) << s` / `>> s` (floor rounding) in a single pass. `src` must be canonical and
+    // must not alias `*this`.
+    constexpr void assign_shifted_left(std::span<const uint_multiprecision_t> src, bool neg, shift_type s);
+    constexpr void assign_shifted_right(std::span<const uint_multiprecision_t> src, bool neg, shift_type s);
 
     template <detail::signed_or_unsigned Integer>
     [[nodiscard]] constexpr bool equals_integer(Integer x) const noexcept;
@@ -713,13 +724,38 @@ class BEMAN_BIG_INT_TRIVIAL_ABI basic_big_int {
     constexpr uint_multiprecision_t
     divmod_in_place_short(uint_multiprecision_t divisor, bool divisor_neg, detail::division_op op);
 
+    // `*this *= b`, keeping the allocator. `b` may alias `*this`. A one-limb `b` multiplies in place; a product
+    // of at most 64 limbs is formed on the stack at run time; larger products go to a fresh buffer that replaces
+    // the old one only on success.
+    template <std::size_t extent_b>
+    constexpr void multiply_in_place(std::span<const uint_multiprecision_t, extent_b> b, bool b_neg);
+
+    // `*this /= divisor` or `*this %= divisor` for a multi-limb divisor in the schoolbook band, at run
+    // time and with all scratch on the stack: the dividend is divided where it sits, so nothing allocates.
+    // Returns false, leaving `*this` untouched, when the shape does not qualify.
+    template <std::size_t extent_b>
+    constexpr bool divide_in_place_small(std::span<const uint_multiprecision_t, extent_b> divisor,
+                                         bool                                             divisor_neg,
+                                         detail::division_op                              op);
+
+    // A value holding exactly the trimmed magnitude `mag` (non-empty), with allocator `a`.
+    [[nodiscard]] static constexpr basic_big_int
+    make_from_magnitude(std::span<const uint_multiprecision_t> mag, bool neg, const allocator_type& a);
+
     // Shared implementation behind copy-assign, move-assign, and the lvalue
     // branches of `operator+` / `operator-`.
-    // Sets `*this` to a copy of `src`, reusing the existing allocation whenever
-    // the effective capacity already fits `src.limb_count() + extra_space` limbs.
-    // `extra_space` lets callers that know they are about to grow by a fixed
-    // amount (e.g., a carry-out of one limb in addition) reserve that space
-    // up front so that a subsequent grow is not needed.
+    // Sets `*this` to the value of `src`.
+    //
+    // An rvalue heap `src` is stolen (its buffer adopted, `src` left as inline zero) whenever our
+    // allocator can free it, i.e. the allocator propagates, is always-equal, or compares equal to
+    // `src`'s, regardless of the capacity we already hold. Our own buffer is released first, with
+    // our allocator. Every other case copies, reusing the existing allocation when it already
+    // fits `src.limb_count() + extra_space` limbs. `extra_space` lets callers that know they are
+    // about to grow by a fixed amount (e.g., a carry-out of one limb) reserve that space up front;
+    // it must be 0 for an rvalue `src`.
+    //
+    // When a propagating allocator compares unequal to ours, our heap buffer cannot be kept: it is
+    // released through the old allocator before the new one is adopted.
     template <detail::allocator_propagation propagation = detail::allocator_propagation::propagate, class Src>
         requires std::same_as<std::remove_cvref_t<Src>, basic_big_int>
     constexpr void assign_value(Src&& src, const std::size_t extra_space = 0) {
@@ -728,10 +764,6 @@ class BEMAN_BIG_INT_TRIVIAL_ABI basic_big_int {
             // self-aliasing the existing `operator=` overloads protected against.
             return;
         }
-
-        const std::size_t src_count = src.limb_count();
-        const std::size_t needed    = src_count + extra_space;
-        const std::size_t eff_cap   = is_representation_inplace() ? inplace_capacity : m_capacity;
 
         // Allocator propagation follows `std::allocator_traits`. Stateful allocators
         // such as `std::pmr::polymorphic_allocator` have a deleted copy/move
@@ -745,7 +777,39 @@ class BEMAN_BIG_INT_TRIVIAL_ABI basic_big_int {
             (std::is_lvalue_reference_v<Src> ? alloc_traits::propagate_on_container_copy_assignment::value
                                              : alloc_traits::propagate_on_container_move_assignment::value);
 
-        if (needed <= eff_cap) {
+        if constexpr (!std::is_lvalue_reference_v<Src>) {
+            BEMAN_BIG_INT_DEBUG_ASSERT(extra_space == 0);
+            if (!src.is_representation_inplace() &&
+                (propagate_alloc || alloc_traits::is_always_equal::value || m_alloc == src.m_alloc)) {
+                free_storage();
+                if constexpr (propagate_alloc) {
+                    m_alloc = std::forward<Src>(src).m_alloc;
+                }
+                m_capacity          = src.m_capacity;
+                m_storage.data      = src.m_storage.data;
+                m_size_and_sign     = src.m_size_and_sign;
+                src.m_capacity      = 0;
+                src.m_size_and_sign = 1;
+                src.m_storage       = {};
+                return;
+            }
+            // Inline `src`, or a heap `src` that our allocator cannot free: copy below.
+        }
+
+        const std::size_t src_count = src.limb_count();
+        const std::size_t needed    = src_count + extra_space;
+        const std::size_t eff_cap   = is_representation_inplace() ? inplace_capacity : m_capacity;
+
+        // Keeping our heap buffer is only valid if our allocator stays the one that frees it.
+        const bool keeps_buffer = [&] {
+            if constexpr (propagate_alloc && !alloc_traits::is_always_equal::value) {
+                return is_representation_inplace() || m_alloc == src.m_alloc;
+            } else {
+                return true;
+            }
+        }();
+
+        if (keeps_buffer && needed <= eff_cap) {
             // Fast path: current buffer is already big enough
             const auto old_count = limb_count();
             m_size_and_sign      = src.m_size_and_sign;
@@ -755,22 +819,16 @@ class BEMAN_BIG_INT_TRIVIAL_ABI basic_big_int {
             limb_type* const       dst_limbs = limb_ptr();
             const limb_type* const src_limbs = src.limb_ptr();
             std::copy_n(src_limbs, src_count, dst_limbs);
-            // Preserve the "limbs[limb_count..inplace_capacity) == 0" invariant that
-            // `inplace_to_bit_uint` relies on. Only relevant for inline storage.
-            if (is_representation_inplace()) {
-                for (std::size_t i = src_count; i < old_count; ++i) {
-                    dst_limbs[i] = limb_type{0};
-                }
-            }
+            clear_inline_tail(old_count);
             return;
         }
 
-        // Slow path: current buffer is too small. Each branch releases our buffer
-        // with our current allocator, before any propagation, and publishes the
-        // control words only once the storage they describe is in place.
+        // Slow path. Each branch releases our buffer with our current allocator, before any
+        // propagation, and publishes the control words only once the storage they describe is in place.
         if (src.is_representation_inplace() && needed <= inplace_capacity) {
             // Both src and the requested headroom fit inline. No buffer to
-            // adopt or allocate; just propagate (if applicable) and copy limbs.
+            // allocate; release ours (if any), propagate, and copy limbs.
+            free_storage();
             if constexpr (propagate_alloc) {
                 m_alloc = std::forward<Src>(src).m_alloc;
             }
@@ -782,39 +840,9 @@ class BEMAN_BIG_INT_TRIVIAL_ABI basic_big_int {
             return;
         }
 
-        if constexpr (!std::is_lvalue_reference_v<Src>) {
-            // For a heap `src`, adopt its pointer when the allocators are
-            // compatible -- i.e., we are propagating from src, the allocator
-            // type is always-equal (e.g. std::allocator), or the two
-            // allocators compare equal at runtime.
-            if (!src.is_representation_inplace()) {
-                if constexpr (propagate_alloc || alloc_traits::is_always_equal::value) {
-                    free_storage();
-                    if constexpr (propagate_alloc) {
-                        m_alloc = std::forward<Src>(src).m_alloc;
-                    }
-                    m_capacity             = src.m_capacity;
-                    m_storage.data         = src.m_storage.data;
-                    m_size_and_sign        = src.m_size_and_sign;
-                    src.m_capacity         = 0;
-                    src.m_size_and_sign    = 1;
-                    src.m_storage.limbs[0] = limb_type{0};
-                    if (m_capacity < needed) {
-                        grow(needed);
-                    }
-                    return;
-                }
-                // Allocators differ and don't propagate: fall through to a
-                // fresh allocation owned by our allocator.
-            }
-            // `src` is inline (or unstealable heap), fall through to the
-            // allocate-and-copy path below.
-        }
-
-        // Fall back to a fresh allocation of `needed` limbs. Secure it before
-        // releasing ours, so a throwing allocation leaves `*this` unchanged. A
-        // propagating allocator has to serve the new block while ours still has to
-        // release the old, so allocate through a copy of `src`'s.
+        // Fresh allocation of `needed` limbs. Secure it before releasing ours, so a throwing allocation
+        // leaves `*this` unchanged. A propagating allocator has to serve the new block while ours still
+        // has to release the old, so allocate through a copy of `src`'s.
         const alloc_result allocation = [&] {
             if constexpr (propagate_alloc) {
                 allocator_type src_alloc(src.m_alloc);
@@ -1035,7 +1063,16 @@ constexpr void basic_big_int<b, L, A>::negate() noexcept {
 
 template <std::size_t b, class L, class A>
 constexpr void basic_big_int<b, L, A>::set_zero() noexcept {
-    limb_ptr()[0]   = 0;
+    limb_type* const limbs = limb_ptr();
+    limbs[0]               = 0;
+    if constexpr (inplace_capacity != 1) {
+        // Keep "inline limbs past the limb count are zero" (see `clear_inline_tail`).
+        if (is_representation_inplace()) {
+            for (size_type i = 1; i < inplace_capacity; ++i) {
+                limbs[i] = 0;
+            }
+        }
+    }
     m_size_and_sign = 1;
 }
 
@@ -1120,11 +1157,11 @@ constexpr basic_big_int<b, L, A>& basic_big_int<b, L, A>::operator=(const basic_
 
 template <std::size_t b, class L, class A>
 constexpr basic_big_int<b, L, A>& basic_big_int<b, L, A>::operator=(basic_big_int&& x) noexcept {
-    // Invariant: `assign_value` with `extra_space == 0` and an rvalue `src`
-    // never allocates -- either `*this` already fits `x.limb_count()`, or we
-    // steal `x`'s heap buffer, or `x` is inline and fits inline in `*this`.
-    // So the `noexcept` contract holds even though `assign_value` itself is
-    // not marked `noexcept`.
+    // A heap `x` whose buffer our allocator can free (propagating, always-equal, or equal) is
+    // stolen whatever our capacity, leaving `x` as inline zero. Otherwise `x` is copied into the
+    // existing storage, which allocates only if it does not fit. That copy needs an unequal,
+    // non-propagating allocator (e.g. a different pmr resource); it is the one case in which this
+    // `noexcept` operator can throw, which terminates.
     assign_value(std::move(x));
     return *this;
 }
@@ -1318,49 +1355,37 @@ constexpr bool basic_big_int<b, L, A>::unchecked_decrement_magnitude() {
     return borrow_in;
 }
 
+// Zero stays zero. The result is sized exactly: the extra top limb exists only when the top limb's
+// leading zeros cannot absorb the bit shift.
 template <std::size_t b, class L, class A>
 constexpr void basic_big_int<b, L, A>::shift_left(const shift_type s) {
     BEMAN_BIG_INT_DEBUG_ASSERT(s <= shift_max);
-    if (s == 0) {
+    const size_type n = limb_count();
+    if (s == 0 || limb_ptr()[n - 1] == 0) {
         return;
     }
 
-    const shift_type shifted_limbs = s / bits_per_limb;
-    const shift_type shifted_bits  = s % bits_per_limb;
+    const size_type whole = s / bits_per_limb;
+    const unsigned  bits  = static_cast<unsigned>(s % bits_per_limb);
+    const bool      extra = bits != 0 && static_cast<unsigned>(std::countl_zero(limb_ptr()[n - 1])) < bits;
+    const size_type new_n = n + whole + static_cast<size_type>(extra);
 
-    // Only reserve an extra limb for the bit-shift when the top limb doesn't enough leading zeros.
-    // `countl_zero` tells us exactly how many bits of headroom the current top limb provides.
-    const bool needs_extra_limb =
-        shifted_bits != 0 && static_cast<shift_type>(std::countl_zero(limb_ptr()[limb_count() - 1])) < shifted_bits;
-    reserve_representation(limb_count() + shifted_limbs + static_cast<size_type>(needs_extra_limb));
+    grow(new_n);
     limb_type* const limbs = limb_ptr();
-
-    if (shifted_limbs != 0) {
-        const auto current_count = limb_count();
-        std::copy_backward(limbs, limbs + current_count, limbs + current_count + shifted_limbs);
-        std::fill_n(limbs, static_cast<std::ptrdiff_t>(shifted_limbs), limb_type{0});
-        unchecked_set_limb_count(static_cast<std::uint32_t>(current_count + shifted_limbs));
-    }
-    if (shifted_bits != 0) {
-        const auto      current_count = limb_count();
-        const limb_type overflow      = limbs[current_count - 1] >> (bits_per_limb - shifted_bits);
-
-        // Shift all limbs in place, top to bottom.
-        // Each iteration reads limbs[i-1] (original) and limbs[i] (original), writes limbs[i].
-        // This avoids an out-of-bounds write
-        for (shift_type i = current_count - 1; i > shifted_limbs; --i) {
-            const detail::wide<limb_type> all_bits{.low_bits = limbs[i - 1], .high_bits = limbs[i]};
-            limbs[i] = detail::funnel_shl(all_bits, static_cast<unsigned int>(shifted_bits));
+    if (bits != 0) {
+        const limb_type out = detail::lshift_copy(limbs + whole, limbs, n, bits);
+        if (extra) {
+            limbs[n + whole] = out;
         }
-        limbs[shifted_limbs] <<= shifted_bits;
-
-        if (overflow != 0) {
-            limbs[current_count] = overflow;
-            unchecked_set_limb_count(static_cast<std::uint32_t>(current_count + 1));
-        }
+    } else {
+        std::copy_backward(limbs, limbs + n, limbs + n + whole);
     }
+    std::fill_n(limbs, whole, limb_type{0});
+    unchecked_set_limb_count(static_cast<std::uint32_t>(new_n));
 }
 
+// Floor division by `2^s`: a negative value whose discarded bits are not all zero gets its magnitude
+// incremented after the (truncating) magnitude shift.
 template <std::size_t b, class L, class A>
 constexpr void basic_big_int<b, L, A>::shift_right(const shift_type s) {
     BEMAN_BIG_INT_DEBUG_ASSERT(s <= shift_max);
@@ -1368,51 +1393,129 @@ constexpr void basic_big_int<b, L, A>::shift_right(const shift_type s) {
         return;
     }
 
-    const shift_type shifted_limbs = s / bits_per_limb;
-    const shift_type shifted_bits  = s % bits_per_limb;
-    limb_type* const limbs         = limb_ptr();
+    const size_type n     = limb_count();
+    const size_type whole = s / bits_per_limb;
+    const unsigned  bits  = static_cast<unsigned>(s % bits_per_limb);
+    const bool      neg   = is_negative();
 
-    // Shifting to the right has the effect of dividing by `pow(2, N)` rounded towards negative infinity.
-    // When we "discard" limbs, this has truncating rounding;
-    // for positive numbers that is already what we need, but requires adjustment for negative numbers.
-    // In that case, we need to figure out whether the result is inexact
-    // by detecting whether any nonzero bits are shifted out.
-    const bool needs_decrement = is_negative() && [&] {
-        for (shift_type i = 0; i < shifted_limbs; ++i) {
-            if (i >= limb_count()) {
-                return false;
-            }
-            if (limbs[i] != 0) {
-                return true;
-            }
+    if (whole >= n) {
+        // Everything is discarded: zero, or -1 for a negative value (which is nonzero, so bits were lost).
+        set_zero();
+        if (neg) {
+            limb_ptr()[0]   = 1;
+            m_size_and_sign = 0x8000'0001U;
         }
-        const auto shift_mask = (limb_type{1} << shifted_bits) - 1;
-        return shifted_limbs < limb_count() && (limbs[shifted_limbs] & shift_mask) != 0;
-    }();
+        return;
+    }
 
-    if (shifted_limbs != 0) {
-        const auto current_count = limb_count();
-        if (shifted_limbs >= current_count) {
-            limbs[0] = 0;
-            unchecked_set_limb_count(1);
-        } else {
-            std::shift_left(limbs, limbs + current_count, static_cast<std::ptrdiff_t>(shifted_limbs));
-            unchecked_set_limb_count(static_cast<std::uint32_t>(current_count - shifted_limbs));
+    limb_type* const limbs   = limb_ptr();
+    bool             inexact = false;
+    if (neg) {
+        for (size_type i = 0; i < whole && !inexact; ++i) {
+            inexact = limbs[i] != 0;
         }
     }
-    if (shifted_bits != 0) {
-        for (size_type i = 0; i + 1 < limb_count(); ++i) {
-            const detail::wide<limb_type> all_bits{.low_bits = limbs[i], .high_bits = limbs[i + 1]};
-            limbs[i] = detail::funnel_shr(all_bits, static_cast<unsigned int>(shifted_bits));
-        }
-        BEMAN_BIG_INT_DEBUG_ASSERT(limb_count() != 0);
-        limbs[limb_count() - 1] >>= shifted_bits;
+
+    const size_type new_n = n - whole;
+    if (bits != 0) {
+        inexact |= detail::rshift_copy(limbs, limbs + whole, new_n, bits) != 0;
+    } else if (whole != 0) {
+        std::copy(limbs + whole, limbs + n, limbs);
     }
-    unchecked_trim_magnitude();
-    if (needs_decrement) {
-        // See above for rounding considerations.
-        // Also note that we may be holding a negative zero right now,
-        // and increasing the magnitude converts that into `-1`.
+
+    size_type k = new_n;
+    while (k > 1 && limbs[k - 1] == 0) {
+        --k;
+    }
+    m_size_and_sign = (m_size_and_sign & 0x8000'0000U) | static_cast<std::uint32_t>(k);
+    clear_inline_tail(n);
+    if (neg && inexact) {
+        // A magnitude that shifted down to zero is a negative zero here; incrementing makes it -1.
+        unchecked_increment_magnitude();
+        BEMAN_BIG_INT_DEBUG_ASSERT(is_negative());
+    }
+}
+
+template <std::size_t b, class L, class A>
+constexpr void basic_big_int<b, L, A>::assign_shifted_left(const std::span<const uint_multiprecision_t> src,
+                                                           const bool                                   neg,
+                                                           const shift_type                             s) {
+    BEMAN_BIG_INT_DEBUG_ASSERT(s <= shift_max);
+    const size_type n = src.size();
+    if (src[n - 1] == 0) {
+        set_zero();
+        return;
+    }
+
+    const size_type old_count = limb_count();
+    const size_type whole     = s / bits_per_limb;
+    const unsigned  bits      = static_cast<unsigned>(s % bits_per_limb);
+    const bool      extra     = bits != 0 && static_cast<unsigned>(std::countl_zero(src[n - 1])) < bits;
+    const size_type new_n     = n + whole + static_cast<size_type>(extra);
+
+    limb_type* const limbs = storage_for_overwrite(new_n);
+    if (bits != 0) {
+        const limb_type out = detail::lshift_copy(limbs + whole, src.data(), n, bits);
+        if (extra) {
+            limbs[n + whole] = out;
+        }
+    } else {
+        std::copy_n(src.data(), n, limbs + whole);
+    }
+    std::fill_n(limbs, whole, limb_type{0});
+    m_size_and_sign = (static_cast<std::uint32_t>(neg) << 31) | static_cast<std::uint32_t>(new_n);
+    clear_inline_tail(old_count);
+}
+
+template <std::size_t b, class L, class A>
+constexpr void basic_big_int<b, L, A>::assign_shifted_right(const std::span<const uint_multiprecision_t> src,
+                                                            const bool                                   neg,
+                                                            const shift_type                             s) {
+    BEMAN_BIG_INT_DEBUG_ASSERT(s <= shift_max);
+    const size_type n     = src.size();
+    const size_type whole = s / bits_per_limb;
+    const unsigned  bits  = static_cast<unsigned>(s % bits_per_limb);
+
+    if (whole >= n) {
+        set_zero();
+        if (neg) {
+            limb_ptr()[0]   = 1;
+            m_size_and_sign = 0x8000'0001U;
+        }
+        return;
+    }
+
+    bool inexact = false;
+    if (neg) {
+        for (size_type i = 0; i < whole && !inexact; ++i) {
+            inexact = src[i] != 0;
+        }
+    }
+
+    // Size the result exactly (the source's top limb may shift away entirely) so a heap source whose
+    // shifted value fits inline does not allocate.
+    const size_type  old_count = limb_count();
+    const limb_type* from      = src.data() + whole;
+    size_type        k         = n - whole;
+    const bool       top_dies  = k > 1 && bits != 0 && (from[k - 1] >> bits) == 0;
+    k -= static_cast<size_type>(top_dies);
+    limb_type* const limbs = storage_for_overwrite(k);
+    if (bits != 0) {
+        inexact |= detail::rshift_copy(limbs, from, k, bits) != 0;
+        if (top_dies) {
+            // The vanished top limb still contributes its low bits to limb k - 1.
+            limbs[k - 1] |= static_cast<limb_type>(from[k] << (bits_per_limb - bits));
+        }
+    } else {
+        std::copy_n(from, k, limbs);
+    }
+
+    while (k > 1 && limbs[k - 1] == 0) {
+        --k;
+    }
+    m_size_and_sign = (static_cast<std::uint32_t>(neg) << 31) | static_cast<std::uint32_t>(k);
+    clear_inline_tail(old_count);
+    if (neg && inexact) {
         unchecked_increment_magnitude();
         BEMAN_BIG_INT_DEBUG_ASSERT(is_negative());
     }
@@ -1892,15 +1995,9 @@ constexpr detail::common_big_int_type<L, R> operator+(L&& x, R&& y) {
         r.add_in_place(x.representation(), x.is_negative());
         return r;
     } else if constexpr (form == detail::binary_op_form::copy_copy) {
-        // Use add_into which combines copy and addition allocations.
-        // Pre-order operands so the larger goes first — this lets the hot loop
-        // drop the `i < a.size()` bounds check on every iteration.
+        // `add_into` writes the sum straight into the fresh result: one allocation, one pass.
         Result r{detail::result_allocator<Result>(x, y)};
-        if (x.limb_count() >= y.limb_count()) {
-            r.add_into(x.representation(), x.is_negative(), y.representation(), y.is_negative());
-        } else {
-            r.add_into(y.representation(), y.is_negative(), x.representation(), x.is_negative());
-        }
+        r.add_into(x.representation(), x.is_negative(), y.representation(), y.is_negative());
         return r;
     } else if constexpr (form == detail::binary_op_form::move_int) {
         const auto y_limbs = detail::to_limbs(detail::uabs(y));
@@ -1913,16 +2010,14 @@ constexpr detail::common_big_int_type<L, R> operator+(L&& x, R&& y) {
         r.add_in_place(detail::to_fixed_span(x_limbs), detail::integer_signbit(x));
         return r;
     } else if constexpr (form == detail::binary_op_form::copy_int) {
-        Result r{detail::result_allocator<Result>(x, y)};
-        r.template assign_value<detail::allocator_propagation::no_propagate>(x, !x.is_representation_inplace());
+        Result     r{detail::result_allocator<Result>(x, y)};
         const auto y_limbs = detail::to_limbs(detail::uabs(y));
-        r.add_in_place(detail::to_fixed_span(y_limbs), detail::integer_signbit(y));
+        r.add_into(x.representation(), x.is_negative(), detail::to_fixed_span(y_limbs), detail::integer_signbit(y));
         return r;
     } else if constexpr (form == detail::binary_op_form::int_copy) {
-        Result r{detail::result_allocator<Result>(x, y)};
-        r.template assign_value<detail::allocator_propagation::no_propagate>(y, !y.is_representation_inplace());
+        Result     r{detail::result_allocator<Result>(x, y)};
         const auto x_limbs = detail::to_limbs(detail::uabs(x));
-        r.add_in_place(detail::to_fixed_span(x_limbs), detail::integer_signbit(x));
+        r.add_into(y.representation(), y.is_negative(), detail::to_fixed_span(x_limbs), detail::integer_signbit(x));
         return r;
     }
 }
@@ -1961,14 +2056,8 @@ constexpr detail::common_big_int_type<L, R> operator-(L&& x, R&& y) {
     } else if constexpr (form == detail::binary_op_form::copy_copy) {
         // Both lvalue `basic_big_int`s: fold `x + (-y)` into a fresh buffer in a
         // single pass via `add_into`, fusing the allocation with the subtract.
-        // Pre-order operands so the larger goes first — `add_into` relies on
-        // this to keep the hot loop free of a per-iteration bounds check.
         Result r{detail::result_allocator<Result>(x, y)};
-        if (x.limb_count() >= y.limb_count()) {
-            r.add_into(x.representation(), x.is_negative(), y.representation(), !y.is_negative());
-        } else {
-            r.add_into(y.representation(), !y.is_negative(), x.representation(), x.is_negative());
-        }
+        r.add_into(x.representation(), x.is_negative(), y.representation(), !y.is_negative());
         return r;
     } else if constexpr (form == detail::binary_op_form::move_int) {
         const auto y_limbs = detail::to_limbs(detail::uabs(y));
@@ -1982,17 +2071,14 @@ constexpr detail::common_big_int_type<L, R> operator-(L&& x, R&& y) {
         r.add_in_place(detail::to_fixed_span(x_limbs), detail::integer_signbit(x));
         return r;
     } else if constexpr (form == detail::binary_op_form::copy_int) {
-        Result r{detail::result_allocator<Result>(x, y)};
-        r.template assign_value<detail::allocator_propagation::no_propagate>(x, !x.is_representation_inplace());
+        Result     r{detail::result_allocator<Result>(x, y)};
         const auto y_limbs = detail::to_limbs(detail::uabs(y));
-        r.add_in_place(detail::to_fixed_span(y_limbs), !detail::integer_signbit(y));
+        r.add_into(x.representation(), x.is_negative(), detail::to_fixed_span(y_limbs), !detail::integer_signbit(y));
         return r;
     } else if constexpr (form == detail::binary_op_form::int_copy) {
-        Result r{detail::result_allocator<Result>(x, y)};
-        r.template assign_value<detail::allocator_propagation::no_propagate>(y, !y.is_representation_inplace());
-        r.negate();
+        Result     r{detail::result_allocator<Result>(x, y)};
         const auto x_limbs = detail::to_limbs(detail::uabs(x));
-        r.add_in_place(detail::to_fixed_span(x_limbs), detail::integer_signbit(x));
+        r.add_into(y.representation(), !y.is_negative(), detail::to_fixed_span(x_limbs), detail::integer_signbit(x));
         return r;
     }
 }
@@ -2104,17 +2190,9 @@ constexpr std::remove_cvref_t<T> operator<<(T&& x, const S s) {
         r.shift_left(shift);
         return r;
     } else if constexpr (form == detail::binary_op_form::copy_int) {
-        // lvalue: use assign_value with headroom so shift_left doesn't reallocate.
-        const shift_type shifted_limbs = shift / Result::bits_per_limb;
-        const shift_type shifted_bits  = shift % Result::bits_per_limb;
-        const bool       needs_extra =
-            shifted_bits != 0 &&
-            static_cast<shift_type>(std::countl_zero(x.limb_ptr()[x.limb_count() - 1])) < shifted_bits;
-        const std::size_t headroom = shifted_limbs + static_cast<std::size_t>(needs_extra);
-
+        // lvalue: build the shifted value straight into a fresh result, one pass.
         Result r{detail::result_allocator<Result>(x, s)};
-        r.template assign_value<detail::allocator_propagation::no_propagate>(x, headroom);
-        r.shift_left(shift);
+        r.assign_shifted_left(x.representation(), x.is_negative(), shift);
         return r;
     }
 }
@@ -2140,95 +2218,17 @@ constexpr std::remove_cvref_t<T> operator>>(T&& x, const S s) {
         r.shift_right(shift);
         return r;
     } else if constexpr (form == detail::binary_op_form::copy_int) {
-        // lvalue: copy then shift. Two fast paths avoid copying bits that are
-        // about to be discarded anyway
-        //
-        // First is the case where the value is discarded entirely
-        // All we need to do is copy the sign
-        //
-        // Second is the case where some of the value is discarded
-        // For positive values this is a simple copy what we need and make a final limb internal shift
-        // For negative values we need to account for the rounding at the end
-        //
-        // If neither of these situations applies, make a full copy and shift.
-
-        using limb_type = uint_multiprecision_t;
-
-        const shift_type shifted_limbs = shift / Result::bits_per_limb;
-        const shift_type shifted_bits  = shift % Result::bits_per_limb;
-        const shift_type x_bits        = static_cast<shift_type>(x.size());
-
+        // lvalue: shift straight from the source into a fresh result, one pass.
+        // Shifting out every bit leaves just the sign (-1 or 0), without touching the limbs.
         const auto alloc = detail::result_allocator<Result>(x, s);
-
-        // Case 1: Everything is discarded except the sign
-        if (shift >= x_bits) {
+        if (shift >= static_cast<shift_type>(x.size())) {
             if (x.is_negative()) {
                 return Result{-1, alloc};
             }
             return Result{alloc};
         }
-
-        const limb_type* const src_limbs = x.limb_ptr();
-        const shift_type       src_count = static_cast<shift_type>(x.limb_count());
-
-        // Number of limbs the shifted result actually occupies. Smaller than
-        // `src_count` exactly when at least one source limb (or the top
-        // limb's surviving bits) shrinks away.
-        const auto new_count = detail::div_to_pos_inf(x_bits - shift, static_cast<shift_type>(Result::bits_per_limb));
-
-        // Case 2: Result is strictly smaller than the source
-        if (new_count < src_count) {
-            const shift_type src_offset = shifted_limbs;
-
-            Result r{alloc};
-            r.reserve_representation(new_count);
-            limb_type* const dst = r.limb_ptr();
-
-            if (shifted_bits == 0) {
-                std::copy_n(src_limbs + src_offset, new_count, dst);
-            } else {
-                // Funnel-shift directly from source limbs into `dst`.
-                // Handles the case where we can theoretically go from heap -> inline storage with our result
-                for (shift_type i = 0; i < new_count; ++i) {
-                    const shift_type src_idx = src_offset + i;
-                    const limb_type  low     = src_limbs[src_idx];
-                    const limb_type  high    = (src_idx + 1 < src_count) ? src_limbs[src_idx + 1] : limb_type{0};
-                    const detail::wide<limb_type> all_bits{.low_bits = low, .high_bits = high};
-                    dst[i] = detail::funnel_shr(all_bits, static_cast<unsigned int>(shifted_bits));
-                }
-            }
-            r.unchecked_set_limb_count(static_cast<std::uint32_t>(new_count));
-
-            if (x.is_negative()) {
-                // Mirror `shift_right`'s rounding-toward-negative-infinity
-                // We have to account even for the bits that will never be copied
-                bool discarded_nonzero = false;
-                for (shift_type i = 0; i < src_offset; ++i) {
-                    if (src_limbs[i] != 0) {
-                        discarded_nonzero = true;
-                        break;
-                    }
-                }
-
-                if (!discarded_nonzero && shifted_bits != 0) {
-                    const auto mask = static_cast<limb_type>((limb_type{1} << shifted_bits) - 1);
-                    if ((src_limbs[src_offset] & mask) != 0) {
-                        discarded_nonzero = true;
-                    }
-                }
-
-                r.unchecked_set_sign(true);
-                if (discarded_nonzero) {
-                    r.unchecked_increment_magnitude();
-                }
-            }
-            return r;
-        }
-
-        // Case 3: Make a full copy and shift
         Result r{alloc};
-        r.template assign_value<detail::allocator_propagation::no_propagate>(x);
-        r.shift_right(shift);
+        r.assign_shifted_right(x.representation(), x.is_negative(), shift);
         return r;
     }
 }
@@ -2360,295 +2360,187 @@ basic_big_int<b, L, A>::compare_limbs(const std::span<const uint_multiprecision_
 // Adds `(other, other_neg)` into `*this` in place. Shared core for `operator+` and
 // `operator-`: the caller chooses the destination (an rvalue operand's storage or a
 // copy of an lvalue operand) and supplies the other side as a limb span + sign.
+// `other` may alias our own limbs (`x += x`, `x -= x`, `x += -x`): such an operand is never longer than
+// `*this`, so no growth happens before it has been read.
 template <std::size_t b, class L, class A>
 template <std::size_t extent_other>
-constexpr void basic_big_int<b, L, A>::add_in_place(const std::span<const uint_multiprecision_t, extent_other> other,
-                                                    const bool other_neg) {
-    const bool this_neg = is_negative();
+constexpr void
+basic_big_int<b, L, A>::add_in_place(const std::span<const uint_multiprecision_t, extent_other> other_in,
+                                     const bool                                                 other_neg) {
+    using limb_view              = std::span<const uint_multiprecision_t>;
+    const limb_view     other    = other_in.first(detail::trimmed_size_span(other_in));
+    const bool          this_neg = is_negative();
+    const std::size_t   n        = limb_count();
+    const std::size_t   m        = other.size();
+    const std::uint32_t sign_bit = m_size_and_sign & 0x8000'0000U;
+
+    if (n == 1 && m == 1) {
+        // Single-limb operands: one add or subtract, no comparison of spans.
+        const limb_type x = limb_ptr()[0];
+        const limb_type y = other[0];
+        if (this_neg == other_neg) {
+            const auto [sum, carry] = detail::carrying_add(x, y, false);
+            limb_ptr()[0]           = sum;
+            if (carry) {
+                grow(2);
+                limb_ptr()[1]   = limb_type{1};
+                m_size_and_sign = sign_bit | 2U;
+            }
+        } else if (x == y) {
+            set_zero();
+        } else {
+            limb_ptr()[0]   = x > y ? x - y : y - x;
+            m_size_and_sign = (static_cast<std::uint32_t>(x > y ? this_neg : other_neg) << 31) | 1U;
+        }
+        return;
+    }
 
     if (this_neg == other_neg) {
-        // Same sign: add magnitudes limb-by-limb. Target sign stays `this_neg`.
-        const std::uint32_t old_count = limb_count();
-        const std::size_t   big       = std::max<std::size_t>(old_count, other.size());
-
-        // `grow(big)` only allocates when `big` exceeds our current capacity;
-        // otherwise it's a no-op and we stay in our existing buffer.
-        grow(big);
+        // Same sign: the magnitude grows, the sign stays.
+        if (m <= n) {
+            limb_type* limbs = limb_ptr();
+            const bool carry = detail::add_n_tail({limbs, n}, {limbs, n}, other);
+            if (carry) {
+                grow(n + 1);
+                limbs           = limb_ptr();
+                limbs[n]        = limb_type{1};
+                m_size_and_sign = sign_bit | static_cast<std::uint32_t>(n + 1);
+            }
+            return;
+        }
+        // `other` is longer, so it cannot alias us and growing first is safe.
+        grow(m);
         limb_type* limbs = limb_ptr();
-
-        bool carry = false;
-        for (std::size_t i = 0; i < big; ++i) {
-            const limb_type li            = i < old_count ? limbs[i] : limb_type{0};
-            const limb_type ri            = i < other.size() ? other[i] : limb_type{0};
-            const auto [r_value, r_carry] = detail::carrying_add(li, ri, carry);
-            limbs[i]                      = r_value;
-            carry                         = r_carry;
-        }
-        unchecked_set_limb_count(static_cast<std::uint32_t>(big));
-
-        // Only allocate for the extra top limb if the ripple carry has actually escaped.
+        const bool carry = detail::add_n_tail({limbs, m}, other, {limbs, n});
+        m_size_and_sign  = sign_bit | static_cast<std::uint32_t>(m);
         if (carry) {
-            grow(big + 1);
-            limb_ptr()[big] = limb_type{1};
-            unchecked_set_limb_count(static_cast<std::uint32_t>(big + 1));
+            // `grow` only keeps the limbs the count covers, so the count goes first.
+            grow(m + 1);
+            limb_ptr()[m]   = limb_type{1};
+            m_size_and_sign = sign_bit | static_cast<std::uint32_t>(m + 1);
         }
-
-        unchecked_set_sign(this_neg && !unchecked_is_magnitude_zero());
         return;
     }
 
-    // Differing signs: subtract smaller magnitude from larger; take the sign of the
-    // larger-magnitude operand.
-    const auto magnitude_order = detail::compare_limb_magnitudes(representation(), other);
-
-    if (std::is_gteq(magnitude_order)) {
-        // `|*this| >= |other|`: compute `*this - other` in place. Target sign is `this_neg`.
-        const std::uint32_t n     = limb_count();
-        limb_type* const    limbs = limb_ptr();
-
-        bool borrow = false;
-        for (std::size_t i = 0; i < n; ++i) {
-            const limb_type li             = limbs[i];
-            const limb_type si             = i < other.size() ? other[i] : limb_type{0};
-            const auto [r_value, r_borrow] = detail::borrowing_sub(li, si, borrow);
-            limbs[i]                       = r_value;
-            borrow                         = r_borrow;
-        }
-        // Having picked `*this` as the larger operand, the final borrow must be zero.
-        BEMAN_BIG_INT_DEBUG_ASSERT(!borrow);
-
-        unchecked_trim_magnitude();
-        unchecked_set_sign(this_neg && !unchecked_is_magnitude_zero());
+    // Differing signs: subtract the smaller magnitude from the larger; the larger one's sign wins.
+    const auto order = detail::compare_limb_magnitudes(limb_view{limb_ptr(), n}, other);
+    if (std::is_eq(order)) {
+        set_zero();
         return;
     }
 
-    // `|other| > |*this|`: compute `other - *this` into our buffer. Target sign is `other_neg`.
-    const std::uint32_t old_count = limb_count();
-    const std::size_t   n         = other.size();
-
-    // Subtraction can never produce more limbs than the larger operand, so this grow is tight.
-    grow(n);
-    limb_type* const limbs = limb_ptr();
-
-    bool borrow = false;
-    for (std::size_t i = 0; i < n; ++i) {
-        // Read our old limb at index `i` *before* overwriting it, so this loop is
-        // aliasing-safe if `other` happens to point into our own limb buffer.
-        const limb_type si             = i < old_count ? limbs[i] : limb_type{0};
-        const limb_type oi             = other[i];
-        const auto [r_value, r_borrow] = detail::borrowing_sub(oi, si, borrow);
-        limbs[i]                       = r_value;
-        borrow                         = r_borrow;
+    std::size_t           k;
+    bool                  result_neg;
+    limb_type*            limbs;
+    [[maybe_unused]] bool borrow;
+    if (std::is_gt(order)) {
+        // `|*this| > |other|`: subtract in place, nothing past `other` is touched once the borrow dies.
+        limbs      = limb_ptr();
+        borrow     = detail::sub_n_tail({limbs, n}, {limbs, n}, other);
+        k          = n;
+        result_neg = this_neg;
+    } else {
+        // `|other| > |*this|` (so `m >= n`): `other - *this` over our own limbs, reading each of ours first.
+        grow(m);
+        limbs      = limb_ptr();
+        borrow     = detail::sub_n_tail({limbs, m}, other, {limbs, n});
+        k          = m;
+        result_neg = other_neg;
     }
-    // Having picked `other` as the larger operand, the final borrow must be zero.
     BEMAN_BIG_INT_DEBUG_ASSERT(!borrow);
-    unchecked_set_limb_count(static_cast<std::uint32_t>(n));
-    unchecked_trim_magnitude();
-
-    // `|other| > |*this|` strictly, so the magnitude is guaranteed nonzero.
-    unchecked_set_sign(other_neg && !unchecked_is_magnitude_zero());
+    while (k > 1 && limbs[k - 1] == 0) {
+        --k;
+    }
+    // Trimmed limbs are zero, so the inline tail needs no clearing.
+    m_size_and_sign = (static_cast<std::uint32_t>(result_neg) << 31) | static_cast<std::uint32_t>(k);
 }
 
 // Computes `(a, a_neg) + (b, b_neg)` directly into `*this`.
-// Fuses copy and potential second allocation
-// Precondition: `a.size() >= b.size()`
+// Precondition: `*this` shares no storage with `a` or `b`.
+// Either operand order is accepted, and operands may carry untrimmed high zero limbs.
 template <std::size_t b, class L, class A>
 template <std::size_t extent_a, std::size_t extent_b>
-constexpr void basic_big_int<b, L, A>::add_into(const std::span<const uint_multiprecision_t, extent_a> a,
-                                                const bool                                             a_neg,
-                                                const std::span<const uint_multiprecision_t, extent_b> b_span,
-                                                const bool                                             b_neg) {
-    BEMAN_BIG_INT_DEBUG_ASSERT(a.size() >= b_span.size());
+constexpr void basic_big_int<b, L, A>::add_into(const std::span<const uint_multiprecision_t, extent_a> a_in,
+                                                bool                                                   a_neg,
+                                                const std::span<const uint_multiprecision_t, extent_b> b_in,
+                                                bool                                                   b_neg) {
+    using limb_view = std::span<const uint_multiprecision_t>;
+    limb_view a     = a_in.first(detail::trimmed_size_span(a_in));
+    limb_view bs    = b_in.first(detail::trimmed_size_span(b_in));
+    if (a.size() < bs.size()) {
+        std::swap(a, bs);
+        std::swap(a_neg, b_neg);
+    }
+    if (a.size() == 1) { // both single limbs (a is the longer operand)
+        const limb_type x         = a[0];
+        const limb_type y         = bs[0];
+        const size_type old_count = limb_count();
+        if (a_neg == b_neg) {
+            const auto [sum, carry] = detail::carrying_add(x, y, false);
+            limb_type* const limbs  = storage_for_overwrite(carry ? 2 : 1);
+            limbs[0]                = sum;
+            if (carry) {
+                limbs[1] = limb_type{1};
+            }
+            m_size_and_sign = (static_cast<std::uint32_t>(a_neg) << 31) | (carry ? 2U : 1U);
+        } else if (x == y) {
+            set_zero();
+            return;
+        } else {
+            storage_for_overwrite(1)[0] = x > y ? x - y : y - x;
+            m_size_and_sign             = (static_cast<std::uint32_t>(x > y ? a_neg : b_neg) << 31) | 1U;
+        }
+        clear_inline_tail(old_count);
+        return;
+    }
+
+    const std::size_t old_count = limb_count();
+    const std::size_t big       = a.size();
+    const std::size_t cap       = is_representation_inplace() ? inplace_capacity : m_capacity;
 
     if (a_neg == b_neg) {
-        // Same sign: add magnitudes.
-        // Sign of the result is `a_neg`.
-        const std::size_t big     = a.size();
-        const std::size_t eff_cap = is_representation_inplace() ? inplace_capacity : m_capacity;
-
-        // `common` is the range where both operands contribute,
-        // beyond it the remaining `a[i]` limbs just propagate the carry.
-        const std::size_t common = b_span.size();
-
-        // Unrolled addition loop
-        const auto run_add = [&](auto store) {
-            bool        carry = false;
-            std::size_t i     = 0;
-            for (; i + 4 <= common; i += 4) {
-                const auto [v0, c0] = detail::carrying_add(a[i + 0], b_span[i + 0], carry);
-                const auto [v1, c1] = detail::carrying_add(a[i + 1], b_span[i + 1], c0);
-                const auto [v2, c2] = detail::carrying_add(a[i + 2], b_span[i + 2], c1);
-                const auto [v3, c3] = detail::carrying_add(a[i + 3], b_span[i + 3], c2);
-                store(i + 0, v0);
-                store(i + 1, v1);
-                store(i + 2, v2);
-                store(i + 3, v3);
-                carry = c3;
-            }
-            for (; i < common; ++i) {
-                const auto [v, c] = detail::carrying_add(a[i], b_span[i], carry);
-                store(i, v);
-                carry = c;
-            }
-            // Carry-propagation tail over `a[common..big)`. Once the ripple
-            // stops carrying, the rest is a straight copy of `a`'s limbs.
-            while (i < big && carry) {
-                const auto [v, c] = detail::carrying_add(a[i], limb_type{0}, true);
-                store(i, v);
-                carry = c;
-                ++i;
-            }
-            for (; i < big; ++i) {
-                store(i, a[i]);
-            }
-            return carry;
-        };
-
-        if (big > inplace_capacity && big + 1 > eff_cap) {
-            // Heap allocation required for the result body.
-            // Write directly into the raw buffer via `construct_at`,
-            // skipping the `copy_n_to_allocation` zero-fill of the portion we're about to overwrite.
-            // Reserve `big + 1` so the carry limb folds into the same allocation.
-            const alloc_result allocation = alloc_limbs(big + 1);
-            limb_type* const   limbs      = allocation.ptr;
-
-            const bool carry = run_add([limbs](std::size_t idx, limb_type v) { std::construct_at(limbs + idx, v); });
-
-            std::construct_at(limbs + big, carry ? limb_type{1} : limb_type{0});
-            for (std::size_t i = big + 1; i < allocation.count; ++i) {
-                std::construct_at(limbs + i);
-            }
-
-            free_storage();
-            m_capacity     = static_cast<std::uint32_t>(allocation.count);
-            m_storage.data = allocation.ptr;
-            unchecked_set_limb_count(static_cast<std::uint32_t>(carry ? big + 1 : big));
-        } else {
-            // Either we fit inline, or we already own a heap buffer big enough to hold the result.
-            // Reuse it and let `grow` (almost always a no-op) handle the rare carry-out grow call.
-            limb_type* const limbs = limb_ptr();
-
-            const bool carry = run_add([limbs](std::size_t idx, limb_type v) { limbs[idx] = v; });
-            unchecked_set_limb_count(static_cast<std::uint32_t>(big));
-
-            if (carry) {
-                grow(big + 1);
-                limb_ptr()[big] = limb_type{1};
-                unchecked_set_limb_count(static_cast<std::uint32_t>(big + 1));
-            }
+        // Same sign: the sign of the result is `a_neg` (the magnitude is nonzero when that is negative).
+        // Ask for the carry limb only when the body alone would force an allocation anyway.
+        limb_type* const limbs = storage_for_overwrite(big > cap ? big + 1 : big);
+        const bool       carry = detail::add_n_tail({limbs, big}, a, bs);
+        const auto       sign  = static_cast<std::uint32_t>(a_neg) << 31;
+        m_size_and_sign        = sign | static_cast<std::uint32_t>(big);
+        if (carry) {
+            // `grow` only keeps the limbs the count covers, so the count goes first.
+            grow(big + 1);
+            limb_ptr()[big] = limb_type{1};
+            m_size_and_sign = sign | static_cast<std::uint32_t>(big + 1);
         }
-
-        unchecked_set_sign(a_neg && !unchecked_is_magnitude_zero());
+        clear_inline_tail(old_count);
         return;
     }
 
     // Differing signs: subtract the smaller magnitude from the larger.
-    const auto magnitude_order = detail::compare_limb_magnitudes(a, b_span);
-
-    // Both subtraction branches mirror the same-sign allocation strategy
-    const std::size_t eff_cap = is_representation_inplace() ? inplace_capacity : m_capacity;
-
-    const auto finalize_trim_and_sign =
-        [this](const limb_type* const limbs, const std::size_t n, const bool target_neg) {
-            unchecked_set_limb_count(static_cast<std::uint32_t>(n));
-            while (limb_count() > 1 && limbs[limb_count() - 1] == 0) {
-                unchecked_set_limb_count(limb_count() - 1);
-            }
-            unchecked_set_sign(target_neg && !unchecked_is_magnitude_zero());
-        };
-
-    // Unrolled subtract
-    const auto run_sub = [&](auto larger, auto smaller, auto store, const std::size_t total) {
-        const std::size_t common = smaller.size();
-        bool              borrow = false;
-        std::size_t       i      = 0;
-        for (; i + 4 <= common; i += 4) {
-            const auto [v0, b0] = detail::borrowing_sub(larger[i + 0], smaller[i + 0], borrow);
-            const auto [v1, b1] = detail::borrowing_sub(larger[i + 1], smaller[i + 1], b0);
-            const auto [v2, b2] = detail::borrowing_sub(larger[i + 2], smaller[i + 2], b1);
-            const auto [v3, b3] = detail::borrowing_sub(larger[i + 3], smaller[i + 3], b2);
-            store(i + 0, v0);
-            store(i + 1, v1);
-            store(i + 2, v2);
-            store(i + 3, v3);
-            borrow = b3;
-        }
-        for (; i < common; ++i) {
-            const auto [v, br] = detail::borrowing_sub(larger[i], smaller[i], borrow);
-            store(i, v);
-            borrow = br;
-        }
-        while (i < total && borrow) {
-            const auto [v, br] = detail::borrowing_sub(larger[i], limb_type{0}, true);
-            store(i, v);
-            borrow = br;
-            ++i;
-        }
-        for (; i < total; ++i) {
-            store(i, larger[i]);
-        }
-        return borrow;
-    };
-
-    if (std::is_gteq(magnitude_order)) {
-        // `|a| >= |b|`: compute `a - b` into our buffer.
-        // Target sign is `a_neg`.
-        const std::size_t n = a.size();
-
-        if (n > inplace_capacity && n > eff_cap) {
-            const alloc_result allocation = alloc_limbs(n);
-            limb_type* const   limbs      = allocation.ptr;
-
-            [[maybe_unused]] const bool borrow =
-                run_sub(a, b_span, [limbs](std::size_t idx, limb_type v) { std::construct_at(limbs + idx, v); }, n);
-            BEMAN_BIG_INT_DEBUG_ASSERT(!borrow);
-            for (std::size_t i = n; i < allocation.count; ++i) {
-                std::construct_at(limbs + i);
-            }
-
-            free_storage();
-            m_capacity     = static_cast<std::uint32_t>(allocation.count);
-            m_storage.data = allocation.ptr;
-            finalize_trim_and_sign(limbs, n, a_neg);
-        } else {
-            limb_type* const            limbs = limb_ptr();
-            [[maybe_unused]] const bool borrow =
-                run_sub(a, b_span, [limbs](std::size_t idx, limb_type v) { limbs[idx] = v; }, n);
-            BEMAN_BIG_INT_DEBUG_ASSERT(!borrow);
-            finalize_trim_and_sign(limbs, n, a_neg);
-        }
+    const auto order = detail::compare_limb_magnitudes(a, bs);
+    if (std::is_eq(order)) {
+        set_zero();
         return;
     }
+    const bool      a_larger   = std::is_gt(order);
+    const limb_view larger     = a_larger ? a : bs;
+    const limb_view smaller    = a_larger ? bs : a;
+    const bool      result_neg = a_larger ? a_neg : b_neg;
 
-    // `|b| > |a|`: compute `b - a` into our buffer.
-    // Target sign is `b_neg`.
-    const std::size_t n = b_span.size();
-
-    if (n > inplace_capacity && n > eff_cap) {
-        const alloc_result allocation = alloc_limbs(n);
-        limb_type* const   limbs      = allocation.ptr;
-
-        [[maybe_unused]] const bool borrow =
-            run_sub(b_span, a, [limbs](std::size_t idx, limb_type v) { std::construct_at(limbs + idx, v); }, n);
-        BEMAN_BIG_INT_DEBUG_ASSERT(!borrow);
-        for (std::size_t i = n; i < allocation.count; ++i) {
-            std::construct_at(limbs + i);
-        }
-
-        free_storage();
-        m_capacity     = static_cast<std::uint32_t>(allocation.count);
-        m_storage.data = allocation.ptr;
-        finalize_trim_and_sign(limbs, n, b_neg);
-    } else {
-        limb_type* const            limbs = limb_ptr();
-        [[maybe_unused]] const bool borrow =
-            run_sub(b_span, a, [limbs](std::size_t idx, limb_type v) { limbs[idx] = v; }, n);
-        BEMAN_BIG_INT_DEBUG_ASSERT(!borrow);
-        finalize_trim_and_sign(limbs, n, b_neg);
+    std::size_t                 k      = larger.size();
+    limb_type* const            limbs  = storage_for_overwrite(k);
+    [[maybe_unused]] const bool borrow = detail::sub_n_tail({limbs, k}, larger, smaller);
+    BEMAN_BIG_INT_DEBUG_ASSERT(!borrow);
+    while (k > 1 && limbs[k - 1] == 0) {
+        --k;
     }
+    m_size_and_sign = (static_cast<std::uint32_t>(result_neg) << 31) | static_cast<std::uint32_t>(k);
+    clear_inline_tail(old_count);
 }
 
-// Computes `a * b` and stores the result into `*this`.
+// Computes `a * b` and stores the result into `*this`. The operands must not alias `*this`.
+// The product is written straight into `*this`'s storage (the multiply dispatchers need no pre-zeroed
+// result); a product one limb past the inline capacity is formed on the stack at run time, so that a
+// value that trims to fit inline never allocates.
 template <std::size_t b, class L, class A>
 template <std::size_t extent_a, std::size_t extent_b>
 constexpr void basic_big_int<b, L, A>::multiply_into(const std::span<const uint_multiprecision_t, extent_a> a,
@@ -2665,38 +2557,31 @@ constexpr void basic_big_int<b, L, A>::multiply_into(const std::span<const uint_
     }
 
     const std::size_t result_size = a_trimmed.size() + b_trimmed.size();
+    const size_type   old_count   = limb_count();
 
-    // Stack-buffer fast path: when both operand magnitudes fit in inplace storage,
-    // the product fits in `2 * inplace_capacity` limbs.
-    // Use a small stack buffer of limited size to try and keep things in inplace storage
-    // without blowing the stack
-    constexpr size_type stack_buf_limit = 64;
-    constexpr size_type stack_buf_size  = 2 * inplace_capacity;
-    if constexpr (stack_buf_size <= stack_buf_limit) {
-        if (a_trimmed.size() <= inplace_capacity && b_trimmed.size() <= inplace_capacity) {
-            limb_type                  stack_buf[stack_buf_size]{};
-            const std::span<limb_type> stack_span{stack_buf, result_size};
-            const std::size_t          sig = detail::multiply_dispatch(stack_span, a_trimmed, b_trimmed, m_alloc);
-            if (sig > inplace_capacity) {
-                grow(sig);
+    // Both operands are nonzero, so the product is nonzero and its sign is the xor of the operand signs.
+    if constexpr (inplace_capacity + 1 <= 64) {
+        if BEMAN_BIG_INT_IS_NOT_CONSTEVAL {
+            if (result_size == inplace_capacity + 1) {
+                limb_type         stack_buf[inplace_capacity + 1];
+                const std::size_t sig = detail::multiply_dispatch(
+                    std::span<limb_type>{stack_buf, result_size}, a_trimmed, b_trimmed, m_alloc);
+                limb_type* const dst = storage_for_overwrite(sig);
+                std::copy_n(stack_buf, sig, dst);
+                unchecked_set_limb_count(static_cast<std::uint32_t>(sig));
+                clear_inline_tail(old_count);
+                unchecked_set_sign(a_neg != b_neg);
+                return;
             }
-            auto* const dst = limb_ptr();
-            for (std::size_t i = 0; i < sig; ++i) {
-                dst[i] = stack_buf[i];
-            }
-            unchecked_set_limb_count(static_cast<std::uint32_t>(sig));
-            unchecked_set_sign(a_neg != b_neg && !unchecked_is_magnitude_zero());
-            return;
         }
     }
 
-    grow(result_size);
-    std::fill_n(limb_ptr(), result_size, limb_type{0});
-
-    std::span<uint_multiprecision_t> result_span{limb_ptr(), result_size};
-    const std::size_t                sig = detail::multiply_dispatch(result_span, a_trimmed, b_trimmed, m_alloc);
+    limb_type* const  dst = storage_for_overwrite(result_size);
+    const std::size_t sig =
+        detail::multiply_dispatch(std::span<limb_type>{dst, result_size}, a_trimmed, b_trimmed, m_alloc);
     unchecked_set_limb_count(static_cast<std::uint32_t>(sig));
-    unchecked_set_sign(a_neg != b_neg && !unchecked_is_magnitude_zero());
+    clear_inline_tail(old_count);
+    unchecked_set_sign(a_neg != b_neg);
 }
 
 template <std::size_t b, class L, class A>
@@ -2845,6 +2730,68 @@ constexpr auto basic_big_int<b, L, A>::operator-=(T&& rhs) -> basic_big_int&
     return *this;
 }
 
+// Multiplies in place, keeping the allocator and, below the large-product threshold, the capacity.
+template <std::size_t b, class L, class A>
+template <std::size_t extent_b>
+constexpr void basic_big_int<b, L, A>::multiply_in_place(const std::span<const uint_multiprecision_t, extent_b> b_span,
+                                                         const bool b_neg) {
+    const std::span<const uint_multiprecision_t> a_all{limb_ptr(), limb_count()};
+    const auto                                   a_trimmed = a_all.first(detail::trimmed_size_span(a_all));
+    const auto                                   b_trimmed = b_span.first(detail::trimmed_size_span(b_span));
+
+    if (detail::is_span_zero(a_trimmed) || detail::is_span_zero(b_trimmed)) {
+        set_zero();
+        return;
+    }
+
+    const bool        result_neg = is_negative() != b_neg;
+    const std::size_t la         = a_trimmed.size();
+    const std::size_t lb         = b_trimmed.size();
+
+    if (lb == 1) {
+        // `b` may alias our limbs, so take its value before anything moves.
+        const limb_type mul   = b_trimmed[0];
+        limb_type*      limbs = limb_ptr();
+        limb_type       carry = 0;
+        for (std::size_t i = 0; i < la; ++i) {
+            const auto [lo, hi] = detail::widening_mul(limbs[i], mul);
+            const auto [sum, c] = detail::carrying_add(lo, carry);
+            limbs[i]            = sum;
+            carry               = hi + static_cast<limb_type>(c);
+        }
+        if (carry != 0) {
+            grow(la + 1);
+            limb_ptr()[la] = carry;
+            unchecked_set_limb_count(static_cast<std::uint32_t>(la + 1));
+        }
+        unchecked_set_sign(result_neg);
+        return;
+    }
+
+    const std::size_t   result_size = la + lb;
+    constexpr size_type stack_limbs = 64;
+    if BEMAN_BIG_INT_IS_NOT_CONSTEVAL {
+        if (result_size <= stack_limbs) {
+            limb_type         stack_buf[stack_limbs];
+            const std::size_t sig =
+                detail::multiply_dispatch(std::span<limb_type>{stack_buf, result_size}, a_trimmed, b_trimmed, m_alloc);
+            // The operands are dead now, so growth may release the old buffer.
+            const size_type  old_count = limb_count();
+            limb_type* const dst       = storage_for_overwrite(sig);
+            std::copy_n(stack_buf, sig, dst);
+            unchecked_set_limb_count(static_cast<std::uint32_t>(sig));
+            clear_inline_tail(old_count);
+            unchecked_set_sign(result_neg);
+            return;
+        }
+    }
+
+    // Large product: build it in a fresh buffer, then adopt that buffer. `*this` is untouched if this throws.
+    basic_big_int product{m_alloc};
+    product.multiply_into(a_trimmed, is_negative(), b_trimmed, b_neg);
+    *this = std::move(product);
+}
+
 // Compound multiplication assignment.
 template <std::size_t b, class L, class A>
 template <class T>
@@ -2852,30 +2799,82 @@ constexpr auto basic_big_int<b, L, A>::operator*=(T&& rhs) -> basic_big_int&
     requires detail::common_big_int_type_with<T, basic_big_int>
 {
     if constexpr (detail::is_basic_big_int_v<std::remove_cvref_t<T>>) {
-        // Move *this to a temp so the old limbs become a read-only input,
-        // then multiply into a new *this.
-        const basic_big_int temp = std::move(*this);
-        *this                    = basic_big_int{};
-        // `rhs` may alias `*this` (e.g. `y *= y`).
-        // After the move, `rhs` still references the moved-from destination, so read both operands from `temp`.
-        if (std::addressof(rhs) == this) {
-            multiply_into(temp.representation(), temp.is_negative(), temp.representation(), temp.is_negative());
-            return *this;
-        }
-        multiply_into(temp.representation(), temp.is_negative(), rhs.representation(), rhs.is_negative());
+        // `rhs` may be `*this`: multiply_in_place reads both operands before writing.
+        multiply_in_place(rhs.representation(), rhs.is_negative());
     } else {
-        const basic_big_int temp = std::move(*this);
-        *this                    = basic_big_int{};
-        const auto rhs_limbs     = detail::to_limbs(detail::uabs(rhs));
-        multiply_into(
-            temp.representation(), temp.is_negative(), detail::to_fixed_span(rhs_limbs), detail::integer_signbit(rhs));
+        const auto rhs_limbs = detail::to_limbs(detail::uabs(rhs));
+        multiply_in_place(detail::to_fixed_span(rhs_limbs), detail::integer_signbit(rhs));
     }
     return *this;
 }
 
+template <std::size_t b, class L, class A>
+template <std::size_t extent_b>
+constexpr bool
+basic_big_int<b, L, A>::divide_in_place_small(const std::span<const uint_multiprecision_t, extent_b> divisor,
+                                              const bool                                             divisor_neg,
+                                              const detail::division_op                              op) {
+    if BEMAN_BIG_INT_IS_NOT_CONSTEVAL {
+        const std::span<const uint_multiprecision_t> dividend_all{limb_ptr(), limb_count()};
+        const auto        dividend = dividend_all.first(detail::trimmed_size_span(dividend_all));
+        const auto        d        = divisor.first(detail::trimmed_size_span(divisor));
+        const std::size_t n        = dividend.size();
+        const std::size_t m        = d.size();
+        if (m < 2 || n < m || detail::is_span_zero(dividend) || !detail::divide_takes_schoolbook(n, m)) {
+            return false;
+        }
+        const std::size_t q_cap = n - m + 1;
+        const std::size_t r_cap = n + 1;
+        const std::size_t need =
+            detail::divide_schoolbook_storage_size(n, m, true) + (op == detail::division_op::rem ? q_cap : 0);
+        if (need > detail::small_division_stack_limbs) {
+            return false;
+        }
+
+        limb_type                      stack_buf[detail::small_division_stack_limbs];
+        detail::scratch_allocator_base scratch(stack_buf, detail::small_division_stack_limbs);
+        limb_type* const               limbs     = limb_ptr();
+        const size_type                old_count = limb_count();
+        if (op == detail::division_op::div) {
+            // The schoolbook kernel copies the dividend into scratch before its first quotient write.
+            const std::span<uint_multiprecision_t> quot{limbs, q_cap};
+            detail::divide_dispatch_q(quot, dividend, d, scratch, m_alloc);
+            const std::size_t qsize = detail::trimmed_size_span(std::span<const uint_multiprecision_t>{limbs, q_cap});
+            unchecked_set_limb_count(static_cast<std::uint32_t>(qsize));
+            clear_inline_tail(old_count);
+            unchecked_set_sign(is_negative() != divisor_neg && !unchecked_is_magnitude_zero());
+        } else {
+            const bool                             neg       = is_negative();
+            const std::span<uint_multiprecision_t> quot_span = scratch.allocate(q_cap);
+            const std::span<uint_multiprecision_t> rem_span  = scratch.allocate(r_cap);
+            detail::divide_dispatch(quot_span, rem_span, dividend, d, scratch, m_alloc);
+            const std::size_t rsize = detail::trimmed_size_span(std::span<const uint_multiprecision_t>{rem_span});
+            std::copy_n(rem_span.data(), rsize, limbs);
+            unchecked_set_limb_count(static_cast<std::uint32_t>(rsize));
+            clear_inline_tail(old_count);
+            unchecked_set_sign(neg && !unchecked_is_magnitude_zero());
+        }
+        return true;
+    }
+    return false;
+}
+
+template <std::size_t b, class L, class A>
+constexpr auto basic_big_int<b, L, A>::make_from_magnitude(const std::span<const uint_multiprecision_t> mag,
+                                                           const bool                                   neg,
+                                                           const allocator_type& a) -> basic_big_int {
+    basic_big_int r{a};
+    limb_type*    dst = r.storage_for_overwrite(mag.size());
+    std::copy(mag.begin(), mag.end(), dst);
+    r.unchecked_set_limb_count(static_cast<std::uint32_t>(mag.size()));
+    r.unchecked_set_sign(neg && !r.unchecked_is_magnitude_zero());
+    return r;
+}
+
 // Single-limb divisor fast path from Knuth
-// Avoids allocating a remainder scratch buffer and a `t` buffer: we just stream the quotient through `*this`'s
-// limbs and carry a single remainder limb between iterations.
+// Avoids a scratch remainder buffer and a `t` buffer. The quotient streams through `*this`'s limbs when they
+// already have room; otherwise a run-time stack buffer takes it, so a quotient that trims to fit inline never
+// allocates. The remainder-only form needs no quotient at all.
 template <std::size_t b, class L, class A>
 template <std::size_t extent_a>
 constexpr uint_multiprecision_t
@@ -2886,13 +2885,15 @@ basic_big_int<b, L, A>::divmod_into_short(const std::span<const uint_multiprecis
                                           const detail::division_op                              op) {
     BEMAN_BIG_INT_ASSERT(divisor != 0);
 
-    const bool want_quotient = op != detail::division_op::rem;
-    const auto dividend_trim = dividend.first(detail::trimmed_size_span(dividend));
-    const bool result_neg    = want_quotient ? (dividend_neg != divisor_neg) : dividend_neg;
+    const bool      want_quotient = op != detail::division_op::rem;
+    const auto      dividend_trim = dividend.first(detail::trimmed_size_span(dividend));
+    const bool      result_neg    = want_quotient ? (dividend_neg != divisor_neg) : dividend_neg;
+    const size_type old_count     = limb_count();
 
     if (detail::is_span_zero(dividend_trim)) {
         limb_ptr()[0] = 0;
         unchecked_set_limb_count(1);
+        clear_inline_tail(old_count);
         unchecked_set_sign(false);
         return {};
     }
@@ -2902,25 +2903,45 @@ basic_big_int<b, L, A>::divmod_into_short(const std::span<const uint_multiprecis
         const uint_multiprecision_t d = dividend_trim[0];
         limb_ptr()[0]                 = want_quotient ? (d / divisor) : (d % divisor);
         unchecked_set_limb_count(1);
+        clear_inline_tail(old_count);
         unchecked_set_sign(result_neg && !unchecked_is_magnitude_zero());
         return op != detail::division_op::div ? d % divisor : 0;
     }
 
-    // Stream the quotient through *this's limb buffer,
-    // returning the scalar remainder.
-    grow(dividend_trim.size());
-    std::span<uint_multiprecision_t> quot_span{limb_ptr(), dividend_trim.size()};
-    const uint_multiprecision_t      remainder = detail::divide_unsigned_short(quot_span, dividend_trim, divisor);
+    const size_type n = dividend_trim.size();
 
-    if (want_quotient) {
-        const std::size_t qsize =
-            detail::trimmed_size_span(std::span<const uint_multiprecision_t>{limb_ptr(), dividend_trim.size()});
-        unchecked_set_limb_count(static_cast<std::uint32_t>(qsize));
-    } else {
-        limb_ptr()[0] = remainder;
+    if (!want_quotient) {
+        const uint_multiprecision_t remainder = detail::mod_unsigned_short(dividend_trim, divisor);
+        limb_ptr()[0]                         = remainder;
         unchecked_set_limb_count(1);
+        clear_inline_tail(old_count);
+        unchecked_set_sign(result_neg && !unchecked_is_magnitude_zero());
+        return remainder;
     }
 
+    const size_type     capacity    = is_representation_inplace() ? inplace_capacity : m_capacity;
+    constexpr size_type stack_limbs = 64;
+    if BEMAN_BIG_INT_IS_NOT_CONSTEVAL {
+        if (n > capacity && n <= stack_limbs) {
+            limb_type                   stack_buf[stack_limbs];
+            const uint_multiprecision_t remainder =
+                detail::divide_unsigned_short(std::span<uint_multiprecision_t>{stack_buf, n}, dividend_trim, divisor);
+            const size_type  qsize = detail::trimmed_size_span(std::span<const uint_multiprecision_t>{stack_buf, n});
+            limb_type* const dst   = storage_for_overwrite(qsize);
+            std::copy_n(stack_buf, qsize, dst);
+            unchecked_set_limb_count(static_cast<std::uint32_t>(qsize));
+            clear_inline_tail(old_count);
+            unchecked_set_sign(result_neg && !unchecked_is_magnitude_zero());
+            return remainder;
+        }
+    }
+
+    limb_type* const            dst = storage_for_overwrite(n);
+    const uint_multiprecision_t remainder =
+        detail::divide_unsigned_short(std::span<uint_multiprecision_t>{dst, n}, dividend_trim, divisor);
+    const size_type qsize = detail::trimmed_size_span(std::span<const uint_multiprecision_t>{dst, n});
+    unchecked_set_limb_count(static_cast<std::uint32_t>(qsize));
+    clear_inline_tail(old_count);
     unchecked_set_sign(result_neg && !unchecked_is_magnitude_zero());
     return remainder;
 }
@@ -2938,8 +2959,10 @@ constexpr uint_multiprecision_t basic_big_int<b, L, A>::divmod_in_place_short(co
     if (want_quotient) {
         unchecked_trim_magnitude();
     } else {
-        limb_ptr()[0] = remainder;
+        const auto old_count = limb_count();
+        limb_ptr()[0]        = remainder;
         unchecked_set_limb_count(1);
+        clear_inline_tail(old_count);
     }
     unchecked_set_sign(result_neg && !unchecked_is_magnitude_zero());
     return remainder;
@@ -2979,26 +3002,25 @@ constexpr auto basic_big_int<b, L, A>::divmod_into(const std::span<const uint_mu
             set_zero();
             return {};
         }
-
-        grow(dividend_trim.size());
-        std::copy(dividend_trim.begin(), dividend_trim.end(), limb_ptr());
-        unchecked_set_limb_count(static_cast<std::uint32_t>(dividend_trim.size()));
-        unchecked_set_sign(dividend_neg && !unchecked_is_magnitude_zero());
-        if (op == detail::division_op::rem) {
-            return {};
+        if (op == detail::division_op::div_rem) {
+            set_zero();
+            return make_from_magnitude(dividend_trim, dividend_neg, m_alloc);
         }
 
-        BEMAN_BIG_INT_DEBUG_ASSERT(op == detail::division_op::div_rem);
-        basic_big_int result = std::move(*this);
-        set_zero();
-        return result;
+        const size_type  old_count = limb_count();
+        limb_type* const dst       = storage_for_overwrite(dividend_trim.size());
+        std::copy(dividend_trim.begin(), dividend_trim.end(), dst);
+        unchecked_set_limb_count(static_cast<std::uint32_t>(dividend_trim.size()));
+        clear_inline_tail(old_count);
+        unchecked_set_sign(dividend_neg && !unchecked_is_magnitude_zero());
+        return {};
     }
 
     // Single-limb divisor fast path.
     if (divisor_trim.size() == 1) {
         const uint_multiprecision_t rem_limb =
             divmod_into_short(dividend_trim, dividend_neg, divisor_trim[0], divisor_neg, op);
-        if (rem_limb == 0) {
+        if (op != detail::division_op::div_rem || rem_limb == 0) {
             return {};
         }
         basic_big_int remainder{rem_limb, m_alloc};
@@ -3006,70 +3028,63 @@ constexpr auto basic_big_int<b, L, A>::divmod_into(const std::span<const uint_mu
         return remainder;
     }
 
-    // Multi-limb long division.
+    // Multi-limb long division. The quotient lands in `*this` (div, div_rem) or the remainder does (rem);
+    // everything else, including the div_rem remainder, lives in scratch and is copied out at its exact size.
     const std::size_t n_div = dividend_trim.size();
     const std::size_t m_div = divisor_trim.size();
     const std::size_t q_cap = n_div - m_div + 1;
     const std::size_t r_cap = n_div + 1;
-    const std::size_t t_cap = detail::divide_unsigned_storage_size(n_div, m_div);
+    const std::size_t scratch_limbs =
+        detail::divide_schoolbook_storage_size(n_div, m_div, true) + (op == detail::division_op::rem ? q_cap : 0);
+    const size_type old_count = limb_count();
 
-    if (op == detail::division_op::div) {
-        // Quotient only: the divide-and-conquer band can skip the remainder
-        // work entirely through the approximate-quotient path.
-        grow(q_cap);
-        std::fill_n(limb_ptr(), q_cap, limb_type{0});
+    const auto divide_with = [&](detail::scratch_allocator_base& scratch) -> basic_big_int {
+        if (op == detail::division_op::rem) {
+            // Quotient and remainder both in scratch; only the remainder is kept.
+            const std::span<uint_multiprecision_t> quot_span = scratch.allocate(q_cap);
+            const std::span<uint_multiprecision_t> rem_span  = scratch.allocate(r_cap);
+            detail::divide_dispatch(quot_span, rem_span, dividend_trim, divisor_trim, scratch, m_alloc);
+            const std::size_t rsize = detail::trimmed_size_span(std::span<const uint_multiprecision_t>{rem_span});
+            limb_type* const  dst   = storage_for_overwrite(rsize);
+            std::copy_n(rem_span.data(), rsize, dst);
+            unchecked_set_limb_count(static_cast<std::uint32_t>(rsize));
+            clear_inline_tail(old_count);
+            unchecked_set_sign(dividend_neg && !unchecked_is_magnitude_zero());
+            return {};
+        }
 
-        detail::scratch_allocator<allocator_type> scratch(r_cap + t_cap, m_alloc);
-        detail::divide_dispatch_q(
-            std::span<uint_multiprecision_t>{limb_ptr(), q_cap}, dividend_trim, divisor_trim, scratch, m_alloc);
-
-        const std::size_t qsize = detail::trimmed_size_span(std::span<const uint_multiprecision_t>{limb_ptr(), q_cap});
+        // Quotient only: the divide-and-conquer band can skip the remainder work through the
+        // approximate-quotient path. With div_rem the remainder is produced into scratch.
+        limb_type* const                       dst      = storage_for_overwrite(q_cap);
+        const std::span<uint_multiprecision_t> quot     = {dst, q_cap};
+        std::span<uint_multiprecision_t>       rem_span = {};
+        if (op == detail::division_op::div) {
+            detail::divide_dispatch_q(quot, dividend_trim, divisor_trim, scratch, m_alloc);
+        } else {
+            rem_span = scratch.allocate(r_cap);
+            detail::divide_dispatch(quot, rem_span, dividend_trim, divisor_trim, scratch, m_alloc);
+        }
+        const std::size_t qsize = detail::trimmed_size_span(std::span<const uint_multiprecision_t>{dst, q_cap});
         unchecked_set_limb_count(static_cast<std::uint32_t>(qsize));
+        clear_inline_tail(old_count);
         unchecked_set_sign(unrounded_quotient_neg && !unchecked_is_magnitude_zero());
-        return {};
+        if (op == detail::division_op::div) {
+            return {};
+        }
+        const std::size_t rsize = detail::trimmed_size_span(std::span<const uint_multiprecision_t>{rem_span});
+        return make_from_magnitude(
+            std::span<const uint_multiprecision_t>{rem_span.data(), rsize}, dividend_neg, m_alloc);
+    };
+
+    if BEMAN_BIG_INT_IS_NOT_CONSTEVAL {
+        if (scratch_limbs <= detail::small_division_stack_limbs) {
+            limb_type                      stack_buf[detail::small_division_stack_limbs];
+            detail::scratch_allocator_base scratch(stack_buf, detail::small_division_stack_limbs);
+            return divide_with(scratch);
+        }
     }
-
-    if (want_quotient) {
-        // *this will hold the quotient.
-        // Remainder and `t` go in scratch.
-        grow(q_cap);
-        std::fill_n(limb_ptr(), q_cap, limb_type{0});
-
-        detail::scratch_allocator<allocator_type> scratch(r_cap + t_cap, m_alloc);
-        const std::span<uint_multiprecision_t>    rem_span = scratch.allocate(r_cap);
-
-        detail::divide_dispatch(std::span<uint_multiprecision_t>{limb_ptr(), q_cap},
-                                rem_span,
-                                dividend_trim,
-                                divisor_trim,
-                                scratch,
-                                m_alloc);
-
-        const std::size_t qsize = detail::trimmed_size_span(std::span<const uint_multiprecision_t>{limb_ptr(), q_cap});
-        unchecked_set_limb_count(static_cast<std::uint32_t>(qsize));
-        unchecked_set_sign(unrounded_quotient_neg && !unchecked_is_magnitude_zero());
-
-        BEMAN_BIG_INT_DEBUG_ASSERT(op == detail::division_op::div_rem);
-        basic_big_int rem(rem_span.data(), rem_span.data() + rem_span.size(), m_alloc);
-        rem.unchecked_set_sign(dividend_neg && !rem.unchecked_is_magnitude_zero());
-        return rem;
-    }
-
-    // *this will hold the remainder.
-    // Quotient and `t` go in scratch.
-    grow(r_cap);
-    std::fill_n(limb_ptr(), r_cap, limb_type{0});
-
-    detail::scratch_allocator<allocator_type> scratch(q_cap + t_cap, m_alloc);
-    const std::span<uint_multiprecision_t>    quot_span = scratch.allocate(q_cap);
-
-    detail::divide_dispatch(
-        quot_span, std::span<uint_multiprecision_t>{limb_ptr(), r_cap}, dividend_trim, divisor_trim, scratch, m_alloc);
-
-    const std::size_t rsize = detail::trimmed_size_span(std::span<const uint_multiprecision_t>{limb_ptr(), r_cap});
-    unchecked_set_limb_count(static_cast<std::uint32_t>(rsize));
-    unchecked_set_sign(dividend_neg && !unchecked_is_magnitude_zero());
-    return {};
+    detail::scratch_allocator<allocator_type> scratch(scratch_limbs, m_alloc);
+    return divide_with(scratch);
 }
 
 // Simultaneously computes the quotient and remainder of a division,
@@ -3195,15 +3210,16 @@ constexpr auto basic_big_int<b, L, A>::operator/=(T&& rhs) -> basic_big_int&
             // storage when `&rhs == this`.
             if (&rhs == this) {
                 BEMAN_BIG_INT_ASSERT(!is_zero());
-                *this = basic_big_int{1};
+                set_zero();
+                limb_ptr()[0] = 1;
                 return *this;
             }
         }
         if (rhs.limb_count() == 1) {
             static_cast<void>(divmod_in_place_short(rhs.limb_ptr()[0], rhs.is_negative(), detail::division_op::div));
-        } else {
-            const basic_big_int temp = std::move(*this);
-            *this                    = basic_big_int{};
+        } else if (!divide_in_place_small(rhs.representation(), rhs.is_negative(), detail::division_op::div)) {
+            const basic_big_int temp(std::move(*this), m_alloc);
+            set_zero();
             divmod_into(temp.representation(),
                         temp.is_negative(),
                         rhs.representation(),
@@ -3215,9 +3231,10 @@ constexpr auto basic_big_int<b, L, A>::operator/=(T&& rhs) -> basic_big_int&
         if (detail::trimmed_size_span(rhs_limbs) == 1) {
             static_cast<void>(
                 divmod_in_place_short(rhs_limbs[0], detail::integer_signbit(rhs), detail::division_op::div));
-        } else {
-            const basic_big_int temp = std::move(*this);
-            *this                    = basic_big_int{};
+        } else if (!divide_in_place_small(
+                       detail::to_fixed_span(rhs_limbs), detail::integer_signbit(rhs), detail::division_op::div)) {
+            const basic_big_int temp(std::move(*this), m_alloc);
+            set_zero();
             divmod_into(temp.representation(),
                         temp.is_negative(),
                         detail::to_fixed_span(rhs_limbs),
@@ -3238,15 +3255,15 @@ constexpr auto basic_big_int<b, L, A>::operator%=(T&& rhs) -> basic_big_int&
             // Self-modulus: `std::move(*this)` below would zero `rhs` when &rhs == this.
             if (&rhs == this) {
                 BEMAN_BIG_INT_ASSERT(!is_zero());
-                *this = basic_big_int{};
+                set_zero();
                 return *this;
             }
         }
         if (rhs.limb_count() == 1) {
             static_cast<void>(divmod_in_place_short(rhs.limb_ptr()[0], rhs.is_negative(), detail::division_op::rem));
-        } else {
-            const basic_big_int temp = std::move(*this);
-            *this                    = basic_big_int{};
+        } else if (!divide_in_place_small(rhs.representation(), rhs.is_negative(), detail::division_op::rem)) {
+            const basic_big_int temp(std::move(*this), m_alloc);
+            set_zero();
             divmod_into(temp.representation(),
                         temp.is_negative(),
                         rhs.representation(),
@@ -3258,9 +3275,10 @@ constexpr auto basic_big_int<b, L, A>::operator%=(T&& rhs) -> basic_big_int&
         if (detail::trimmed_size_span(rhs_limbs) == 1) {
             static_cast<void>(
                 divmod_in_place_short(rhs_limbs[0], detail::integer_signbit(rhs), detail::division_op::rem));
-        } else {
-            const basic_big_int temp = std::move(*this);
-            *this                    = basic_big_int{};
+        } else if (!divide_in_place_small(
+                       detail::to_fixed_span(rhs_limbs), detail::integer_signbit(rhs), detail::division_op::rem)) {
+            const basic_big_int temp(std::move(*this), m_alloc);
+            set_zero();
             divmod_into(temp.representation(),
                         temp.is_negative(),
                         detail::to_fixed_span(rhs_limbs),
@@ -3445,6 +3463,46 @@ constexpr void basic_big_int<b, L, A>::grow(const size_type limbs_needed) {
 
     m_storage.data = allocation.ptr;
     m_capacity     = static_cast<std::uint32_t>(allocation.count);
+}
+
+// Same growth policy as `grow`. The new block is allocated before the old one is released.
+// Runtime blocks are left uninitialized (poisoned in debug builds); constant evaluation
+// must construct every limb before use.
+template <std::size_t b, class L, class A>
+constexpr auto basic_big_int<b, L, A>::storage_for_overwrite(const size_type n) -> limb_type* {
+    const size_type current_cap = is_representation_inplace() ? inplace_capacity : m_capacity;
+    if (n > current_cap) {
+        if (n > max_limbs) {
+            detail::throw_length_error();
+        }
+        const size_type    new_cap    = std::min(std::max(n, 2 * current_cap), max_limbs);
+        const alloc_result allocation = alloc_limbs(new_cap);
+        if BEMAN_BIG_INT_IS_NOT_CONSTEVAL {
+#ifdef BEMAN_BIG_INT_DEBUG
+            std::uninitialized_fill_n(allocation.ptr, allocation.count, limb_type{~limb_type{0} / 0xFF * 0xA5});
+#endif
+        } else {
+            for (size_type i = 0; i < allocation.count; ++i) {
+                std::construct_at(allocation.ptr + i);
+            }
+        }
+        free_storage();
+        m_storage.data = allocation.ptr;
+        m_capacity     = static_cast<std::uint32_t>(allocation.count);
+    }
+    return limb_ptr();
+}
+
+template <std::size_t b, class L, class A>
+constexpr void basic_big_int<b, L, A>::clear_inline_tail(const size_type old_count) noexcept {
+    if constexpr (inplace_capacity != 1) {
+        if (is_representation_inplace()) {
+            limb_type* const limbs = m_storage.limbs;
+            for (size_type i = limb_count(); i < old_count; ++i) {
+                limbs[i] = limb_type{0};
+            }
+        }
+    }
 }
 
 BEMAN_BIG_INT_DIAGNOSTIC_POP()

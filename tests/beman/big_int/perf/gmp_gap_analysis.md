@@ -527,6 +527,12 @@ Decision criteria applied (from the plan):
 | 9 | Make `add_unsigned_spans` stop at the carry tail (1024x1 add is 2.5x GMP in the kernel row) and give the public add the same compiler-independent loop | kernel/gmp 2.5x, auto 1.2x | kernel rows only; public path already fine | S | both |
 | 10 | Conversions: after #2 and #4, recheck; power-chain reuse looks minor at 10000 limbs (4.5-7%) but is untested above 100k limbs | tochars/fromchars 262144/131072 2.8x | speculative | M | both |
 
+Status of item 1: implemented on branch `opt_1`; results, targets met and not met, and the inline-capacity study are in
+[`item1_frontend_results.md`](item1_frontend_results.md) (small `auto` is now 2-5 ns above the allocation floor for
+mul/sqr, 0-6 ns for shifts and 3-6 ns for add/sub; x64 add 1000 840 -> 600 ns, meeting the 650 ns goal; open items: x64
+GCC in-place shifts at >= 256 limbs are 5-8% slower than the baseline, and a few sub-nanosecond small in-place rows). Decision
+(2026-10-06): the default inline capacity stays at 64 bits (`big_int`, one limb).
+
 Not recommended: asm for cmp (already faster than GMP on x64, parity on M4); asm for mul 32-512 limbs on x64 (IFMA beats
 GMP by 1.1-1.8x).
 

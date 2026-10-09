@@ -71,6 +71,9 @@ std::size_t square_runtime(const std::span<uint_multiprecision_t>       result,
         }
     }
 
+    // The Karatsuba/Toom squaring tiers accumulate into the result.
+    std::ranges::fill(result.first(result_total), uint_multiprecision_t{0});
+
     const auto in_heap_scratch = [&](const std::size_t limbs, auto&& kernel) {
         scratch_heap_array<uint_multiprecision_t> buf(heap, limbs);
         scratch_allocator_base                    scratch(buf.data(), limbs);
@@ -172,9 +175,10 @@ std::size_t multiply_runtime_impl(std::span<uint_multiprecision_t>       result,
 // (it may slice the other way or take the FFT) and allocates its own scratch,
 // possibly after piece 0 has been written. On x86 (model off, gate = floor on
 // min) slicing is only entered when min = m is below the floor, so no piece
-// takes the FFT and this path is a no-op there. Callers pre-zero the result and
-// discard it if an allocation throws. Requires trimmed operands,
-// min >= karatsuba_cutoff and a pre-zeroed result.
+// takes the FFT and this path is a no-op there. The caller discards the result
+// if an allocation throws. Requires trimmed operands, min >= karatsuba_cutoff
+// and a result whose first a.size() + b.size() limbs are pre-zeroed (the
+// pieces accumulate into it).
 std::size_t multiply_sliced(const std::span<uint_multiprecision_t>       result,
                             const std::span<const uint_multiprecision_t> a,
                             const std::span<const uint_multiprecision_t> b,
@@ -306,6 +310,9 @@ std::size_t multiply_runtime_impl(const std::span<uint_multiprecision_t>       r
         }
     }
 
+    // The slicing and Karatsuba/Toom tiers accumulate into the result.
+    std::ranges::fill(result.first(result_total), uint_multiprecision_t{0});
+
     const bool slice = mode == slice_mode::forced      ? max_size > min_size
                        : mode == slice_mode::automatic ? mul_should_slice(min_size, max_size)
                                                        : false;
@@ -358,13 +365,46 @@ std::size_t multiply_runtime_any(const std::span<uint_multiprecision_t>       re
         return hi != 0 ? 2 : 1;
     }
     if (a.size() == 1) {
-        return multiply_single_limb(result, b, a[0]);
+        return multiply_by_limb_full(result, b, a[0]);
     }
     if (b.size() == 1) {
-        return multiply_single_limb(result, a, b[0]);
+        return multiply_by_limb_full(result, a, b[0]);
     }
 
     return multiply_runtime(result, a, b, heap);
+}
+
+// The header only calls this below mul_header_basecase_limbs, so every
+// operand-size gate used here must stay under the compiled cutoffs.
+static_assert(mul_header_basecase_limbs <= karatsuba_cutoff);
+static_assert(mul_header_basecase_limbs <= square_karatsuba_cutoff);
+
+std::size_t multiply_basecase_runtime(const std::span<uint_multiprecision_t>       result,
+                                      const std::span<const uint_multiprecision_t> a,
+                                      const std::span<const uint_multiprecision_t> b) noexcept {
+    BEMAN_BIG_INT_DEBUG_ASSERT(a.size() >= 2);
+    BEMAN_BIG_INT_DEBUG_ASSERT(b.size() >= 2);
+    BEMAN_BIG_INT_DEBUG_ASSERT(a.back() != 0);
+    BEMAN_BIG_INT_DEBUG_ASSERT(b.back() != 0);
+    BEMAN_BIG_INT_DEBUG_ASSERT(std::min(a.size(), b.size()) < mul_header_basecase_limbs);
+    BEMAN_BIG_INT_DEBUG_ASSERT(result.size() >= a.size() + b.size());
+
+    const std::size_t result_total = a.size() + b.size();
+
+    // Mirrors multiply_runtime_impl / square_runtime below their Karatsuba cutoffs.
+    if (a.data() == b.data() && a.size() == b.size()) {
+        const std::size_t n = a.size();
+        if (n < square_long_cutoff) {
+            ::beman_big_int_multiply_long_runtime(result.data(), a.data(), n, a.data(), n);
+        } else if (is_power_of_two_span(a)) {
+            return multiply_power_of_two(result, a, a);
+        } else {
+            ::beman_big_int_square_long_runtime(result.data(), a.data(), n);
+        }
+    } else {
+        ::beman_big_int_multiply_long_runtime(result.data(), a.data(), a.size(), b.data(), b.size());
+    }
+    return trimmed_size_span(std::span<const uint_multiprecision_t>{result.data(), result_total});
 }
 
 } // namespace detail

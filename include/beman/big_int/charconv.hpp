@@ -423,6 +423,8 @@ from_chars(const char* const begin, const char* const end, basic_big_int<b, L, A
         // In any other case, we have the guarantee that at least one digit can be parsed.
         out.set_zero();
         out.grow(limbs_needed);
+        // The digit blocks are OR-ed in, so a reused destination must not keep stale limbs.
+        std::fill_n(out.limb_ptr(), limbs_needed, uint_multiprecision_t{0});
         while (true) {
             const auto        digit_block_length = std::min(current_end - current_begin, max_digits_per_iteration);
             const char* const digit_block_begin  = current_end - digit_block_length;
