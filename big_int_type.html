@@ -1,0 +1,2011 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+        <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1">
+<style>html.fonts-loading{visibility:hidden;opacity:0}</style>
+<script>document.documentElement.classList.add('fonts-loading');</script>
+
+<link rel="preload" href="./_/font/NotoSansDisplay.woff2" as="font" type="font/woff2" crossorigin="anonymous" />
+<link rel="preload" href="./_/font/NotoSansDisplay-Italic.woff2" as="font" type="font/woff2" crossorigin="anonymous" />
+<link rel="preload" href="./_/font/MonaspaceNeon-Var.woff2" as="font" type="font/woff2" crossorigin="anonymous" />
+<link rel="preload" href="./_/font/MonaspaceXenon-Var.woff2" as="font" type="font/woff2" crossorigin="anonymous" />
+
+<script>
+(function() {
+  'use strict';
+  
+  var revealed = false;
+  
+  var reveal = function() {
+    if (revealed) return;
+    revealed = true;
+    document.documentElement.classList.remove('fonts-loading');
+  };
+  
+  setTimeout(reveal, 3000);
+  
+  if (!('FontFace' in window) || !('fonts' in document)) {
+    setTimeout(reveal, 100);
+    return;
+  }
+  
+  var uiRoot = './_';
+  var fonts = [
+    { 
+      family: 'Noto Sans', 
+      url: uiRoot + '/font/NotoSansDisplay.woff2',
+      descriptors: { style: 'normal', weight: '100 900', stretch: '62.5% 100%' }
+    },
+    { 
+      family: 'Noto Sans', 
+      url: uiRoot + '/font/NotoSansDisplay-Italic.woff2',
+      descriptors: { style: 'italic', weight: '100 900', stretch: '62.5% 100%' }
+    },
+    { 
+      family: 'Monaspace Neon', 
+      url: uiRoot + '/font/MonaspaceNeon-Var.woff2',
+      descriptors: { style: 'normal', weight: '400' }
+    },
+    { 
+      family: 'Monaspace Xenon', 
+      url: uiRoot + '/font/MonaspaceXenon-Var.woff2',
+      descriptors: { style: 'italic', weight: '400' }
+    }
+  ];
+  
+  var loadPromises = fonts.map(function(f) {
+    try {
+      var face = new FontFace(f.family, 'url("' + f.url + '")', f.descriptors);
+      return face.load().then(function(loaded) {
+        document.fonts.add(loaded);
+        return loaded;
+      }).catch(function() {
+        return null;
+      });
+    } catch (e) {
+      return Promise.resolve(null);
+    }
+  });
+  
+  Promise.all(loadPromises)
+    .then(function() {
+      return document.fonts.ready;
+    })
+    .then(reveal)
+    .catch(reveal);
+})();
+</script>    <title>The big_int Type :: std::big_int</title>
+    <link rel="prev" href="api_reference.html">
+    <link rel="next" href="charconv.html">
+  <meta name="generator" content="Antora 3.1.15">
+    <link rel="stylesheet" href="./_/css/boostlook.css">
+    <link rel="stylesheet" href="./_/css/site.css">
+    <link rel="stylesheet" href="./_/css/vendor/tabs.css">
+    <script>
+    (function() {
+      if (window.self !== window.top) return;
+      var theme = localStorage.getItem('antora-theme');
+      if (!theme && window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
+        theme = 'dark';
+      }
+      if (theme === 'dark') document.documentElement.classList.add('dark');
+    })();
+    </script>
+    <script>var uiRootPath = './_'</script>
+<link rel="icon" href="./_/img/favicons/favicon.ico" type="image/x-icon">
+    <!-- Favicon configuration -->
+    <link rel="apple-touch-icon" sizes="180x180" href="./_/img/favicons/apple-touch-icon.png">
+    <link rel="icon" type="image/png" sizes="32x32" href="./_/img/favicons/favicon-32x32.png">
+    <link rel="icon" type="image/png" sizes="16x16" href="./_/img/favicons/favicon-16x16.png">
+    <link rel="manifest" href="./_/img/favicons/site.webmanifest">
+    <link rel="shortcut icon" href="./_/img/favicons/favicon.ico">
+  </head>
+  <body class="article toc2 toc-left">
+    <div class="boostlook">
+   <div id="header">
+      <div id="toc" class="nav-container toc2" data-component="ROOT" data-version="">
+  <aside class="nav">
+    <button class="nav-close"></button>
+    <div class="panels">
+      <div class="nav-panel-menu is-active" data-panel="menu">
+  <nav class="nav-menu">
+      <div class="title-row">
+        <h3 class="title"><a href="overview.html">std::big_int</a></h3>
+        <button class="theme-toggle" aria-label="Toggle dark mode" title="Toggle theme" style="display:none">
+  <i class="fas fa-sun theme-icon-light"></i>
+  <i class="fas fa-moon theme-icon-dark"></i>
+</button>      </div>
+      <ul class="nav-list">
+        <ul class="nav-list">
+        <li class="" data-depth="1">
+            <a class="nav-link" href="overview.html">Overview</a>
+        </li>
+        <ul class="nav-list">
+        <li class="" data-depth="2">
+            <a class="nav-link" href="overview.html#overview_introduction">Introduction</a>
+        </li>
+              <li class="" data-depth="2">
+            <a class="nav-link" href="overview.html#overview_motivation">Motivation</a>
+        </li>
+              <li class="" data-depth="2">
+            <a class="nav-link" href="overview.html#overview_supported_compilers">Supported Compilers</a>
+        </li>
+        </ul>
+        <li class="" data-depth="1">
+            <a class="nav-link" href="build_and_usage.html">Build and Usage</a>
+        </li>
+        <ul class="nav-list">
+        <li class="" data-depth="2">
+            <a class="nav-link" href="build_and_usage.html#build_and_usage_dependencies">Dependencies</a>
+        </li>
+              <li class="" data-depth="2">
+            <a class="nav-link" href="build_and_usage.html#build_and_usage_build">Building</a>
+        </li>
+              <li class="" data-depth="2">
+            <a class="nav-link" href="build_and_usage.html#build_and_usage_modules">Optional: the C++ named module</a>
+        </li>
+              <li class="" data-depth="2">
+            <a class="nav-link" href="build_and_usage.html#build_and_usage_install">Installation</a>
+        </li>
+              <li class="" data-depth="2">
+            <a class="nav-link" href="build_and_usage.html#build_and_usage_cmake">CMake configuration</a>
+        </li>
+              <li class="" data-depth="2">
+            <a class="nav-link" href="build_and_usage.html#build_and_usage_using">Using <code>beman.big_int</code></a>
+        </li>
+        </ul>
+        <li class="" data-depth="1">
+            <a class="nav-link" href="modules.html">C++ Named Modules</a>
+        </li>
+        <ul class="nav-list">
+        <li class="" data-depth="2">
+            <a class="nav-link" href="modules.html#modules_exports">What the module exports</a>
+        </li>
+              <li class="" data-depth="2">
+            <a class="nav-link" href="modules.html#modules_build">Building the module</a>
+        </li>
+              <li class="" data-depth="2">
+            <a class="nav-link" href="modules.html#modules_consume">Consuming the module</a>
+        </li>
+              <li class="" data-depth="2">
+            <a class="nav-link" href="modules.html#modules_import_std">The <code>import std</code> variant</a>
+        </li>
+              <li class="" data-depth="2">
+            <a class="nav-link" href="modules.html#modules_tests">Tests</a>
+        </li>
+              <li class="" data-depth="2">
+            <a class="nav-link" href="modules.html#modules_limitations">Limitations</a>
+        </li>
+        </ul>
+        <li class="" data-depth="1">
+            <a class="nav-link" href="debugging.html">Debugger Visualizers</a>
+        </li>
+        <ul class="nav-list">
+        <li class="" data-depth="2">
+            <a class="nav-link" href="debugging.html#debugging_natvis">MSVC and Visual Studio: Natvis</a>
+        </li>
+        <ul class="nav-list">
+        <li class="" data-depth="3">
+            <a class="nav-link" href="debugging.html#debugging_natvis_plain">The self-contained visualizer</a>
+        </li>
+              <li class="" data-depth="3">
+            <a class="nav-link" href="debugging.html#debugging_natvis_addin">The add-in DLL, for full decimal</a>
+        </li>
+              <li class="" data-depth="3">
+            <a class="nav-link" href="debugging.html#debugging_natvis_expand">Expanding a value</a>
+        </li>
+              <li class="" data-depth="3">
+            <a class="nav-link" href="debugging.html#debugging_natvis_limits">Limitations</a>
+        </li>
+        </ul>
+        <li class="" data-depth="2">
+            <a class="nav-link" href="debugging.html#debugging_printers">LLDB and GDB: Python pretty printers</a>
+        </li>
+        </ul>
+        <li class="" data-depth="1">
+            <a class="nav-link" href="examples.html">Examples</a>
+        </li>
+        <ul class="nav-list">
+        <li class="" data-depth="2">
+            <a class="nav-link" href="examples.html#examples_foundational">Foundational Examples</a>
+        </li>
+        <ul class="nav-list">
+        <li class="" data-depth="3">
+            <a class="nav-link" href="examples.html#examples_construction">Construction</a>
+        </li>
+              <li class="" data-depth="3">
+            <a class="nav-link" href="examples.html#examples_operators">Fundamental operators</a>
+        </li>
+              <li class="" data-depth="3">
+            <a class="nav-link" href="examples.html#examples_factorial">Factorial</a>
+        </li>
+              <li class="" data-depth="3">
+            <a class="nav-link" href="examples.html#examples_literals">User-defined literals</a>
+        </li>
+              <li class="" data-depth="3">
+            <a class="nav-link" href="examples.html#examples_charconv">Numeric conversions</a>
+        </li>
+              <li class="" data-depth="3">
+            <a class="nav-link" href="examples.html#examples_string">String conversions</a>
+        </li>
+              <li class="" data-depth="3">
+            <a class="nav-link" href="examples.html#examples_numeric">Numeric functions</a>
+        </li>
+              <li class="" data-depth="3">
+            <a class="nav-link" href="examples.html#examples_limits">Numeric limits</a>
+        </li>
+              <li class="" data-depth="3">
+            <a class="nav-link" href="examples.html#examples_division">Integer division</a>
+        </li>
+              <li class="" data-depth="3">
+            <a class="nav-link" href="examples.html#examples_io">Formatting and output</a>
+        </li>
+        </ul>
+        <li class="" data-depth="2">
+            <a class="nav-link" href="examples.html#examples_advanced">Advanced Examples</a>
+        </li>
+        <ul class="nav-list">
+        <li class="" data-depth="3">
+            <a class="nav-link" href="examples.html#examples_fibonacci">Fibonacci</a>
+        </li>
+              <li class="" data-depth="3">
+            <a class="nav-link" href="examples.html#examples_roots">Roots</a>
+        </li>
+              <li class="" data-depth="3">
+            <a class="nav-link" href="examples.html#examples_primes">Primes</a>
+        </li>
+              <li class="" data-depth="3">
+            <a class="nav-link" href="examples.html#examples_rsa">RSA</a>
+        </li>
+        </ul>
+  </ul>
+        <li class="" data-depth="1">
+            <a class="nav-link" href="api_reference.html">API Reference</a>
+        </li>
+        <ul class="nav-list">
+        <li class="" data-depth="2">
+            <a class="nav-link" href="api_reference.html#api_namespaces">Namespaces</a>
+        </li>
+              <li class="" data-depth="2">
+            <a class="nav-link" href="api_reference.html#api_types">Types</a>
+        </li>
+              <li class="" data-depth="2">
+            <a class="nav-link" href="api_reference.html#api_functions">Functions</a>
+        </li>
+        </ul>
+        <li class=" is-current-page" data-depth="1">
+            <a class="nav-link" href="big_int_type.html">The big_int Type</a>
+        </li>
+        <ul class="nav-list">
+        <li class="" data-depth="2">
+            <a class="nav-link" href="#big_int_type_design">Design</a>
+        </li>
+              <li class="" data-depth="2">
+            <a class="nav-link" href="#big_int_type_synopsis">Synopsis</a>
+        </li>
+              <li class="" data-depth="2">
+            <a class="nav-link" href="#big_int_type_members">Member types and constants</a>
+        </li>
+              <li class="" data-depth="2">
+            <a class="nav-link" href="#big_int_type_construct">Constructors and destructor</a>
+        </li>
+              <li class="" data-depth="2">
+            <a class="nav-link" href="#big_int_type_assign">Assignment</a>
+        </li>
+              <li class="" data-depth="2">
+            <a class="nav-link" href="#big_int_type_compound">Compound assignment operators</a>
+        </li>
+              <li class="" data-depth="2">
+            <a class="nav-link" href="#big_int_type_swap">Swap</a>
+        </li>
+        <ul class="nav-list">
+        <li class="" data-depth="3">
+            <a class="nav-link" href="#big_int_type_swap_non_member">Non-member swap</a>
+        </li>
+        </ul>
+        <li class="" data-depth="2">
+            <a class="nav-link" href="#big_int_type_observers">Observers</a>
+        </li>
+              <li class="" data-depth="2">
+            <a class="nav-link" href="#big_int_type_unary">Unary operators</a>
+        </li>
+              <li class="" data-depth="2">
+            <a class="nav-link" href="#big_int_type_conv">Conversion operator</a>
+        </li>
+              <li class="" data-depth="2">
+            <a class="nav-link" href="#big_int_type_cmp">Comparison operators</a>
+        </li>
+              <li class="" data-depth="2">
+            <a class="nav-link" href="#big_int_type_binary">Binary operators</a>
+        </li>
+        </ul>
+        <li class="" data-depth="1">
+            <a class="nav-link" href="charconv.html"><code>&lt;charconv&gt;</code> Conversions</a>
+        </li>
+        <ul class="nav-list">
+        <li class="" data-depth="2">
+            <a class="nav-link" href="charconv.html#charconv_synopsis">Synopsis</a>
+        </li>
+              <li class="" data-depth="2">
+            <a class="nav-link" href="charconv.html#charconv_to_chars">to_chars</a>
+        </li>
+              <li class="" data-depth="2">
+            <a class="nav-link" href="charconv.html#charconv_from_chars">from_chars</a>
+        </li>
+        </ul>
+        <li class="" data-depth="1">
+            <a class="nav-link" href="string.html">String Conversions</a>
+        </li>
+        <ul class="nav-list">
+        <li class="" data-depth="2">
+            <a class="nav-link" href="string.html#string_synopsis">Synopsis</a>
+        </li>
+              <li class="" data-depth="2">
+            <a class="nav-link" href="string.html#string_to_string">to_string</a>
+        </li>
+              <li class="" data-depth="2">
+            <a class="nav-link" href="string.html#string_to_wstring">to_wstring</a>
+        </li>
+        </ul>
+        <li class="" data-depth="1">
+            <a class="nav-link" href="format.html"><code>&lt;format&gt;</code> Support</a>
+        </li>
+        <ul class="nav-list">
+        <li class="" data-depth="2">
+            <a class="nav-link" href="format.html#format_synopsis">Synopsis</a>
+        </li>
+              <li class="" data-depth="2">
+            <a class="nav-link" href="format.html#format_spec">Format specification</a>
+        </li>
+              <li class="" data-depth="2">
+            <a class="nav-link" href="format.html#format_members">parse and format</a>
+        </li>
+              <li class="" data-depth="2">
+            <a class="nav-link" href="format.html#format_errors">Errors</a>
+        </li>
+              <li class="" data-depth="2">
+            <a class="nav-link" href="format.html#format_examples">Examples</a>
+        </li>
+              <li class="" data-depth="2">
+            <a class="nav-link" href="format.html#format_wide">Wide characters</a>
+        </li>
+        </ul>
+        <li class="" data-depth="1">
+            <a class="nav-link" href="literals.html">User-Defined Literals</a>
+        </li>
+        <ul class="nav-list">
+        <li class="" data-depth="2">
+            <a class="nav-link" href="literals.html#literals_synopsis">Synopsis</a>
+        </li>
+              <li class="" data-depth="2">
+            <a class="nav-link" href="literals.html#literals_scope">Bringing the literals into scope</a>
+        </li>
+              <li class="" data-depth="2">
+            <a class="nav-link" href="literals.html#literals_suffix">The n, N, _n, and _N suffixes</a>
+        </li>
+              <li class="" data-depth="2">
+            <a class="nav-link" href="literals.html#literals_bases">Bases, separators, and sign</a>
+        </li>
+              <li class="" data-depth="2">
+            <a class="nav-link" href="literals.html#literals_constexpr">Compile-time evaluation</a>
+        </li>
+        </ul>
+        <li class="" data-depth="1">
+            <a class="nav-link" href="limits.html"><code>std::numeric_limits</code> Support</a>
+        </li>
+        <ul class="nav-list">
+        <li class="" data-depth="2">
+            <a class="nav-link" href="limits.html#limits_synopsis">Synopsis</a>
+        </li>
+              <li class="" data-depth="2">
+            <a class="nav-link" href="limits.html#limits_values">What each member reports</a>
+        </li>
+              <li class="" data-depth="2">
+            <a class="nav-link" href="limits.html#limits_noexcept">The <code>noexcept</code> specifications</a>
+        </li>
+              <li class="" data-depth="2">
+            <a class="nav-link" href="limits.html#limits_bounded">Why <code>is_bounded</code> is <code>false</code></a>
+        </li>
+              <li class="" data-depth="2">
+            <a class="nav-link" href="limits.html#limits_generic">Using it in generic code</a>
+        </li>
+        </ul>
+        <li class="" data-depth="1">
+            <a class="nav-link" href="numeric.html">Numeric Functions</a>
+        </li>
+        <ul class="nav-list">
+        <li class="" data-depth="2">
+            <a class="nav-link" href="numeric.html#numeric_synopsis">Synopsis</a>
+        </li>
+              <li class="" data-depth="2">
+            <a class="nav-link" href="numeric.html#numeric_abs">abs</a>
+        </li>
+              <li class="" data-depth="2">
+            <a class="nav-link" href="numeric.html#numeric_saturating_cast">saturating_cast</a>
+        </li>
+              <li class="" data-depth="2">
+            <a class="nav-link" href="numeric.html#numeric_in_range">in_range</a>
+        </li>
+              <li class="" data-depth="2">
+            <a class="nav-link" href="numeric.html#numeric_gcd">gcd</a>
+        </li>
+              <li class="" data-depth="2">
+            <a class="nav-link" href="numeric.html#numeric_lcm">lcm</a>
+        </li>
+              <li class="" data-depth="2">
+            <a class="nav-link" href="numeric.html#numeric_midpoint">midpoint</a>
+        </li>
+        </ul>
+        <li class="" data-depth="1">
+            <a class="nav-link" href="benchmarks.html">Benchmarks</a>
+        </li>
+        <ul class="nav-list">
+        <li class="" data-depth="2">
+            <a class="nav-link" href="benchmarks.html#benchmarks_small_value">Small-value optimization</a>
+        </li>
+              <li class="" data-depth="2">
+            <a class="nav-link" href="benchmarks.html#benchmarks_libraries">big_int vs Boost.Multiprecision and GMP</a>
+        </li>
+              <li class="" data-depth="2">
+            <a class="nav-link" href="benchmarks.html#benchmarks_base_conversion">Base conversion and string representations</a>
+        </li>
+              <li class="" data-depth="2">
+            <a class="nav-link" href="benchmarks.html#benchmarks_order_n">Order-N operations</a>
+        </li>
+              <li class="" data-depth="2">
+            <a class="nav-link" href="benchmarks.html#benchmarks_arch_opts">Architecture-specific optimizations</a>
+        </li>
+              <li class="" data-depth="2">
+            <a class="nav-link" href="benchmarks.html#benchmarks_sources">Source programs</a>
+        </li>
+        </ul>
+        <li class="" data-depth="1">
+            <a class="nav-link" href="references.html">References</a>
+        </li>
+        </ul>
+  </ul>
+  </nav>
+</div>
+    </div>
+  </aside>
+</div>
+  </div>  <div id="content">
+    <article class="doc max-width-reset">
+  <div class="toolbar" role="navigation">
+<button class="nav-toggle"></button>
+<nav class="breadcrumbs" aria-label="breadcrumbs">
+  <ul>
+    <li>
+      <a href="overview.html" aria-label="Home: std::big_int">
+        <svg xmlns="http://www.w3.org/2000/svg" width="1rem" height="1rem" viewBox="0 -960 960 960" fill="#000000" aria-hidden="true"><path d="M160-120v-480l320-240 320 240v480H560v-280H400v280H160Z"/></svg>
+      </a>
+    </li>
+    <li><a href="big_int_type.html">The big_int Type</a></li>
+  </ul>
+</nav>
+  <div class="search-container">
+    <div id="search-field" class="field has-filter">
+      <input id="search-input" type="text" placeholder="Search the docs" >
+    </div>
+  </div>
+<div class="spirit-nav">
+    <a accesskey="p" href="api_reference.html">
+      <span class="material-symbols-outlined" title="Previous: API Reference">arrow_back</span>
+    </a>
+    <a class="disabled" accesskey="u" aria-disabled="true" tabindex="-1">
+      <span class="material-symbols-outlined" title="Up:">arrow_upward</span>
+    </a>
+    <a accesskey="n" href="charconv.html">
+      <span class="material-symbols-outlined" title="Next: <code>&lt;charconv&gt;</code> Conversions">arrow_forward</span>
+    </a>
+</div></div>
+    <h1 class="page">The <code>big_int</code> Type</h1>
+  <div class="sect1">
+<h2 id="big_int_type_design"><a class="anchor" href="#big_int_type_design"></a>Design</h2>
+<div class="sectionbody">
+<div class="paragraph">
+<p>The most important anchor points of the design of the <code>big_int</code> type are:</p>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p><code>big_int</code> should be elastic; that is, it should grow to the necessary size required to fit the result of an arithmetic operation.</p>
+</li>
+<li>
+<p><code>big_int</code> should support custom allocators.</p>
+</li>
+<li>
+<p><code>big_int</code> should expose small-object optimization to the user.</p>
+</li>
+</ul>
+</div>
+<div class="paragraph">
+<p>This leads us to the following type declarations:</p>
+</div>
+<div id="big_int_type_unit_multi_t" class="listingblock">
+<div class="content">
+<pre class="highlightjs highlight"><code class="language-c++ hljs" data-lang="c++">namespace beman::big_int {
+// uint_multiprecision_t is the unsigned integer used to store each "limb"
+// (machine-word digit) of the magnitude of a big_int.
+
+#if ... // 32-bit limb platform detected
+using uint_multiprecision_t = unsigned int;
+#else  // 64-bit limb platform detected
+using uint_multiprecision_t = unsigned long long;
+#endif
+
+} // namespace beman::big_int</code></pre>
+</div>
+</div>
+<div id="big_int_type_using_big_int" class="listingblock">
+<div class="content">
+<pre class="highlightjs highlight"><code class="language-c++ hljs" data-lang="c++">// min_inplace_bits is the number of bits of statically allocated storage that
+// the basic_big_int will have available for the small-object optimization.
+// Limb names the limb type, and shall be uint_multiprecision_t.
+template &lt;std::size_t min_inplace_bits,
+          class Limb      = uint_multiprecision_t,
+          class Allocator = std::allocator&lt;Limb&gt;&gt;
+class basic_big_int;
+
+// Default specialization with a stateless allocator.
+using big_int = basic_big_int&lt;64, uint_multiprecision_t, std::allocator&lt;uint_multiprecision_t&gt;&gt;;
+
+namespace pmr {
+
+// Specialization parameterized on std::pmr::polymorphic_allocator.
+template &lt;std::size_t b, class L = uint_multiprecision_t&gt;
+using basic_big_int = beman::big_int::basic_big_int&lt;b, L, std::pmr::polymorphic_allocator&lt;L&gt;&gt;;
+
+using big_int = basic_big_int&lt;/* same in-place bits as the default big_int */&gt;;
+
+} // namespace pmr
+
+} // namespace beman::big_int</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>A <code>basic_big_int</code> stores its magnitude as a little-endian sequence of
+<code>uint_multiprecision_t</code> limbs (the first limb holds the least significant bits)
+together with a separate sign. Values whose magnitude fits within
+<code>inplace_bits</code> bits are stored directly inside the object; larger values are
+stored in allocator-provided dynamic storage.</p>
+</div>
+<div class="paragraph">
+<p>The limb type is named by the <code>Limb</code> template parameter rather than being fixed by the
+class, so that a future revision can change it without changing the signature of
+<code>basic_big_int</code>. <code>Limb</code> shall be <code>uint_multiprecision_t</code>, and
+<code>Allocator::value_type</code> shall be <code>Limb</code>; a program that instantiates
+<code>basic_big_int</code> with any other limb type is ill-formed.</p>
+</div>
+<div id="big_int_type_length_limit" class="paragraph">
+<p>For a practical implementation the <code>big_int</code> does have a maximum size available as <code>max_size()</code>.
+Any operation that would need more storage than that, or the growth required by
+an arithmetic, shift, bitwise, assignment, or parsing operation, etc., throws
+<code>std::length_error</code>, or in an exception free environment <code>std::abort()</code>.
+The check happens before the allocator is consulted, so no allocation is attempted for a request that cannot be represented.
+A request that is within the limit but cannot be served reports the allocator&#8217;s own failure (typically <code>std::bad_alloc</code>) instead.
+During constant evaluation the same condition is a compile-time error rather than an exception, since a thrown exception is not a
+constant expression.</p>
+</div>
+</div>
+</div>
+<div class="sect1">
+<h2 id="big_int_type_synopsis"><a class="anchor" href="#big_int_type_synopsis"></a>Synopsis</h2>
+<div class="sectionbody">
+<div class="paragraph">
+<p>In the synopsis below, the italicized names (<code><em>arbitrary-arithmetic</em></code>,
+<code><em>arbitrary-integer</em></code>, <code><em>signed-or-unsigned</em></code>, <code><em>cv-unqualified-arithmetic</em></code>,
+<code><em>common-big-int-type</em></code>, and <code><em>common-big-int-type-with</em></code>) are exposition-only
+concepts and helper aliases used to constrain the interface.
+<code><em>common-big-int-type</em>&lt;L, R&gt;</code> denotes the <code>basic_big_int</code> specialization shared
+by <code>L</code> and <code>R</code> when one operand is a <code>basic_big_int</code> and the other is either the
+same specialization or a built-in signed or unsigned integer type.</p>
+</div>
+<div id="big_int_type_basic_big_int" class="listingblock">
+<div class="content">
+<pre class="highlightjs highlight"><code class="language-c++ hljs" data-lang="c++">template &lt;std::size_t min_inplace_bits,
+          class Limb      = uint_multiprecision_t,
+          class Allocator = std::allocator&lt;Limb&gt;&gt;
+class basic_big_int {
+  public:
+    // member types
+    using allocator_type = Allocator;
+    using size_type      = std::size_t;
+    using pointer        = std::allocator_traits&lt;Allocator&gt;::pointer;
+    using const_pointer  = std::allocator_traits&lt;Allocator&gt;::const_pointer;
+
+    // member constants
+    static constexpr size_type inplace_capacity = /* number of in-place limbs */;
+    static constexpr size_type inplace_bits =
+        inplace_capacity * std::numeric_limits&lt;Limb&gt;::digits;
+
+    // [big.int.cons], construct/copy/destroy
+    constexpr basic_big_int() noexcept(noexcept(Allocator()));
+    constexpr explicit basic_big_int(const Allocator&amp; a) noexcept;
+    constexpr basic_big_int(const basic_big_int&amp; x);
+    constexpr basic_big_int(basic_big_int&amp;&amp; x) noexcept;
+    constexpr basic_big_int(const basic_big_int&amp; x, const std::type_identity_t&lt;Allocator&gt;&amp; a);
+    constexpr basic_big_int(basic_big_int&amp;&amp; x, const std::type_identity_t&lt;Allocator&gt;&amp; a);
+    template &lt;_arbitrary-arithmetic_ T&gt;
+        requires(!std::same_as&lt;std::remove_cvref_t&lt;T&gt;, basic_big_int&gt;)
+    constexpr explicit(/* see below */) basic_big_int(T&amp;&amp; value) noexcept(/* see below */);
+    template &lt;_arbitrary-arithmetic_ T&gt;
+    constexpr basic_big_int(const T&amp; value, const allocator_type&amp; a) noexcept(/* see below */);
+    template &lt;std::input_iterator I, std::sentinel_for&lt;I&gt; S&gt;
+        requires _signed-or-unsigned_&lt;std::iter_value_t&lt;I&gt;&gt;
+    constexpr basic_big_int(I begin, S end, const allocator_type&amp; a = allocator_type());
+    template &lt;std::ranges::input_range R&gt;
+        requires _signed-or-unsigned_&lt;std::ranges::range_value_t&lt;R&gt;&gt;
+    constexpr basic_big_int(std::from_range_t, R&amp;&amp; r, const allocator_type&amp; a = allocator_type());
+    constexpr ~basic_big_int();
+
+    // [big.int.modifiers], assignment
+    constexpr basic_big_int&amp; operator=(const basic_big_int&amp; x);
+    constexpr basic_big_int&amp; operator=(basic_big_int&amp;&amp; x) noexcept;
+    template &lt;_arbitrary-integer_ T&gt;
+        requires(!std::same_as&lt;std::remove_cvref_t&lt;T&gt;, basic_big_int&gt;)
+    constexpr basic_big_int&amp; operator=(T&amp;&amp; x) noexcept(/* see below */);
+
+    template &lt;class T&gt; constexpr basic_big_int&amp; operator+=(T&amp;&amp; rhs) requires _common-big-int-type-with_&lt;T, basic_big_int&gt;;
+    template &lt;class T&gt; constexpr basic_big_int&amp; operator-=(T&amp;&amp; rhs) requires _common-big-int-type-with_&lt;T, basic_big_int&gt;;
+    template &lt;class T&gt; constexpr basic_big_int&amp; operator*=(T&amp;&amp; rhs) requires _common-big-int-type-with_&lt;T, basic_big_int&gt;;
+    template &lt;class T&gt; constexpr basic_big_int&amp; operator/=(T&amp;&amp; rhs) requires _common-big-int-type-with_&lt;T, basic_big_int&gt;;
+    template &lt;class T&gt; constexpr basic_big_int&amp; operator%=(T&amp;&amp; rhs) requires _common-big-int-type-with_&lt;T, basic_big_int&gt;;
+    template &lt;class T&gt; constexpr basic_big_int&amp; operator&amp;=(T&amp;&amp; rhs) requires _common-big-int-type-with_&lt;T, basic_big_int&gt;;
+    template &lt;class T&gt; constexpr basic_big_int&amp; operator|=(T&amp;&amp; rhs) requires _common-big-int-type-with_&lt;T, basic_big_int&gt;;
+    template &lt;class T&gt; constexpr basic_big_int&amp; operator^=(T&amp;&amp; rhs) requires _common-big-int-type-with_&lt;T, basic_big_int&gt;;
+    template &lt;_signed-or-unsigned_ S&gt; constexpr basic_big_int&amp; operator&lt;&lt;=(S s);
+    template &lt;_signed-or-unsigned_ S&gt; constexpr basic_big_int&amp; operator&gt;&gt;=(S s);
+
+    // [big.int.modifiers], swap
+    constexpr void swap(basic_big_int&amp; x) noexcept(
+        std::allocator_traits&lt;allocator_type&gt;::propagate_on_container_swap::value ||
+        std::allocator_traits&lt;allocator_type&gt;::is_always_equal::value);
+
+    // [big.int.ops], observers
+    constexpr std::span&lt;const uint_multiprecision_t&gt; representation() const noexcept;
+    constexpr size_type                              representation_size() const noexcept;
+    constexpr allocator_type                         get_allocator() const noexcept;
+    constexpr size_type                              size() const noexcept;
+    constexpr size_type                              max_size() const noexcept;
+    constexpr size_type                              max_representation_size() const noexcept;
+    constexpr void                                   reserve(size_type n);
+    constexpr void                                   reserve_representation(size_type n);
+    constexpr size_type                              capacity() const noexcept;
+    constexpr size_type                              representation_capacity() const noexcept;
+    constexpr void                                   shrink_to_fit();
+
+    // [big.int.unary], unary operators
+    constexpr basic_big_int  operator+() const&amp;;
+    constexpr basic_big_int  operator+() &amp;&amp; noexcept;
+    constexpr basic_big_int  operator-() const&amp;;
+    constexpr basic_big_int  operator-() &amp;&amp; noexcept;
+    constexpr basic_big_int  operator~() const&amp;;
+    constexpr basic_big_int  operator~() &amp;&amp;;
+    constexpr basic_big_int&amp; operator++();
+    constexpr basic_big_int  operator++(int);
+    constexpr basic_big_int&amp; operator--();
+    constexpr basic_big_int  operator--(int);
+
+    // [big.int.conv], conversion
+    template &lt;_cv-unqualified-arithmetic_ T&gt;
+    constexpr explicit operator T() const noexcept;
+};
+
+// [big.int.special], specialized algorithms
+template &lt;std::size_t b, class L, class A&gt;
+constexpr void swap(basic_big_int&lt;b, L, A&gt;&amp; x, basic_big_int&lt;b, L, A&gt;&amp; y)
+    noexcept(noexcept(x.swap(y)));
+
+// [big.int.cmp], comparison operators
+template &lt;class L, _common-big-int-type-with_&lt;L&gt; R&gt;
+constexpr bool operator==(const L&amp; lhs, const R&amp; rhs) noexcept;
+template &lt;class L, _common-big-int-type-with_&lt;L&gt; R&gt;
+constexpr std::strong_ordering operator&lt;=&gt;(const L&amp; lhs, const R&amp; rhs) noexcept;
+
+// [big.int.binary], binary operators
+template &lt;class L, class R&gt; constexpr _common-big-int-type_&lt;L, R&gt; operator+(L&amp;&amp; x, R&amp;&amp; y);
+template &lt;class L, class R&gt; constexpr _common-big-int-type_&lt;L, R&gt; operator-(L&amp;&amp; x, R&amp;&amp; y);
+template &lt;class L, class R&gt; constexpr _common-big-int-type_&lt;L, R&gt; operator*(L&amp;&amp; x, R&amp;&amp; y);
+template &lt;class L, class R&gt; constexpr _common-big-int-type_&lt;L, R&gt; operator/(L&amp;&amp; x, R&amp;&amp; y);
+template &lt;class L, class R&gt; constexpr _common-big-int-type_&lt;L, R&gt; operator%(L&amp;&amp; x, R&amp;&amp; y);
+template &lt;class L, class R&gt; constexpr _common-big-int-type_&lt;L, R&gt; operator&amp;(L&amp;&amp; x, R&amp;&amp; y);
+template &lt;class L, class R&gt; constexpr _common-big-int-type_&lt;L, R&gt; operator|(L&amp;&amp; x, R&amp;&amp; y);
+template &lt;class L, class R&gt; constexpr _common-big-int-type_&lt;L, R&gt; operator^(L&amp;&amp; x, R&amp;&amp; y);
+template &lt;class T, _signed-or-unsigned_ S&gt;
+    requires /* remove_cvref_t&lt;T&gt; is a basic_big_int specialization */
+constexpr std::remove_cvref_t&lt;T&gt; operator&lt;&lt;(T&amp;&amp; x, S s);
+template &lt;class T, _signed-or-unsigned_ S&gt;
+    requires /* remove_cvref_t&lt;T&gt; is a basic_big_int specialization */
+constexpr std::remove_cvref_t&lt;T&gt; operator&gt;&gt;(T&amp;&amp; x, S s);
+
+// [big.int.hash], hash support
+template &lt;std::size_t b, class L, class A&gt;
+struct std::hash&lt;beman::big_int::basic_big_int&lt;b, L, A&gt;&gt;;</code></pre>
+</div>
+</div>
+</div>
+</div>
+<div class="sect1">
+<h2 id="big_int_type_members"><a class="anchor" href="#big_int_type_members"></a>Member types and constants</h2>
+<div class="sectionbody">
+<table class="tableblock frame-all grid-all stretch">
+<colgroup>
+<col style="width: 25%;">
+<col style="width: 75%;">
+</colgroup>
+<thead>
+<tr>
+<th class="tableblock halign-left valign-top">Name</th>
+<th class="tableblock halign-left valign-top">Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><code>allocator_type</code></p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">The allocator type <code>Allocator</code>.</p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><code>size_type</code></p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><code>std::size_t</code>.</p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><code>pointer</code></p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><code>std::allocator_traits&lt;Allocator&gt;::pointer</code>.</p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><code>const_pointer</code></p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><code>std::allocator_traits&lt;Allocator&gt;::const_pointer</code>.</p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><code>inplace_capacity</code></p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">The number of <code>Limb</code> limbs available in the in-place (small-object) storage. It is at least large enough to hold <code>min_inplace_bits</code> bits, and never smaller than what fits in the object&#8217;s pointer footprint.</p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><code>inplace_bits</code></p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><code>inplace_capacity * std::numeric_limits&lt;Limb&gt;::digits</code>; the number of bits of in-place storage. A value whose magnitude fits in <code>inplace_bits</code> bits is stored without allocating.</p></td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
+<div class="sect1">
+<h2 id="big_int_type_construct"><a class="anchor" href="#big_int_type_construct"></a>Constructors and destructor</h2>
+<div class="sectionbody">
+<div class="sect2">
+<h3 id="big_int_type_default_constructor"><a class="anchor" href="#big_int_type_default_constructor"></a>Default constructor</h3>
+<div class="listingblock">
+<div class="content">
+<pre class="highlightjs highlight"><code class="language-c++ hljs" data-lang="c++">constexpr basic_big_int() noexcept(noexcept(Allocator()));</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>Initializes the integer value to zero and default-constructs the allocator.</p>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p><strong>Preconditions:</strong> None.</p>
+</li>
+<li>
+<p><strong>Postconditions:</strong> None.</p>
+</li>
+</ul>
+</div>
+</div>
+<div class="sect2">
+<h3 id="big_int_type_allocator_constructor"><a class="anchor" href="#big_int_type_allocator_constructor"></a>Allocator constructor</h3>
+<div class="listingblock">
+<div class="content">
+<pre class="highlightjs highlight"><code class="language-c++ hljs" data-lang="c++">constexpr explicit basic_big_int(const Allocator&amp; a) noexcept;</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>Initializes the integer value to zero and initializes the allocator to <code>a</code>.</p>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p><strong>Preconditions:</strong> None.</p>
+</li>
+<li>
+<p><strong>Postconditions:</strong> None.</p>
+</li>
+</ul>
+</div>
+</div>
+<div class="sect2">
+<h3 id="big_int_type_copy_constructor"><a class="anchor" href="#big_int_type_copy_constructor"></a>Copy constructor</h3>
+<div class="listingblock">
+<div class="content">
+<pre class="highlightjs highlight"><code class="language-c++ hljs" data-lang="c++">constexpr basic_big_int(const basic_big_int&amp; x);</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>Initializes the integer value to that of <code>x</code> and initializes the allocator to
+<code>allocator_traits&lt;Allocator&gt;::select_on_container_copy_construction(x.get_allocator())</code>.</p>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p><strong>Preconditions:</strong> None.</p>
+</li>
+<li>
+<p><strong>Postconditions:</strong> None.</p>
+</li>
+<li>
+<p><strong>Throws:</strong> Nothing if the effective width of the integer value of <code>x</code> is less than or equal to <code>inplace_bits</code>; otherwise, any exception thrown during allocation.</p>
+</li>
+</ul>
+</div>
+</div>
+<div class="sect2">
+<h3 id="big_int_type_move_constructor"><a class="anchor" href="#big_int_type_move_constructor"></a>Move constructor</h3>
+<div class="listingblock">
+<div class="content">
+<pre class="highlightjs highlight"><code class="language-c++ hljs" data-lang="c++">constexpr basic_big_int(basic_big_int&amp;&amp; x) noexcept;</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>Initializes the integer value to that of <code>x</code> and initializes the allocator by
+moving from <code>x.get_allocator()</code>.</p>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p><strong>Preconditions:</strong> None.</p>
+</li>
+<li>
+<p><strong>Postconditions:</strong> <code>x</code> is left in a valid state with an unspecified value.</p>
+</li>
+</ul>
+</div>
+</div>
+<div class="sect2">
+<h3 id="big_int_type_allocator_extended_copy_constructor"><a class="anchor" href="#big_int_type_allocator_extended_copy_constructor"></a>Allocator-extended copy constructor</h3>
+<div class="listingblock">
+<div class="content">
+<pre class="highlightjs highlight"><code class="language-c++ hljs" data-lang="c++">constexpr basic_big_int(const basic_big_int&amp; x, const std::type_identity_t&lt;Allocator&gt;&amp; a);</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>Initializes the integer value to that of <code>x</code> and initializes the allocator to
+<code>a</code>. Unlike the copy constructor, <code>select_on_container_copy_construction</code> is
+not consulted, so this is how a copy is placed on a chosen allocator, such as
+the source&#8217;s own: <code>basic_big_int y(x, x.get_allocator());</code>.</p>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p><strong>Preconditions:</strong> None.</p>
+</li>
+<li>
+<p><strong>Postconditions:</strong> None.</p>
+</li>
+<li>
+<p><strong>Throws:</strong> Nothing if the effective width of the integer value of <code>x</code> is less than or equal to <code>inplace_bits</code>; otherwise, any exception thrown during allocation.</p>
+</li>
+</ul>
+</div>
+</div>
+<div class="sect2">
+<h3 id="big_int_type_allocator_extended_move_constructor"><a class="anchor" href="#big_int_type_allocator_extended_move_constructor"></a>Allocator-extended move constructor</h3>
+<div class="listingblock">
+<div class="content">
+<pre class="highlightjs highlight"><code class="language-c++ hljs" data-lang="c++">constexpr basic_big_int(basic_big_int&amp;&amp; x, const std::type_identity_t&lt;Allocator&gt;&amp; a);</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>Initializes the integer value to that of <code>x</code> and initializes the allocator to
+<code>a</code>. If <code>allocator_traits&lt;Allocator&gt;::is_always_equal::value</code> is <code>true</code> or
+<code>a == x.get_allocator()</code>, the storage of <code>x</code> is taken over as by the move
+constructor. Otherwise <code>a</code> cannot deallocate that storage, so the value is
+copied into storage obtained from <code>a</code>, as by the allocator-extended copy
+constructor.</p>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p><strong>Preconditions:</strong> None.</p>
+</li>
+<li>
+<p><strong>Postconditions:</strong> <code>x</code> is left in a valid state with an unspecified value.</p>
+</li>
+<li>
+<p><strong>Throws:</strong> Nothing if the storage of <code>x</code> is taken over or the effective width of the integer value of <code>x</code> is less than or equal to <code>inplace_bits</code>; otherwise, any exception thrown during allocation. If an exception is thrown, <code>x</code> is unchanged.</p>
+</li>
+</ul>
+</div>
+<div class="admonitionblock note">
+<table>
+<tr>
+<td class="icon">
+<i class="fa icon-note" title="Note"></i>
+</td>
+<td class="content">
+Uses-allocator construction calls these two constructors, so an allocator-aware
+container such as <code>std::pmr::vector</code> copies or moves each <code>basic_big_int</code> element onto
+its own allocator. When the element already uses that allocator, as it does when the
+container reallocates, the move takes over the element&#8217;s storage instead of allocating.
+Because the allocator parameter is a non-deduced context, class template argument
+deduction takes the type from <code>x</code> alone, and <code>a</code> may be anything convertible to
+<code>Allocator</code>: <code>basic_big_int y(x, &amp;resource)</code> deduces the same <code>pmr::basic_big_int</code>
+as <code>x</code>.
+</td>
+</tr>
+</table>
+</div>
+</div>
+<div class="sect2">
+<h3 id="big_int_type_converting_constructor_from_an_arithmetic_type"><a class="anchor" href="#big_int_type_converting_constructor_from_an_arithmetic_type"></a>Converting constructor from an arithmetic type</h3>
+<div class="listingblock">
+<div class="content">
+<pre class="highlightjs highlight"><code class="language-c++ hljs" data-lang="c++">template &lt;_arbitrary-arithmetic_ T&gt;
+    requires(!std::same_as&lt;std::remove_cvref_t&lt;T&gt;, basic_big_int&gt;)
+constexpr explicit(/* see below */) basic_big_int(T&amp;&amp; value) noexcept(/* see below */);</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>Initializes the integer value from <code>value</code>. If <code>std::remove_cvref_t&lt;T&gt;</code> is an
+integral type or a <code>basic_big_int</code> specialization, the integer value is that of
+<code>value</code>. If it is a floating-point type, the integer value is that obtained by
+discarding the fractional part of <code>value</code> (truncation toward zero).</p>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p><strong>Constraints:</strong> <code>std::remove_cvref_t&lt;T&gt;</code> is not <code>basic_big_int</code>, and is a built-in integer type, a floating-point type, or a <code>basic_big_int</code> specialization.</p>
+</li>
+<li>
+<p><strong>Preconditions:</strong> If <code>std::remove_cvref_t&lt;T&gt;</code> is a floating-point type, <code>value</code> is finite.</p>
+</li>
+<li>
+<p><strong>Postconditions:</strong> None.</p>
+</li>
+<li>
+<p><strong>Throws:</strong> Nothing if the effective width of the resulting value is less than or equal to <code>inplace_bits</code>; otherwise, any exception thrown during allocation.</p>
+</li>
+<li>
+<p><strong>Remarks:</strong> The constructor is <code>explicit</code> unless <code>std::remove_cvref_t&lt;T&gt;</code> is a built-in signed or unsigned integer type or the same <code>basic_big_int</code> specialization. The expression inside <code>noexcept</code> is <code>true</code> when <code>value</code> is an integral type whose width does not exceed <code>inplace_bits</code>.</p>
+</li>
+</ul>
+</div>
+</div>
+<div class="sect2">
+<h3 id="big_int_type_converting_constructor_from_an_arithmetic_type_with_an_allocator"><a class="anchor" href="#big_int_type_converting_constructor_from_an_arithmetic_type_with_an_allocator"></a>Converting constructor from an arithmetic type with an allocator</h3>
+<div class="listingblock">
+<div class="content">
+<pre class="highlightjs highlight"><code class="language-c++ hljs" data-lang="c++">template &lt;_arbitrary-arithmetic_ T&gt;
+constexpr basic_big_int(const T&amp; value, const allocator_type&amp; a) noexcept(/* see below */);</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>Equivalent to the converting constructor above, but initializes the allocator to
+<code>a</code>.</p>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p><strong>Preconditions:</strong> If <code>std::remove_cvref_t&lt;T&gt;</code> is a floating-point type, <code>value</code> is finite.</p>
+</li>
+<li>
+<p><strong>Postconditions:</strong> None.</p>
+</li>
+<li>
+<p><strong>Throws:</strong> Nothing if the effective width of the resulting value is less than or equal to <code>inplace_bits</code>; otherwise, any exception thrown during allocation.</p>
+</li>
+</ul>
+</div>
+</div>
+<div class="sect2">
+<h3 id="big_int_type_iterator_pair_constructor"><a class="anchor" href="#big_int_type_iterator_pair_constructor"></a>Iterator-pair constructor</h3>
+<div class="listingblock">
+<div class="content">
+<pre class="highlightjs highlight"><code class="language-c++ hljs" data-lang="c++">template &lt;std::input_iterator I, std::sentinel_for&lt;I&gt; S&gt;
+    requires _signed-or-unsigned_&lt;std::iter_value_t&lt;I&gt;&gt;
+constexpr basic_big_int(I begin, S end, const allocator_type&amp; a = allocator_type());</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>Initializes the integer value by concatenating the base-2 representation of each
+element in <code>[begin, end)</code>, where the first element holds the least significant
+limb. If the iterator&#8217;s value type is signed, the combined representation is
+interpreted as a signed integer; otherwise it is interpreted as an unsigned
+integer. Initializes the allocator to <code>a</code>.</p>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p><strong>Preconditions:</strong> <code>[begin, end)</code> is a valid range.</p>
+</li>
+<li>
+<p><strong>Postconditions:</strong> None.</p>
+</li>
+</ul>
+</div>
+</div>
+<div class="sect2">
+<h3 id="big_int_type_from_range_constructor"><a class="anchor" href="#big_int_type_from_range_constructor"></a><code>from_range</code> constructor</h3>
+<div class="listingblock">
+<div class="content">
+<pre class="highlightjs highlight"><code class="language-c++ hljs" data-lang="c++">template &lt;std::ranges::input_range R&gt;
+    requires _signed-or-unsigned_&lt;std::ranges::range_value_t&lt;R&gt;&gt;
+constexpr basic_big_int(std::from_range_t, R&amp;&amp; r, const allocator_type&amp; a = allocator_type());</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>Initializes the integer value by concatenating the base-2 representation of each
+element in <code>r</code>, where the first element holds the least significant limb. If the
+range&#8217;s value type is signed, the combined representation is interpreted as a
+signed integer; otherwise it is interpreted as an unsigned integer. Initializes
+the allocator to <code>a</code>.</p>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p><strong>Preconditions:</strong> None.</p>
+</li>
+<li>
+<p><strong>Postconditions:</strong> None.</p>
+</li>
+</ul>
+</div>
+<div class="admonitionblock note">
+<table>
+<tr>
+<td class="icon">
+<i class="fa icon-note" title="Note"></i>
+</td>
+<td class="content">
+This constructor is available when the standard library provides
+<code>&lt;ranges&gt;</code> container support (the <code>__cpp_lib_containers_ranges</code> feature-test macro).
+</td>
+</tr>
+</table>
+</div>
+</div>
+<div class="sect2">
+<h3 id="big_int_type_destructor"><a class="anchor" href="#big_int_type_destructor"></a>Destructor</h3>
+<div class="listingblock">
+<div class="content">
+<pre class="highlightjs highlight"><code class="language-c++ hljs" data-lang="c++">constexpr ~basic_big_int();</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>Releases any dynamically-allocated storage owned by the object.</p>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p><strong>Preconditions:</strong> None.</p>
+</li>
+<li>
+<p><strong>Postconditions:</strong> None.</p>
+</li>
+</ul>
+</div>
+</div>
+</div>
+</div>
+<div class="sect1">
+<h2 id="big_int_type_assign"><a class="anchor" href="#big_int_type_assign"></a>Assignment</h2>
+<div class="sectionbody">
+<div class="sect2">
+<h3 id="big_int_type_copy_assignment"><a class="anchor" href="#big_int_type_copy_assignment"></a>Copy assignment</h3>
+<div class="listingblock">
+<div class="content">
+<pre class="highlightjs highlight"><code class="language-c++ hljs" data-lang="c++">constexpr basic_big_int&amp; operator=(const basic_big_int&amp; x);</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>Sets the integer value to that of <code>x</code> and returns <code>*this</code>.</p>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p><strong>Preconditions:</strong> None.</p>
+</li>
+<li>
+<p><strong>Postconditions:</strong> None.</p>
+</li>
+</ul>
+</div>
+</div>
+<div class="sect2">
+<h3 id="big_int_type_move_assignment"><a class="anchor" href="#big_int_type_move_assignment"></a>Move assignment</h3>
+<div class="listingblock">
+<div class="content">
+<pre class="highlightjs highlight"><code class="language-c++ hljs" data-lang="c++">constexpr basic_big_int&amp; operator=(basic_big_int&amp;&amp; x) noexcept;</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>Sets the integer value to that of <code>x</code> and returns <code>*this</code>.</p>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p><strong>Preconditions:</strong> None.</p>
+</li>
+<li>
+<p><strong>Postconditions:</strong> <code>x</code> is left in a valid state with an unspecified value.</p>
+</li>
+</ul>
+</div>
+</div>
+<div class="sect2">
+<h3 id="big_int_type_assignment_from_an_integer_type"><a class="anchor" href="#big_int_type_assignment_from_an_integer_type"></a>Assignment from an integer type</h3>
+<div class="listingblock">
+<div class="content">
+<pre class="highlightjs highlight"><code class="language-c++ hljs" data-lang="c++">template &lt;_arbitrary-integer_ T&gt;
+    requires(!std::same_as&lt;std::remove_cvref_t&lt;T&gt;, basic_big_int&gt;)
+constexpr basic_big_int&amp; operator=(T&amp;&amp; x) noexcept(/* see below */);</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>Sets the integer value to that of <code>x</code> and returns <code>*this</code>. Note that, unlike the
+converting constructor, this operator does not accept floating-point operands.</p>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p><strong>Constraints:</strong> <code>std::remove_cvref_t&lt;T&gt;</code> is not <code>basic_big_int</code>, and is a built-in integer type or a <code>basic_big_int</code> specialization.</p>
+</li>
+<li>
+<p><strong>Preconditions:</strong> None.</p>
+</li>
+<li>
+<p><strong>Postconditions:</strong> None.</p>
+</li>
+<li>
+<p><strong>Remarks:</strong> The expression inside <code>noexcept</code> is <code>true</code> when <code>x</code> is an integral type whose width does not exceed <code>inplace_bits</code>.</p>
+</li>
+</ul>
+</div>
+</div>
+</div>
+</div>
+<div class="sect1">
+<h2 id="big_int_type_compound"><a class="anchor" href="#big_int_type_compound"></a>Compound assignment operators</h2>
+<div class="sectionbody">
+<div class="sect2">
+<h3 id="big_int_type_arithmetic_and_bitwise_compound_assignment"><a class="anchor" href="#big_int_type_arithmetic_and_bitwise_compound_assignment"></a>Arithmetic and bitwise compound assignment</h3>
+<div class="listingblock">
+<div class="content">
+<pre class="highlightjs highlight"><code class="language-c++ hljs" data-lang="c++">template &lt;class T&gt; constexpr basic_big_int&amp; operator+=(T&amp;&amp; rhs) requires _common-big-int-type-with_&lt;T, basic_big_int&gt;;
+template &lt;class T&gt; constexpr basic_big_int&amp; operator-=(T&amp;&amp; rhs) requires _common-big-int-type-with_&lt;T, basic_big_int&gt;;
+template &lt;class T&gt; constexpr basic_big_int&amp; operator*=(T&amp;&amp; rhs) requires _common-big-int-type-with_&lt;T, basic_big_int&gt;;
+template &lt;class T&gt; constexpr basic_big_int&amp; operator&amp;=(T&amp;&amp; rhs) requires _common-big-int-type-with_&lt;T, basic_big_int&gt;;
+template &lt;class T&gt; constexpr basic_big_int&amp; operator|=(T&amp;&amp; rhs) requires _common-big-int-type-with_&lt;T, basic_big_int&gt;;
+template &lt;class T&gt; constexpr basic_big_int&amp; operator^=(T&amp;&amp; rhs) requires _common-big-int-type-with_&lt;T, basic_big_int&gt;;</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>Each operator <code>@=</code> is equivalent to <code>*this = std::move(*this) @ std::forward&lt;T&gt;(rhs)</code>
+and returns <code>*this</code>, where <code>@</code> is the corresponding binary operator.</p>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p><strong>Preconditions:</strong> None.</p>
+</li>
+<li>
+<p><strong>Postconditions:</strong> None.</p>
+</li>
+<li>
+<p><strong>Throws:</strong> <code>std::length_error</code> if the result would occupy more than <code>max_size()</code> bits; otherwise, any exception thrown during allocation.</p>
+</li>
+</ul>
+</div>
+</div>
+<div class="sect2">
+<h3 id="big_int_type_division_and_remainder_compound_assignment"><a class="anchor" href="#big_int_type_division_and_remainder_compound_assignment"></a>Division and remainder compound assignment</h3>
+<div class="listingblock">
+<div class="content">
+<pre class="highlightjs highlight"><code class="language-c++ hljs" data-lang="c++">template &lt;class T&gt; constexpr basic_big_int&amp; operator/=(T&amp;&amp; rhs) requires _common-big-int-type-with_&lt;T, basic_big_int&gt;;
+template &lt;class T&gt; constexpr basic_big_int&amp; operator%=(T&amp;&amp; rhs) requires _common-big-int-type-with_&lt;T, basic_big_int&gt;;</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p><code>operator/=</code> sets <code>*this</code> to the quotient and <code>operator%=</code> sets <code>*this</code> to the
+remainder of dividing <code>*this</code> by <code>rhs</code>, truncating toward zero, and returns
+<code>*this</code>.</p>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p><strong>Preconditions:</strong> The integer value of <code>rhs</code> is nonzero.</p>
+</li>
+<li>
+<p><strong>Postconditions:</strong> None.</p>
+</li>
+</ul>
+</div>
+</div>
+<div class="sect2">
+<h3 id="big_int_type_shift_compound_assignment"><a class="anchor" href="#big_int_type_shift_compound_assignment"></a>Shift compound assignment</h3>
+<div class="listingblock">
+<div class="content">
+<pre class="highlightjs highlight"><code class="language-c++ hljs" data-lang="c++">template &lt;_signed-or-unsigned_ S&gt; constexpr basic_big_int&amp; operator&lt;&lt;=(S s);
+template &lt;_signed-or-unsigned_ S&gt; constexpr basic_big_int&amp; operator&gt;&gt;=(S s);</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p><code>operator&lt;&#8656;</code> is equivalent to <code>*this = std::move(*this) &lt;&lt; s</code> (multiplication by
+<code>2^s</code>); <code>operator&gt;&gt;=</code> is equivalent to <code>*this = std::move(*this) &gt;&gt; s</code> (division
+by <code>2^s</code>, rounded toward negative infinity). Each returns <code>*this</code>.</p>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p><strong>Preconditions:</strong> <code>s &gt;= 0</code>, and <code>s</code> does not exceed the maximum shift <code>max_size()</code>.</p>
+</li>
+<li>
+<p><strong>Postconditions:</strong> None.</p>
+</li>
+<li>
+<p><strong>Throws:</strong> <code>std::length_error</code> if the result would occupy more than <code>max_size()</code> bits; otherwise, any exception thrown during allocation.</p>
+</li>
+</ul>
+</div>
+</div>
+</div>
+</div>
+<div class="sect1">
+<h2 id="big_int_type_swap"><a class="anchor" href="#big_int_type_swap"></a>Swap</h2>
+<div class="sectionbody">
+<div class="sect2">
+<h3 id="big_int_type_member_swap"><a class="anchor" href="#big_int_type_member_swap"></a>Member <code>swap</code></h3>
+<div class="listingblock">
+<div class="content">
+<pre class="highlightjs highlight"><code class="language-c++ hljs" data-lang="c++">constexpr void swap(basic_big_int&amp; x) noexcept(
+    std::allocator_traits&lt;allocator_type&gt;::propagate_on_container_swap::value ||
+    std::allocator_traits&lt;allocator_type&gt;::is_always_equal::value);</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>Exchanges the integer values of <code>*this</code> and <code>x</code>. Any dynamically-allocated
+storage is exchanged directly rather than reallocated, so the operation neither
+allocates nor deallocates. If
+<code>std::allocator_traits&lt;allocator_type&gt;::propagate_on_container_swap::value</code> is
+<code>true</code>, the allocators are also exchanged using an unqualified call to <code>swap</code>;
+otherwise they are left unchanged.</p>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p><strong>Preconditions:</strong> <code>std::allocator_traits&lt;allocator_type&gt;::propagate_on_container_swap::value</code> is <code>true</code>, or <code>get_allocator() == x.get_allocator()</code>.</p>
+</li>
+<li>
+<p><strong>Postconditions:</strong> <code>*this</code> holds the integer value that <code>x</code> held before the call, and <code>x</code> holds the integer value that <code>*this</code> held before the call. The allocators are exchanged if and only if <code>std::allocator_traits&lt;allocator_type&gt;::propagate_on_container_swap::value</code> is <code>true</code>.</p>
+</li>
+<li>
+<p><strong>Throws:</strong> Nothing.</p>
+</li>
+</ul>
+</div>
+</div>
+<div class="sect2">
+<h3 id="big_int_type_swap_non_member"><a class="anchor" href="#big_int_type_swap_non_member"></a>Non-member <code>swap</code></h3>
+<div class="listingblock">
+<div class="content">
+<pre class="highlightjs highlight"><code class="language-c++ hljs" data-lang="c++">template &lt;std::size_t b, class L, class A&gt;
+constexpr void swap(basic_big_int&lt;b, L, A&gt;&amp; x, basic_big_int&lt;b, L, A&gt;&amp; y)
+    noexcept(noexcept(x.swap(y)));</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>Equivalent to <code>x.swap(y)</code>, and so subject to the same preconditions. It lives in
+the <code>beman::big_int</code> namespace and is found by argument-dependent lookup, which
+makes it the overload selected both by an unqualified <code>swap(x, y)</code> and by the
+<code>using std::swap; swap(x, y)</code> idiom that generic code and the standard
+algorithms use. Selecting it in preference to <code>std::swap</code> matters: <code>std::swap</code>
+would exchange the two values with three moves, and would not honour
+<code>std::allocator_traits&lt;A&gt;::propagate_on_container_swap</code>.</p>
+</div>
+<div class="paragraph">
+<p>Both arguments must name the same <code>basic_big_int</code> specialization; there is no
+overload that exchanges values across differing <code>min_inplace_bits</code>, limb types,
+or allocators.</p>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p><strong>Effects:</strong> As if by <code>x.swap(y)</code>.</p>
+</li>
+<li>
+<p><strong>Preconditions:</strong> <code>std::allocator_traits&lt;A&gt;::propagate_on_container_swap::value</code> is <code>true</code>, or <code>x.get_allocator() == y.get_allocator()</code>.</p>
+</li>
+<li>
+<p><strong>Postconditions:</strong> <code>x</code> holds the integer value that <code>y</code> held before the call, and <code>y</code> holds the integer value that <code>x</code> held before the call.</p>
+</li>
+<li>
+<p><strong>Throws:</strong> Nothing.</p>
+</li>
+</ul>
+</div>
+</div>
+</div>
+</div>
+<div class="sect1">
+<h2 id="big_int_type_observers"><a class="anchor" href="#big_int_type_observers"></a>Observers</h2>
+<div class="sectionbody">
+<div class="paragraph">
+<p>Throughout this section, a "limb" is one <code>uint_multiprecision_t</code> object of the
+magnitude&#8217;s little-endian representation.</p>
+</div>
+<div class="sect2">
+<h3 id="big_int_type_representation"><a class="anchor" href="#big_int_type_representation"></a><code>representation</code></h3>
+<div class="listingblock">
+<div class="content">
+<pre class="highlightjs highlight"><code class="language-c++ hljs" data-lang="c++">constexpr std::span&lt;const uint_multiprecision_t&gt; representation() const noexcept;</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>Returns a <code>std::span</code> over the limbs that make up the magnitude, whether stored
+in place or in dynamic storage. The first limb in the range holds the least
+significant bits.</p>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p><strong>Preconditions:</strong> None.</p>
+</li>
+<li>
+<p><strong>Postconditions:</strong> None.</p>
+</li>
+<li>
+<p><strong>Remarks:</strong> If the integer value is greater than or equal to zero, <code>basic_big_int(std::from_range, representation(), get_allocator())</code> has the same integer value.</p>
+</li>
+</ul>
+</div>
+</div>
+<div class="sect2">
+<h3 id="big_int_type_representation_size"><a class="anchor" href="#big_int_type_representation_size"></a><code>representation_size</code></h3>
+<div class="listingblock">
+<div class="content">
+<pre class="highlightjs highlight"><code class="language-c++ hljs" data-lang="c++">constexpr size_type representation_size() const noexcept;</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>Returns the number of limbs that make up the magnitude: <code>1</code> if the integer value
+is zero, and otherwise <code>ceil(size() / std::numeric_limits&lt;uint_multiprecision_t&gt;::digits)</code>.
+This is the size of the span returned by <code>representation()</code>.</p>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p><strong>Preconditions:</strong> None.</p>
+</li>
+<li>
+<p><strong>Postconditions:</strong> None.</p>
+</li>
+</ul>
+</div>
+</div>
+<div class="sect2">
+<h3 id="big_int_type_get_allocator"><a class="anchor" href="#big_int_type_get_allocator"></a><code>get_allocator</code></h3>
+<div class="listingblock">
+<div class="content">
+<pre class="highlightjs highlight"><code class="language-c++ hljs" data-lang="c++">constexpr allocator_type get_allocator() const noexcept;</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>Returns a copy of the object&#8217;s allocator.</p>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p><strong>Preconditions:</strong> None.</p>
+</li>
+<li>
+<p><strong>Postconditions:</strong> None.</p>
+</li>
+</ul>
+</div>
+</div>
+<div class="sect2">
+<h3 id="big_int_type_size"><a class="anchor" href="#big_int_type_size"></a><code>size</code></h3>
+<div class="listingblock">
+<div class="content">
+<pre class="highlightjs highlight"><code class="language-c++ hljs" data-lang="c++">constexpr size_type size() const noexcept;</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>Returns the number of bits required to represent the magnitude of the value:
+<code>0</code> if the integer value is zero, and otherwise <code>floor(log2(|v|)) + 1</code>, where
+<code>v</code> is the integer value.</p>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p><strong>Preconditions:</strong> None.</p>
+</li>
+<li>
+<p><strong>Postconditions:</strong> None.</p>
+</li>
+</ul>
+</div>
+</div>
+<div class="sect2">
+<h3 id="big_int_type_max_size"><a class="anchor" href="#big_int_type_max_size"></a><code>max_size</code></h3>
+<div class="listingblock">
+<div class="content">
+<pre class="highlightjs highlight"><code class="language-c++ hljs" data-lang="c++">constexpr size_type max_size() const noexcept;</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>Returns the maximum number of bits that the magnitude may occupy, that is,
+<code>max_representation_size() * std::numeric_limits&lt;uint_multiprecision_t&gt;::digits</code>.
+An operation that would grow the magnitude beyond this many bits throws
+<code>std::length_error</code>; see <a href="#big_int_type_length_limit">the length limit</a>.</p>
+</div>
+<div class="paragraph">
+<p>This is a ceiling on the representation, not a largest value of the type, and it
+lies far beyond any allocation a program can make. <code>std::numeric_limits</code>
+accordingly reports <code>basic_big_int</code> as unbounded; see
+<a href="limits.html#limits_bounded" class="xref page">Why <code>is_bounded</code> is <code>false</code></a>.</p>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p><strong>Preconditions:</strong> None.</p>
+</li>
+<li>
+<p><strong>Postconditions:</strong> None.</p>
+</li>
+<li>
+<p><strong>Throws:</strong> Nothing.</p>
+</li>
+</ul>
+</div>
+</div>
+<div class="sect2">
+<h3 id="big_int_type_max_representation_size"><a class="anchor" href="#big_int_type_max_representation_size"></a><code>max_representation_size</code></h3>
+<div class="listingblock">
+<div class="content">
+<pre class="highlightjs highlight"><code class="language-c++ hljs" data-lang="c++">constexpr size_type max_representation_size() const noexcept;</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>Returns the maximum number of limbs that can be part of the representation, that
+is, <code>max_size() / std::numeric_limits&lt;uint_multiprecision_t&gt;::digits</code>.</p>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p><strong>Preconditions:</strong> None.</p>
+</li>
+<li>
+<p><strong>Postconditions:</strong> None.</p>
+</li>
+<li>
+<p><strong>Throws:</strong> Nothing.</p>
+</li>
+</ul>
+</div>
+</div>
+<div class="sect2">
+<h3 id="big_int_type_reserve"><a class="anchor" href="#big_int_type_reserve"></a><code>reserve</code></h3>
+<div class="listingblock">
+<div class="content">
+<pre class="highlightjs highlight"><code class="language-c++ hljs" data-lang="c++">constexpr void reserve(size_type n);</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>A directive, expressed as a number of bits, that informs the object of a planned
+increase in size so that storage can be allocated up front. The bit count is
+rounded up to a whole number of limbs; equivalent to
+<code>reserve_representation(ceil(n / std::numeric_limits&lt;uint_multiprecision_t&gt;::digits))</code>.</p>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p><strong>Preconditions:</strong> None.</p>
+</li>
+<li>
+<p><strong>Postconditions:</strong> If reallocation occurs, <code>capacity()</code> is greater than or equal to <code>n</code>; otherwise, <code>capacity()</code> is unchanged.</p>
+</li>
+<li>
+<p><strong>Throws:</strong> <code>std::length_error</code> if <code>n</code> is greater than <code>max_size()</code>; otherwise, any exception thrown during allocation. In either case <code>*this</code> is unchanged.</p>
+</li>
+</ul>
+</div>
+</div>
+<div class="sect2">
+<h3 id="big_int_type_reserve_representation"><a class="anchor" href="#big_int_type_reserve_representation"></a><code>reserve_representation</code></h3>
+<div class="listingblock">
+<div class="content">
+<pre class="highlightjs highlight"><code class="language-c++ hljs" data-lang="c++">constexpr void reserve_representation(size_type n);</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>A directive that informs the object of a planned increase in size, expressed as a
+number of limbs, so that storage can be allocated up front. Equivalent to
+<code>reserve(n * std::numeric_limits&lt;uint_multiprecision_t&gt;::digits)</code>.</p>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p><strong>Preconditions:</strong> None.</p>
+</li>
+<li>
+<p><strong>Postconditions:</strong> If reallocation occurs, <code>representation_capacity()</code> is greater than or equal to <code>n</code>; otherwise, the capacity is unchanged.</p>
+</li>
+<li>
+<p><strong>Throws:</strong> <code>std::length_error</code> if <code>n</code> is greater than <code>max_representation_size()</code>; otherwise, any exception thrown during allocation. In either case <code>*this</code> is unchanged.</p>
+</li>
+</ul>
+</div>
+</div>
+<div class="sect2">
+<h3 id="big_int_type_capacity"><a class="anchor" href="#big_int_type_capacity"></a><code>capacity</code></h3>
+<div class="listingblock">
+<div class="content">
+<pre class="highlightjs highlight"><code class="language-c++ hljs" data-lang="c++">constexpr size_type capacity() const noexcept;</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>Returns the number of bits of storage currently available without reallocating,
+that is, <code>representation_capacity() * std::numeric_limits&lt;uint_multiprecision_t&gt;::digits</code>.
+While the value is held in the in-place (small-object) storage this equals
+<code>inplace_bits</code>.</p>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p><strong>Preconditions:</strong> None.</p>
+</li>
+<li>
+<p><strong>Postconditions:</strong> None.</p>
+</li>
+</ul>
+</div>
+</div>
+<div class="sect2">
+<h3 id="big_int_type_representation_capacity"><a class="anchor" href="#big_int_type_representation_capacity"></a><code>representation_capacity</code></h3>
+<div class="listingblock">
+<div class="content">
+<pre class="highlightjs highlight"><code class="language-c++ hljs" data-lang="c++">constexpr size_type representation_capacity() const noexcept;</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>Returns the number of limbs that can be held without allocating: the greater of
+<code>inplace_capacity</code> and the number of limbs of dynamically-allocated storage
+currently available. Unlike <code>capacity()</code>, which is expressed in bits, this is a
+limb count that never reports fewer than <code>inplace_capacity</code> limbs.</p>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p><strong>Preconditions:</strong> None.</p>
+</li>
+<li>
+<p><strong>Postconditions:</strong> None.</p>
+</li>
+</ul>
+</div>
+</div>
+<div class="sect2">
+<h3 id="big_int_type_shrink_to_fit"><a class="anchor" href="#big_int_type_shrink_to_fit"></a><code>shrink_to_fit</code></h3>
+<div class="listingblock">
+<div class="content">
+<pre class="highlightjs highlight"><code class="language-c++ hljs" data-lang="c++">constexpr void shrink_to_fit();</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>If the magnitude fits in the in-place storage, frees any dynamic allocation and
+moves the value into the in-place storage. Otherwise, this is a non-binding
+request to reduce the dynamic capacity to the number of limbs in use; it never
+increases <code>capacity()</code>, but may reduce it, which can cause a reallocation.</p>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p><strong>Preconditions:</strong> None.</p>
+</li>
+<li>
+<p><strong>Postconditions:</strong> None.</p>
+</li>
+</ul>
+</div>
+</div>
+</div>
+</div>
+<div class="sect1">
+<h2 id="big_int_type_unary"><a class="anchor" href="#big_int_type_unary"></a>Unary operators</h2>
+<div class="sectionbody">
+<div class="paragraph">
+<p>The <code>const&amp;</code> overloads build their result by copy construction, so its
+allocator is
+<code>allocator_traits&lt;Allocator&gt;::select_on_container_copy_construction(get_allocator())</code>,
+as <code>abs&#8217;s is. The `&amp;&amp;</code> overloads take over the operand&#8217;s storage and so carry
+the operand&#8217;s own allocator.</p>
+</div>
+<div class="sect2">
+<h3 id="big_int_type_operator"><a class="anchor" href="#big_int_type_operator"></a><code>operator+</code></h3>
+<div class="listingblock">
+<div class="content">
+<pre class="highlightjs highlight"><code class="language-c++ hljs" data-lang="c++">constexpr basic_big_int operator+() const&amp;;
+constexpr basic_big_int operator+() &amp;&amp; noexcept;</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>Equivalent to <code>return *this;</code> for the lvalue overload and
+<code>return std::move(*this);</code> for the rvalue overload, so each selects the
+corresponding constructor and the allocator behavior above follows from it. The
+value is unchanged.</p>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p><strong>Preconditions:</strong> None.</p>
+</li>
+<li>
+<p><strong>Postconditions:</strong> None.</p>
+</li>
+</ul>
+</div>
+</div>
+<div class="sect2">
+<h3 id="big_int_type_operator_2"><a class="anchor" href="#big_int_type_operator_2"></a><code>operator-</code></h3>
+<div class="listingblock">
+<div class="content">
+<pre class="highlightjs highlight"><code class="language-c++ hljs" data-lang="c++">constexpr basic_big_int operator-() const&amp;;
+constexpr basic_big_int operator-() &amp;&amp; noexcept;</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>Returns the arithmetic negation of the value (equivalent to <code>0 - *this</code>). The
+rvalue overload reuses the operand&#8217;s storage and only flips the sign.</p>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p><strong>Preconditions:</strong> None.</p>
+</li>
+<li>
+<p><strong>Postconditions:</strong> None.</p>
+</li>
+</ul>
+</div>
+</div>
+<div class="sect2">
+<h3 id="big_int_type_operator_3"><a class="anchor" href="#big_int_type_operator_3"></a><code>operator~</code></h3>
+<div class="listingblock">
+<div class="content">
+<pre class="highlightjs highlight"><code class="language-c++ hljs" data-lang="c++">constexpr basic_big_int operator~() const&amp;;
+constexpr basic_big_int operator~() &amp;&amp;;</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>Returns the bitwise complement of the value as if performed on an
+infinite-width two&#8217;s-complement representation (equivalent to <code>-1 - *this</code>).</p>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p><strong>Preconditions:</strong> None.</p>
+</li>
+<li>
+<p><strong>Postconditions:</strong> None.</p>
+</li>
+</ul>
+</div>
+</div>
+<div class="sect2">
+<h3 id="big_int_type_operator_4"><a class="anchor" href="#big_int_type_operator_4"></a><code>operator++</code></h3>
+<div class="listingblock">
+<div class="content">
+<pre class="highlightjs highlight"><code class="language-c++ hljs" data-lang="c++">constexpr basic_big_int&amp; operator++();    // pre-increment
+constexpr basic_big_int  operator++(int); // post-increment</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>Pre-increment is equivalent to <code>*this += 1</code> and returns <code>*this</code>. Post-increment
+increments <code>*this</code> and returns a copy of the value prior to the increment.
+Neither is ref-qualified, so both apply to an rvalue.</p>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p><strong>Preconditions:</strong> None.</p>
+</li>
+<li>
+<p><strong>Postconditions:</strong> None.</p>
+</li>
+</ul>
+</div>
+</div>
+<div class="sect2">
+<h3 id="big_int_type_operator_5"><a class="anchor" href="#big_int_type_operator_5"></a><code>operator--</code></h3>
+<div class="listingblock">
+<div class="content">
+<pre class="highlightjs highlight"><code class="language-c++ hljs" data-lang="c++">constexpr basic_big_int&amp; operator--();    // pre-decrement
+constexpr basic_big_int  operator--(int); // post-decrement</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>Pre-decrement is equivalent to <code>*this -= 1</code> and returns <code>*this</code>. Post-decrement
+decrements <code>*this</code> and returns a copy of the value prior to the decrement.
+Neither is ref-qualified, so both apply to an rvalue.</p>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p><strong>Preconditions:</strong> None.</p>
+</li>
+<li>
+<p><strong>Postconditions:</strong> None.</p>
+</li>
+</ul>
+</div>
+</div>
+</div>
+</div>
+<div class="sect1">
+<h2 id="big_int_type_conv"><a class="anchor" href="#big_int_type_conv"></a>Conversion operator</h2>
+<div class="sectionbody">
+<div class="listingblock">
+<div class="content">
+<pre class="highlightjs highlight"><code class="language-c++ hljs" data-lang="c++">template &lt;_cv-unqualified-arithmetic_ T&gt;
+constexpr explicit operator T() const noexcept;</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>Converts the value to <code>T</code>. The result is <code>static_cast&lt;T&gt;(static_cast&lt;U&gt;(v))</code>,
+where <code>v</code> is the integer value and <code>U</code> is a hypothetical signed integer type
+wide enough to represent <code>v</code>. If <code>T</code> is <code>bool</code>, the result is <code>true</code> when the
+value is nonzero and <code>false</code> otherwise. If <code>T</code> is a floating-point type, the
+result is determined as if by a floating-integral conversion.</p>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p><strong>Constraints:</strong> <code>T</code> is a cv-unqualified arithmetic type.</p>
+</li>
+<li>
+<p><strong>Preconditions:</strong> None.</p>
+</li>
+<li>
+<p><strong>Postconditions:</strong> None.</p>
+</li>
+</ul>
+</div>
+</div>
+</div>
+<div class="sect1">
+<h2 id="big_int_type_cmp"><a class="anchor" href="#big_int_type_cmp"></a>Comparison operators</h2>
+<div class="sectionbody">
+<div class="listingblock">
+<div class="content">
+<pre class="highlightjs highlight"><code class="language-c++ hljs" data-lang="c++">template &lt;class L, _common-big-int-type-with_&lt;L&gt; R&gt;
+constexpr bool operator==(const L&amp; lhs, const R&amp; rhs) noexcept;
+template &lt;class L, _common-big-int-type-with_&lt;L&gt; R&gt;
+constexpr std::strong_ordering operator&lt;=&gt;(const L&amp; lhs, const R&amp; rhs) noexcept;</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p><code>operator==</code> returns <code>true</code> if the integer value of <code>lhs</code> equals the integer
+value of <code>rhs</code>. <code>operator&lt;&#8658;</code> returns <code>std::strong_ordering::less</code>,
+<code>std::strong_ordering::greater</code>, or <code>std::strong_ordering::equal</code> according to
+whether the integer value of <code>lhs</code> is less than, greater than, or equal to the
+integer value of <code>rhs</code>. At least one operand is a <code>basic_big_int</code>; the other may
+be the same <code>basic_big_int</code> specialization or a built-in signed or unsigned
+integer type.</p>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p><strong>Preconditions:</strong> None.</p>
+</li>
+<li>
+<p><strong>Postconditions:</strong> None.</p>
+</li>
+</ul>
+</div>
+</div>
+</div>
+<div class="sect1">
+<h2 id="big_int_type_binary"><a class="anchor" href="#big_int_type_binary"></a>Binary operators</h2>
+<div class="sectionbody">
+<div class="paragraph">
+<p>Every operator in this section returns a new value, so its allocator is the
+<code>basic_big_int</code> operand&#8217;s allocator run through
+<code>allocator_traits&lt;Allocator&gt;::select_on_container_copy_construction</code></p>
+</div>
+<div class="sect2">
+<h3 id="big_int_type_arithmetic_and_bitwise_operators"><a class="anchor" href="#big_int_type_arithmetic_and_bitwise_operators"></a>Arithmetic and bitwise operators</h3>
+<div class="listingblock">
+<div class="content">
+<pre class="highlightjs highlight"><code class="language-c++ hljs" data-lang="c++">template &lt;class L, class R&gt; constexpr _common-big-int-type_&lt;L, R&gt; operator+(L&amp;&amp; x, R&amp;&amp; y);
+template &lt;class L, class R&gt; constexpr _common-big-int-type_&lt;L, R&gt; operator-(L&amp;&amp; x, R&amp;&amp; y);
+template &lt;class L, class R&gt; constexpr _common-big-int-type_&lt;L, R&gt; operator*(L&amp;&amp; x, R&amp;&amp; y);
+template &lt;class L, class R&gt; constexpr _common-big-int-type_&lt;L, R&gt; operator&amp;(L&amp;&amp; x, R&amp;&amp; y);
+template &lt;class L, class R&gt; constexpr _common-big-int-type_&lt;L, R&gt; operator|(L&amp;&amp; x, R&amp;&amp; y);
+template &lt;class L, class R&gt; constexpr _common-big-int-type_&lt;L, R&gt; operator^(L&amp;&amp; x, R&amp;&amp; y);</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>Each returns a <code>basic_big_int</code> whose integer value is <code>T(x) @ T(y)</code>, where <code>@</code>
+is the corresponding operator and <code>T</code> is a hypothetical signed integer type with
+infinite range. One operand is a <code>basic_big_int</code> and the other is the same
+specialization or a built-in signed or unsigned integer type.</p>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p><strong>Preconditions:</strong> None.</p>
+</li>
+<li>
+<p><strong>Postconditions:</strong> None.</p>
+</li>
+<li>
+<p><strong>Throws:</strong> <code>std::length_error</code> if the result would occupy more than <code>max_size()</code> bits; otherwise, any exception thrown during allocation.</p>
+</li>
+<li>
+<p><strong>Remarks:</strong> The bitwise operators (<code>&amp;</code>, <code>|</code>, <code>^</code>) behave as if performed on a two&#8217;s-complement representation in which non-negative numbers have infinitely many leading zero bits and negative numbers have infinitely many leading one bits.</p>
+</li>
+</ul>
+</div>
+</div>
+<div class="sect2">
+<h3 id="big_int_type_division_and_remainder_operators"><a class="anchor" href="#big_int_type_division_and_remainder_operators"></a>Division and remainder operators</h3>
+<div class="listingblock">
+<div class="content">
+<pre class="highlightjs highlight"><code class="language-c++ hljs" data-lang="c++">template &lt;class L, class R&gt; constexpr _common-big-int-type_&lt;L, R&gt; operator/(L&amp;&amp; x, R&amp;&amp; y);
+template &lt;class L, class R&gt; constexpr _common-big-int-type_&lt;L, R&gt; operator%(L&amp;&amp; x, R&amp;&amp; y);</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p><code>operator/</code> returns the quotient and <code>operator%</code> returns the remainder of
+dividing <code>x</code> by <code>y</code>, truncating toward zero (matching the behavior of the
+built-in integer types).</p>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p><strong>Preconditions:</strong> The integer value of <code>y</code> is nonzero.</p>
+</li>
+<li>
+<p><strong>Postconditions:</strong> None.</p>
+</li>
+</ul>
+</div>
+</div>
+<div class="sect2">
+<h3 id="big_int_type_shift_operators"><a class="anchor" href="#big_int_type_shift_operators"></a>Shift operators</h3>
+<div class="listingblock">
+<div class="content">
+<pre class="highlightjs highlight"><code class="language-c++ hljs" data-lang="c++">template &lt;class T, _signed-or-unsigned_ S&gt;
+    requires /* remove_cvref_t&lt;T&gt; is a basic_big_int specialization */
+constexpr std::remove_cvref_t&lt;T&gt; operator&lt;&lt;(T&amp;&amp; x, S s);
+template &lt;class T, _signed-or-unsigned_ S&gt;
+    requires /* remove_cvref_t&lt;T&gt; is a basic_big_int specialization */
+constexpr std::remove_cvref_t&lt;T&gt; operator&gt;&gt;(T&amp;&amp; x, S s);</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p><code>operator&lt;&lt;</code> returns a <code>basic_big_int</code> whose integer value is <code>v * 2^s</code>, and
+<code>operator&gt;&gt;</code> returns one whose integer value is <code>v / 2^s</code> rounded toward
+negative infinity, where <code>v</code> is the integer value of <code>x</code>. The result&#8217;s allocator
+is selected as described for the binary operators above.</p>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p><strong>Constraints:</strong> <code>std::remove_cvref_t&lt;T&gt;</code> is a <code>basic_big_int</code> specialization.</p>
+</li>
+<li>
+<p><strong>Preconditions:</strong> <code>s &gt;= 0</code>, and <code>s</code> does not exceed the maximum shift for the result type (<code>max_size()</code>).</p>
+</li>
+<li>
+<p><strong>Postconditions:</strong> None.</p>
+</li>
+<li>
+<p><strong>Throws:</strong> <code>std::length_error</code> if the result would occupy more than <code>max_size()</code> bits; otherwise, any exception thrown during allocation.</p>
+</li>
+</ul>
+</div>
+</div>
+</div>
+</div>
+<div class="sect1">
+<h2 id="big_int_type_hash"><a class="anchor" href="#big_int_type_hash"></a>Hash support</h2>
+<div class="sectionbody">
+<div class="listingblock">
+<div class="content">
+<pre class="highlightjs highlight"><code class="language-c++ hljs" data-lang="c++">template &lt;std::size_t b, class L, class A&gt;
+struct std::hash&lt;beman::big_int::basic_big_int&lt;b, L, A&gt;&gt; {
+    std::size_t operator()(const beman::big_int::basic_big_int&lt;b, L, A&gt;&amp; x) const noexcept;
+};</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>Returns a hash of the integer value of <code>x</code>.</p>
+</div>
+<div class="paragraph">
+<p>The digest is a function of that value and of nothing else. Equal values hash
+equally whatever their <code>min_inplace_bits</code>, <code>Limb</code>, and <code>Allocator</code> arguments, and
+whatever the width of
+<a href="#big_int_type_unit_multi_t"><code>uint_multiprecision_t</code></a> on the
+target: a value hashes the same where limbs are 32 bits wide as it does where
+they are 64 bits wide.</p>
+</div>
+<div class="paragraph">
+<p>Where a signed bit-precise integer type can represent <code>x</code> and the implementation gives
+that type a digest, the digest is
+<code>std::hash&lt;_BitInt(N)&gt;()(static_cast&lt;_BitInt(N)&gt;(x))</code> for the narrowest
+such <code>N</code>, so a <code>basic_big_int</code> key and a <code>_BitInt(N)</code> key of the same value hash
+alike and can be hashed interchangeably.</p>
+</div>
+<div class="paragraph">
+<p>The widths tried are one per object size: a <code>_BitInt(N)</code> past one machine word
+occupies <code>ceil(N / word_bits)</code> words, and on an implementation that hashes a scalar by
+its object representation every <code>_BitInt</code> of a given size has one digest, so a
+rung at each size covers every width that shares that size. A value hashed on the
+192-bit rung therefore also matches a <code>_BitInt(160)</code> key of the same value, and
+one hashed on the narrowest rung matches every <code>_BitInt</code> no wider than a word.
+The ladder runs from one word up to the widest object the implementation&#8217;s own
+<code>std::hash</code> covers, which on a 64-bit target with libc is four words, so 64, 128,
+192, and 256 bits; a rung the target cannot form, or whose `std::hash` the
+implementation does not provide, is passed over. The reach is the
+`BEMAN_BIG_INT_HASH_MAX_OBJECT_WORDS` macro, counted in `std::size_t` words and
+defaulting to four, because libc hashes a scalar past that size with a helper it only
+declares, which is a hard error rather than something a concept can reject. Defining
+that macro to a larger value is the whole change needed to hash on wider rungs once a
+standard library covers them.</p>
+</div>
+<div class="paragraph">
+<p>Where no rung is available every value takes the fallback below; that is the case on an
+implementation that hashes no <code>_BitInt</code>, and on one whose compiler has no
+<code>_BitInt</code> at all.</p>
+</div>
+<div class="paragraph">
+<p>An implementation that hashes a scalar by its object representation gives
+<code>_BitInt(64)</code> and <code>std::int64_t</code> the same digest, since they share one. On such
+an implementation, where a machine word is 64 bits, a value in the range of
+<code>std::int64_t</code> therefore also hashes as
+<code>std::hash&lt;std::int64_t&gt;()(static_cast&lt;std::int64_t&gt;(x))</code>.</p>
+</div>
+<div class="paragraph">
+<p>Beyond the widest available width the digest is not itself part of the interface and may change
+between releases. It is currently SipHash-2-4 over the little-endian byte string of
+the magnitude, trimmed of its most significant zero bytes. That string is
+<code>size()</code> bits rounded up to a whole number of bytes. A negative value is
+distinguished from its magnitude before the string is absorbed. Where <code>std::size_t</code>
+is narrower than 64 bits, the digest is folded down to its width.</p>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p><strong>Preconditions:</strong> None.</p>
+</li>
+<li>
+<p><strong>Postconditions:</strong> None.</p>
+</li>
+</ul>
+</div>
+</div>
+</div>
+  <div class="edit-this-page">
+      <a href="https://github.com/bemanproject/big_int/edit/develop/docs/modules/ROOT/pages/big_int_type.adoc">Edit this Page</a>
+      </div>
+      <nav class="pagination">
+        <span class="prev"><a href="api_reference.html">API Reference</a></span>
+        <span class="next"><a href="charconv.html"><code>&lt;charconv&gt;</code> Conversions</a></span>
+    </nav>
+</article>
+</div>
+  <div id="footer">
+  <script id="site-script" src="./_/js/site.js" data-ui-root-path="./_"></script>
+<script async src="./_/js/vendor/highlight.js"></script>
+<script async src="./_/js/vendor/tabs.js" data-sync-storage-key="preferred-tab"></script>
+<script async src="./_/js/vendor/lunr.js"></script>
+<script async src="./_/js/search-ui.js" id="search-ui-script" data-site-root-path="."
+  data-ui-root-path="./_"></script>
+<script async src="./search-index.js"></script>
+</div>
+</div>
+  </body>
+</html>

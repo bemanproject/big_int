@@ -1,0 +1,678 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+        <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1">
+<style>html.fonts-loading{visibility:hidden;opacity:0}</style>
+<script>document.documentElement.classList.add('fonts-loading');</script>
+
+<link rel="preload" href="./_/font/NotoSansDisplay.woff2" as="font" type="font/woff2" crossorigin="anonymous" />
+<link rel="preload" href="./_/font/NotoSansDisplay-Italic.woff2" as="font" type="font/woff2" crossorigin="anonymous" />
+<link rel="preload" href="./_/font/MonaspaceNeon-Var.woff2" as="font" type="font/woff2" crossorigin="anonymous" />
+<link rel="preload" href="./_/font/MonaspaceXenon-Var.woff2" as="font" type="font/woff2" crossorigin="anonymous" />
+
+<script>
+(function() {
+  'use strict';
+  
+  var revealed = false;
+  
+  var reveal = function() {
+    if (revealed) return;
+    revealed = true;
+    document.documentElement.classList.remove('fonts-loading');
+  };
+  
+  setTimeout(reveal, 3000);
+  
+  if (!('FontFace' in window) || !('fonts' in document)) {
+    setTimeout(reveal, 100);
+    return;
+  }
+  
+  var uiRoot = './_';
+  var fonts = [
+    { 
+      family: 'Noto Sans', 
+      url: uiRoot + '/font/NotoSansDisplay.woff2',
+      descriptors: { style: 'normal', weight: '100 900', stretch: '62.5% 100%' }
+    },
+    { 
+      family: 'Noto Sans', 
+      url: uiRoot + '/font/NotoSansDisplay-Italic.woff2',
+      descriptors: { style: 'italic', weight: '100 900', stretch: '62.5% 100%' }
+    },
+    { 
+      family: 'Monaspace Neon', 
+      url: uiRoot + '/font/MonaspaceNeon-Var.woff2',
+      descriptors: { style: 'normal', weight: '400' }
+    },
+    { 
+      family: 'Monaspace Xenon', 
+      url: uiRoot + '/font/MonaspaceXenon-Var.woff2',
+      descriptors: { style: 'italic', weight: '400' }
+    }
+  ];
+  
+  var loadPromises = fonts.map(function(f) {
+    try {
+      var face = new FontFace(f.family, 'url("' + f.url + '")', f.descriptors);
+      return face.load().then(function(loaded) {
+        document.fonts.add(loaded);
+        return loaded;
+      }).catch(function() {
+        return null;
+      });
+    } catch (e) {
+      return Promise.resolve(null);
+    }
+  });
+  
+  Promise.all(loadPromises)
+    .then(function() {
+      return document.fonts.ready;
+    })
+    .then(reveal)
+    .catch(reveal);
+})();
+</script>    <title>&lt;charconv&gt; Conversions :: std::big_int</title>
+    <link rel="prev" href="big_int_type.html">
+    <link rel="next" href="string.html">
+  <meta name="generator" content="Antora 3.1.15">
+    <link rel="stylesheet" href="./_/css/boostlook.css">
+    <link rel="stylesheet" href="./_/css/site.css">
+    <link rel="stylesheet" href="./_/css/vendor/tabs.css">
+    <script>
+    (function() {
+      if (window.self !== window.top) return;
+      var theme = localStorage.getItem('antora-theme');
+      if (!theme && window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
+        theme = 'dark';
+      }
+      if (theme === 'dark') document.documentElement.classList.add('dark');
+    })();
+    </script>
+    <script>var uiRootPath = './_'</script>
+<link rel="icon" href="./_/img/favicons/favicon.ico" type="image/x-icon">
+    <!-- Favicon configuration -->
+    <link rel="apple-touch-icon" sizes="180x180" href="./_/img/favicons/apple-touch-icon.png">
+    <link rel="icon" type="image/png" sizes="32x32" href="./_/img/favicons/favicon-32x32.png">
+    <link rel="icon" type="image/png" sizes="16x16" href="./_/img/favicons/favicon-16x16.png">
+    <link rel="manifest" href="./_/img/favicons/site.webmanifest">
+    <link rel="shortcut icon" href="./_/img/favicons/favicon.ico">
+  </head>
+  <body class="article toc2 toc-left">
+    <div class="boostlook">
+   <div id="header">
+      <div id="toc" class="nav-container toc2" data-component="ROOT" data-version="">
+  <aside class="nav">
+    <button class="nav-close"></button>
+    <div class="panels">
+      <div class="nav-panel-menu is-active" data-panel="menu">
+  <nav class="nav-menu">
+      <div class="title-row">
+        <h3 class="title"><a href="overview.html">std::big_int</a></h3>
+        <button class="theme-toggle" aria-label="Toggle dark mode" title="Toggle theme" style="display:none">
+  <i class="fas fa-sun theme-icon-light"></i>
+  <i class="fas fa-moon theme-icon-dark"></i>
+</button>      </div>
+      <ul class="nav-list">
+        <ul class="nav-list">
+        <li class="" data-depth="1">
+            <a class="nav-link" href="overview.html">Overview</a>
+        </li>
+        <ul class="nav-list">
+        <li class="" data-depth="2">
+            <a class="nav-link" href="overview.html#overview_introduction">Introduction</a>
+        </li>
+              <li class="" data-depth="2">
+            <a class="nav-link" href="overview.html#overview_motivation">Motivation</a>
+        </li>
+              <li class="" data-depth="2">
+            <a class="nav-link" href="overview.html#overview_supported_compilers">Supported Compilers</a>
+        </li>
+        </ul>
+        <li class="" data-depth="1">
+            <a class="nav-link" href="build_and_usage.html">Build and Usage</a>
+        </li>
+        <ul class="nav-list">
+        <li class="" data-depth="2">
+            <a class="nav-link" href="build_and_usage.html#build_and_usage_dependencies">Dependencies</a>
+        </li>
+              <li class="" data-depth="2">
+            <a class="nav-link" href="build_and_usage.html#build_and_usage_build">Building</a>
+        </li>
+              <li class="" data-depth="2">
+            <a class="nav-link" href="build_and_usage.html#build_and_usage_modules">Optional: the C++ named module</a>
+        </li>
+              <li class="" data-depth="2">
+            <a class="nav-link" href="build_and_usage.html#build_and_usage_install">Installation</a>
+        </li>
+              <li class="" data-depth="2">
+            <a class="nav-link" href="build_and_usage.html#build_and_usage_cmake">CMake configuration</a>
+        </li>
+              <li class="" data-depth="2">
+            <a class="nav-link" href="build_and_usage.html#build_and_usage_using">Using <code>beman.big_int</code></a>
+        </li>
+        </ul>
+        <li class="" data-depth="1">
+            <a class="nav-link" href="modules.html">C++ Named Modules</a>
+        </li>
+        <ul class="nav-list">
+        <li class="" data-depth="2">
+            <a class="nav-link" href="modules.html#modules_exports">What the module exports</a>
+        </li>
+              <li class="" data-depth="2">
+            <a class="nav-link" href="modules.html#modules_build">Building the module</a>
+        </li>
+              <li class="" data-depth="2">
+            <a class="nav-link" href="modules.html#modules_consume">Consuming the module</a>
+        </li>
+              <li class="" data-depth="2">
+            <a class="nav-link" href="modules.html#modules_import_std">The <code>import std</code> variant</a>
+        </li>
+              <li class="" data-depth="2">
+            <a class="nav-link" href="modules.html#modules_tests">Tests</a>
+        </li>
+              <li class="" data-depth="2">
+            <a class="nav-link" href="modules.html#modules_limitations">Limitations</a>
+        </li>
+        </ul>
+        <li class="" data-depth="1">
+            <a class="nav-link" href="debugging.html">Debugger Visualizers</a>
+        </li>
+        <ul class="nav-list">
+        <li class="" data-depth="2">
+            <a class="nav-link" href="debugging.html#debugging_natvis">MSVC and Visual Studio: Natvis</a>
+        </li>
+        <ul class="nav-list">
+        <li class="" data-depth="3">
+            <a class="nav-link" href="debugging.html#debugging_natvis_plain">The self-contained visualizer</a>
+        </li>
+              <li class="" data-depth="3">
+            <a class="nav-link" href="debugging.html#debugging_natvis_addin">The add-in DLL, for full decimal</a>
+        </li>
+              <li class="" data-depth="3">
+            <a class="nav-link" href="debugging.html#debugging_natvis_expand">Expanding a value</a>
+        </li>
+              <li class="" data-depth="3">
+            <a class="nav-link" href="debugging.html#debugging_natvis_limits">Limitations</a>
+        </li>
+        </ul>
+        <li class="" data-depth="2">
+            <a class="nav-link" href="debugging.html#debugging_printers">LLDB and GDB: Python pretty printers</a>
+        </li>
+        </ul>
+        <li class="" data-depth="1">
+            <a class="nav-link" href="examples.html">Examples</a>
+        </li>
+        <ul class="nav-list">
+        <li class="" data-depth="2">
+            <a class="nav-link" href="examples.html#examples_foundational">Foundational Examples</a>
+        </li>
+        <ul class="nav-list">
+        <li class="" data-depth="3">
+            <a class="nav-link" href="examples.html#examples_construction">Construction</a>
+        </li>
+              <li class="" data-depth="3">
+            <a class="nav-link" href="examples.html#examples_operators">Fundamental operators</a>
+        </li>
+              <li class="" data-depth="3">
+            <a class="nav-link" href="examples.html#examples_factorial">Factorial</a>
+        </li>
+              <li class="" data-depth="3">
+            <a class="nav-link" href="examples.html#examples_literals">User-defined literals</a>
+        </li>
+              <li class="" data-depth="3">
+            <a class="nav-link" href="examples.html#examples_charconv">Numeric conversions</a>
+        </li>
+              <li class="" data-depth="3">
+            <a class="nav-link" href="examples.html#examples_string">String conversions</a>
+        </li>
+              <li class="" data-depth="3">
+            <a class="nav-link" href="examples.html#examples_numeric">Numeric functions</a>
+        </li>
+              <li class="" data-depth="3">
+            <a class="nav-link" href="examples.html#examples_limits">Numeric limits</a>
+        </li>
+              <li class="" data-depth="3">
+            <a class="nav-link" href="examples.html#examples_division">Integer division</a>
+        </li>
+              <li class="" data-depth="3">
+            <a class="nav-link" href="examples.html#examples_io">Formatting and output</a>
+        </li>
+        </ul>
+        <li class="" data-depth="2">
+            <a class="nav-link" href="examples.html#examples_advanced">Advanced Examples</a>
+        </li>
+        <ul class="nav-list">
+        <li class="" data-depth="3">
+            <a class="nav-link" href="examples.html#examples_fibonacci">Fibonacci</a>
+        </li>
+              <li class="" data-depth="3">
+            <a class="nav-link" href="examples.html#examples_roots">Roots</a>
+        </li>
+              <li class="" data-depth="3">
+            <a class="nav-link" href="examples.html#examples_primes">Primes</a>
+        </li>
+              <li class="" data-depth="3">
+            <a class="nav-link" href="examples.html#examples_rsa">RSA</a>
+        </li>
+        </ul>
+  </ul>
+        <li class="" data-depth="1">
+            <a class="nav-link" href="api_reference.html">API Reference</a>
+        </li>
+        <ul class="nav-list">
+        <li class="" data-depth="2">
+            <a class="nav-link" href="api_reference.html#api_namespaces">Namespaces</a>
+        </li>
+              <li class="" data-depth="2">
+            <a class="nav-link" href="api_reference.html#api_types">Types</a>
+        </li>
+              <li class="" data-depth="2">
+            <a class="nav-link" href="api_reference.html#api_functions">Functions</a>
+        </li>
+        </ul>
+        <li class="" data-depth="1">
+            <a class="nav-link" href="big_int_type.html">The big_int Type</a>
+        </li>
+        <ul class="nav-list">
+        <li class="" data-depth="2">
+            <a class="nav-link" href="big_int_type.html#big_int_type_design">Design</a>
+        </li>
+              <li class="" data-depth="2">
+            <a class="nav-link" href="big_int_type.html#big_int_type_synopsis">Synopsis</a>
+        </li>
+              <li class="" data-depth="2">
+            <a class="nav-link" href="big_int_type.html#big_int_type_members">Member types and constants</a>
+        </li>
+              <li class="" data-depth="2">
+            <a class="nav-link" href="big_int_type.html#big_int_type_construct">Constructors and destructor</a>
+        </li>
+              <li class="" data-depth="2">
+            <a class="nav-link" href="big_int_type.html#big_int_type_assign">Assignment</a>
+        </li>
+              <li class="" data-depth="2">
+            <a class="nav-link" href="big_int_type.html#big_int_type_compound">Compound assignment operators</a>
+        </li>
+              <li class="" data-depth="2">
+            <a class="nav-link" href="big_int_type.html#big_int_type_swap">Swap</a>
+        </li>
+        <ul class="nav-list">
+        <li class="" data-depth="3">
+            <a class="nav-link" href="big_int_type.html#big_int_type_swap_non_member">Non-member swap</a>
+        </li>
+        </ul>
+        <li class="" data-depth="2">
+            <a class="nav-link" href="big_int_type.html#big_int_type_observers">Observers</a>
+        </li>
+              <li class="" data-depth="2">
+            <a class="nav-link" href="big_int_type.html#big_int_type_unary">Unary operators</a>
+        </li>
+              <li class="" data-depth="2">
+            <a class="nav-link" href="big_int_type.html#big_int_type_conv">Conversion operator</a>
+        </li>
+              <li class="" data-depth="2">
+            <a class="nav-link" href="big_int_type.html#big_int_type_cmp">Comparison operators</a>
+        </li>
+              <li class="" data-depth="2">
+            <a class="nav-link" href="big_int_type.html#big_int_type_binary">Binary operators</a>
+        </li>
+        </ul>
+        <li class=" is-current-page" data-depth="1">
+            <a class="nav-link" href="charconv.html"><code>&lt;charconv&gt;</code> Conversions</a>
+        </li>
+        <ul class="nav-list">
+        <li class="" data-depth="2">
+            <a class="nav-link" href="#charconv_synopsis">Synopsis</a>
+        </li>
+              <li class="" data-depth="2">
+            <a class="nav-link" href="#charconv_to_chars">to_chars</a>
+        </li>
+              <li class="" data-depth="2">
+            <a class="nav-link" href="#charconv_from_chars">from_chars</a>
+        </li>
+        </ul>
+        <li class="" data-depth="1">
+            <a class="nav-link" href="string.html">String Conversions</a>
+        </li>
+        <ul class="nav-list">
+        <li class="" data-depth="2">
+            <a class="nav-link" href="string.html#string_synopsis">Synopsis</a>
+        </li>
+              <li class="" data-depth="2">
+            <a class="nav-link" href="string.html#string_to_string">to_string</a>
+        </li>
+              <li class="" data-depth="2">
+            <a class="nav-link" href="string.html#string_to_wstring">to_wstring</a>
+        </li>
+        </ul>
+        <li class="" data-depth="1">
+            <a class="nav-link" href="format.html"><code>&lt;format&gt;</code> Support</a>
+        </li>
+        <ul class="nav-list">
+        <li class="" data-depth="2">
+            <a class="nav-link" href="format.html#format_synopsis">Synopsis</a>
+        </li>
+              <li class="" data-depth="2">
+            <a class="nav-link" href="format.html#format_spec">Format specification</a>
+        </li>
+              <li class="" data-depth="2">
+            <a class="nav-link" href="format.html#format_members">parse and format</a>
+        </li>
+              <li class="" data-depth="2">
+            <a class="nav-link" href="format.html#format_errors">Errors</a>
+        </li>
+              <li class="" data-depth="2">
+            <a class="nav-link" href="format.html#format_examples">Examples</a>
+        </li>
+              <li class="" data-depth="2">
+            <a class="nav-link" href="format.html#format_wide">Wide characters</a>
+        </li>
+        </ul>
+        <li class="" data-depth="1">
+            <a class="nav-link" href="literals.html">User-Defined Literals</a>
+        </li>
+        <ul class="nav-list">
+        <li class="" data-depth="2">
+            <a class="nav-link" href="literals.html#literals_synopsis">Synopsis</a>
+        </li>
+              <li class="" data-depth="2">
+            <a class="nav-link" href="literals.html#literals_scope">Bringing the literals into scope</a>
+        </li>
+              <li class="" data-depth="2">
+            <a class="nav-link" href="literals.html#literals_suffix">The n, N, _n, and _N suffixes</a>
+        </li>
+              <li class="" data-depth="2">
+            <a class="nav-link" href="literals.html#literals_bases">Bases, separators, and sign</a>
+        </li>
+              <li class="" data-depth="2">
+            <a class="nav-link" href="literals.html#literals_constexpr">Compile-time evaluation</a>
+        </li>
+        </ul>
+        <li class="" data-depth="1">
+            <a class="nav-link" href="limits.html"><code>std::numeric_limits</code> Support</a>
+        </li>
+        <ul class="nav-list">
+        <li class="" data-depth="2">
+            <a class="nav-link" href="limits.html#limits_synopsis">Synopsis</a>
+        </li>
+              <li class="" data-depth="2">
+            <a class="nav-link" href="limits.html#limits_values">What each member reports</a>
+        </li>
+              <li class="" data-depth="2">
+            <a class="nav-link" href="limits.html#limits_noexcept">The <code>noexcept</code> specifications</a>
+        </li>
+              <li class="" data-depth="2">
+            <a class="nav-link" href="limits.html#limits_bounded">Why <code>is_bounded</code> is <code>false</code></a>
+        </li>
+              <li class="" data-depth="2">
+            <a class="nav-link" href="limits.html#limits_generic">Using it in generic code</a>
+        </li>
+        </ul>
+        <li class="" data-depth="1">
+            <a class="nav-link" href="numeric.html">Numeric Functions</a>
+        </li>
+        <ul class="nav-list">
+        <li class="" data-depth="2">
+            <a class="nav-link" href="numeric.html#numeric_synopsis">Synopsis</a>
+        </li>
+              <li class="" data-depth="2">
+            <a class="nav-link" href="numeric.html#numeric_abs">abs</a>
+        </li>
+              <li class="" data-depth="2">
+            <a class="nav-link" href="numeric.html#numeric_saturating_cast">saturating_cast</a>
+        </li>
+              <li class="" data-depth="2">
+            <a class="nav-link" href="numeric.html#numeric_in_range">in_range</a>
+        </li>
+              <li class="" data-depth="2">
+            <a class="nav-link" href="numeric.html#numeric_gcd">gcd</a>
+        </li>
+              <li class="" data-depth="2">
+            <a class="nav-link" href="numeric.html#numeric_lcm">lcm</a>
+        </li>
+              <li class="" data-depth="2">
+            <a class="nav-link" href="numeric.html#numeric_midpoint">midpoint</a>
+        </li>
+        </ul>
+        <li class="" data-depth="1">
+            <a class="nav-link" href="benchmarks.html">Benchmarks</a>
+        </li>
+        <ul class="nav-list">
+        <li class="" data-depth="2">
+            <a class="nav-link" href="benchmarks.html#benchmarks_small_value">Small-value optimization</a>
+        </li>
+              <li class="" data-depth="2">
+            <a class="nav-link" href="benchmarks.html#benchmarks_libraries">big_int vs Boost.Multiprecision and GMP</a>
+        </li>
+              <li class="" data-depth="2">
+            <a class="nav-link" href="benchmarks.html#benchmarks_base_conversion">Base conversion and string representations</a>
+        </li>
+              <li class="" data-depth="2">
+            <a class="nav-link" href="benchmarks.html#benchmarks_order_n">Order-N operations</a>
+        </li>
+              <li class="" data-depth="2">
+            <a class="nav-link" href="benchmarks.html#benchmarks_arch_opts">Architecture-specific optimizations</a>
+        </li>
+              <li class="" data-depth="2">
+            <a class="nav-link" href="benchmarks.html#benchmarks_sources">Source programs</a>
+        </li>
+        </ul>
+        <li class="" data-depth="1">
+            <a class="nav-link" href="references.html">References</a>
+        </li>
+        </ul>
+  </ul>
+  </nav>
+</div>
+    </div>
+  </aside>
+</div>
+  </div>  <div id="content">
+    <article class="doc max-width-reset">
+  <div class="toolbar" role="navigation">
+<button class="nav-toggle"></button>
+<nav class="breadcrumbs" aria-label="breadcrumbs">
+  <ul>
+    <li>
+      <a href="overview.html" aria-label="Home: std::big_int">
+        <svg xmlns="http://www.w3.org/2000/svg" width="1rem" height="1rem" viewBox="0 -960 960 960" fill="#000000" aria-hidden="true"><path d="M160-120v-480l320-240 320 240v480H560v-280H400v280H160Z"/></svg>
+      </a>
+    </li>
+    <li><a href="charconv.html"><code>&lt;charconv&gt;</code> Conversions</a></li>
+  </ul>
+</nav>
+  <div class="search-container">
+    <div id="search-field" class="field has-filter">
+      <input id="search-input" type="text" placeholder="Search the docs" >
+    </div>
+  </div>
+<div class="spirit-nav">
+    <a accesskey="p" href="big_int_type.html">
+      <span class="material-symbols-outlined" title="Previous: The big_int Type">arrow_back</span>
+    </a>
+    <a class="disabled" accesskey="u" aria-disabled="true" tabindex="-1">
+      <span class="material-symbols-outlined" title="Up:">arrow_upward</span>
+    </a>
+    <a accesskey="n" href="string.html">
+      <span class="material-symbols-outlined" title="Next: String Conversions">arrow_forward</span>
+    </a>
+</div></div>
+    <h1 class="page"><code>&lt;charconv&gt;</code> Conversions</h1>
+  <div id="preamble">
+<div class="sectionbody">
+<div class="paragraph">
+<p><code>beman::big_int</code> provides <code>to_chars</code> and <code>from_chars</code> overloads that convert
+between a <code>basic_big_int</code> and its textual representation. They mirror the
+behavior of the standard <code>std::to_chars</code> and <code>std::from_chars</code> functions from
+<code>&lt;charconv&gt;</code>: the conversion is locale-independent, never allocates a result
+buffer of its own, never throws, and is usable in a constant expression.</p>
+</div>
+</div>
+</div>
+<div class="sect1">
+<h2 id="charconv_synopsis"><a class="anchor" href="#charconv_synopsis"></a>Synopsis</h2>
+<div class="sectionbody">
+<div class="listingblock">
+<div class="content">
+<pre class="highlightjs highlight"><code class="language-c++ hljs" data-lang="c++">namespace beman::big_int {
+
+template &lt;std::size_t b, class L, class A&gt;
+constexpr std::to_chars_result
+to_chars(char* first, char* last, const basic_big_int&lt;b, L, A&gt;&amp; value, int base = 10);
+template &lt;std::size_t b, class L, class A&gt;
+constexpr std::to_chars_result
+to_chars(char* first, char* last, basic_big_int&lt;b, L, A&gt;&amp;&amp; value, int base = 10);
+
+template &lt;std::size_t b, class L, class A&gt;
+constexpr std::from_chars_result
+from_chars(const char* first, const char* last, basic_big_int&lt;b, L, A&gt;&amp; value, int base = 10);
+
+} // namespace beman::big_int</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>In every base, digits with a value below ten use the characters <code>0</code>-<code>9</code>; digits
+with a value of ten or more use the lowercase letters <code>a</code>-<code>z</code> when writing and
+accept either case when reading. No prefix (such as <code>0x</code>) is written or
+consumed, and no leading whitespace is skipped.</p>
+</div>
+</div>
+</div>
+<div class="sect1">
+<h2 id="charconv_to_chars"><a class="anchor" href="#charconv_to_chars"></a><code>to_chars</code></h2>
+<div class="sectionbody">
+<div class="listingblock">
+<div class="content">
+<pre class="highlightjs highlight"><code class="language-c++ hljs" data-lang="c++">template &lt;std::size_t b, class L, class A&gt;
+constexpr std::to_chars_result
+to_chars(char* first, char* last, const basic_big_int&lt;b, L, A&gt;&amp; value, int base = 10);
+template &lt;std::size_t b, class L, class A&gt;
+constexpr std::to_chars_result
+to_chars(char* first, char* last, basic_big_int&lt;b, L, A&gt;&amp;&amp; value, int base = 10);</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>Writes the integer value of <code>value</code> into the character range <code>[first, last)</code>,
+in the given <code>base</code>, as if by repeated division. The magnitude is written with
+no leading zeros, except that a value of zero is written as the single
+character <code>0</code>. A negative value is prefixed with a <code>-</code>; non-negative values are
+written with no sign. No null terminator is written. An lvalue, and a const
+rvalue, select the first overload; a non-const rvalue selects the second.</p>
+</div>
+<div class="paragraph">
+<p>Both overloads write exactly the same characters. They differ only in what they
+may do to <code>value</code> along the way. The repeated-division path divides the
+magnitude down one limb-sized block of digits at a time, which destroys it, so
+the lvalue overload renders a copy; the rvalue overload, having been handed the
+value, divides down the storage <code>value</code> already owns and allocates nothing.</p>
+</div>
+<div class="paragraph">
+<p>That path is the only one that consumes anything, and it is reached only by a
+magnitude spanning more than one limb, in a base that is not a power of two,
+and below the size at which the sub-quadratic conversion kernel takes over. A
+power-of-two base reads the limbs directly, a single-limb magnitude is handed
+to <code>std::to_chars</code>, and a magnitude past the kernel&#8217;s gate is rendered from a
+read-only view of the limbs. In those three cases the rvalue overload does no
+less work than the lvalue one&#8201;&#8212;&#8201;but no more either, so handing the value over
+is never the worse choice when the caller is finished with it:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlightjs highlight"><code class="language-c++ hljs" data-lang="c++">big_int     x = (1_n &lt;&lt; 512) + 1; // 155 decimal digits: the repeated-division path
+std::string text(160, '\0');
+
+to_chars(text.data(), text.data() + text.size(), x, 10);            // Copies; x still holds 2^512 + 1.
+to_chars(text.data(), text.data() + text.size(), std::move(x), 10); // Divides x down where it already lives.</code></pre>
+</div>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p><strong>Preconditions:</strong> <code>[first, last)</code> is a valid range, and <code>2 &lt;= base &lt;= 36</code>.</p>
+</li>
+<li>
+<p><strong>Postconditions:</strong> For the lvalue overload, <code>value</code> is unchanged. For the rvalue overload, <code>value</code> is in a valid but unspecified state, whether or not the call succeeded.</p>
+</li>
+<li>
+<p><strong>Returns:</strong> A <code>std::to_chars_result</code>. On success, <code>ec == std::errc{}</code> and <code>ptr</code> is the one-past-the-end pointer of the characters written. If the range is too small to hold the full representation, <code>ec == std::errc::value_too_large</code>, <code>ptr == last</code>, and the contents of <code>[first, last)</code> are unspecified.</p>
+</li>
+<li>
+<p><strong>Throws:</strong> Nothing.</p>
+</li>
+<li>
+<p><strong>Remarks:</strong> Both overloads are usable in a constant expression. When the magnitude fits in a single limb (or, where wider, in a <code>std::uintmax_t</code>) the conversion is delegated to <code>std::to_chars</code>; larger magnitudes use the library&#8217;s own multiprecision conversion.</p>
+</li>
+</ul>
+</div>
+</div>
+</div>
+<div class="sect1">
+<h2 id="charconv_from_chars"><a class="anchor" href="#charconv_from_chars"></a><code>from_chars</code></h2>
+<div class="sectionbody">
+<div class="listingblock">
+<div class="content">
+<pre class="highlightjs highlight"><code class="language-c++ hljs" data-lang="c++">template &lt;std::size_t b, class L, class A&gt;
+constexpr std::from_chars_result
+from_chars(const char* first, const char* last, basic_big_int&lt;b, L, A&gt;&amp; value, int base = 10);</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>Parses an integer from the longest prefix of <code>[first, last)</code> that forms a valid
+number in the given <code>base</code> and, on success, stores it in <code>value</code>. The accepted
+grammar is an optional leading <code>-</code> followed by one or more digits valid for
+<code>base</code>. A leading <code>+</code> is not accepted, and a <code>-</code> is the only sign recognized.
+Parsing stops at the first character that is not a valid digit, so trailing
+characters (for example, a <code>.</code> or a digit that is out of range for <code>base</code>) are
+left unconsumed and still constitute a successful parse of the prefix before
+them.</p>
+</div>
+<div class="paragraph">
+<p>Because <code>basic_big_int</code> is elastic, it grows to hold whatever value is parsed;
+unlike the built-in integer conversions, <code>from_chars</code> never reports
+<code>std::errc::result_out_of_range</code>.</p>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p><strong>Preconditions:</strong> <code>[first, last)</code> is a valid range.</p>
+</li>
+<li>
+<p><strong>Postconditions:</strong> If <code>ec == std::errc{}</code>, <code>value</code> holds the parsed integer; otherwise <code>value</code> is unchanged.</p>
+</li>
+<li>
+<p><strong>Returns:</strong> A <code>std::from_chars_result</code>. On success, <code>ec == std::errc{}</code> and <code>ptr</code> points one past the last character consumed. If the range does not begin with a valid number&#8201;&#8212;&#8201;because it is empty, <code>first</code> is null, it contains only a <code>-</code>, <code>base</code> is outside <code>[2, 36]</code>, or the first character is not a valid digit&#8201;&#8212;&#8201;then <code>ec == std::errc::invalid_argument</code>, <code>value</code> is unchanged, and <code>ptr == last</code>.</p>
+</li>
+<li>
+<p><strong>Throws:</strong> Nothing.</p>
+</li>
+<li>
+<p><strong>Remarks:</strong> The function is usable in a constant expression.</p>
+</li>
+</ul>
+</div>
+</div>
+</div>
+  <div class="edit-this-page">
+      <a href="https://github.com/bemanproject/big_int/edit/develop/docs/modules/ROOT/pages/charconv.adoc">Edit this Page</a>
+      </div>
+      <nav class="pagination">
+        <span class="prev"><a href="big_int_type.html">The big_int Type</a></span>
+        <span class="next"><a href="string.html">String Conversions</a></span>
+    </nav>
+</article>
+</div>
+  <div id="footer">
+  <script id="site-script" src="./_/js/site.js" data-ui-root-path="./_"></script>
+<script async src="./_/js/vendor/highlight.js"></script>
+<script async src="./_/js/vendor/tabs.js" data-sync-storage-key="preferred-tab"></script>
+<script async src="./_/js/vendor/lunr.js"></script>
+<script async src="./_/js/search-ui.js" id="search-ui-script" data-site-root-path="."
+  data-ui-root-path="./_"></script>
+<script async src="./search-index.js"></script>
+</div>
+</div>
+  </body>
+</html>

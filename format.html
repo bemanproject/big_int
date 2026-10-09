@@ -1,0 +1,993 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+        <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1">
+<style>html.fonts-loading{visibility:hidden;opacity:0}</style>
+<script>document.documentElement.classList.add('fonts-loading');</script>
+
+<link rel="preload" href="./_/font/NotoSansDisplay.woff2" as="font" type="font/woff2" crossorigin="anonymous" />
+<link rel="preload" href="./_/font/NotoSansDisplay-Italic.woff2" as="font" type="font/woff2" crossorigin="anonymous" />
+<link rel="preload" href="./_/font/MonaspaceNeon-Var.woff2" as="font" type="font/woff2" crossorigin="anonymous" />
+<link rel="preload" href="./_/font/MonaspaceXenon-Var.woff2" as="font" type="font/woff2" crossorigin="anonymous" />
+
+<script>
+(function() {
+  'use strict';
+  
+  var revealed = false;
+  
+  var reveal = function() {
+    if (revealed) return;
+    revealed = true;
+    document.documentElement.classList.remove('fonts-loading');
+  };
+  
+  setTimeout(reveal, 3000);
+  
+  if (!('FontFace' in window) || !('fonts' in document)) {
+    setTimeout(reveal, 100);
+    return;
+  }
+  
+  var uiRoot = './_';
+  var fonts = [
+    { 
+      family: 'Noto Sans', 
+      url: uiRoot + '/font/NotoSansDisplay.woff2',
+      descriptors: { style: 'normal', weight: '100 900', stretch: '62.5% 100%' }
+    },
+    { 
+      family: 'Noto Sans', 
+      url: uiRoot + '/font/NotoSansDisplay-Italic.woff2',
+      descriptors: { style: 'italic', weight: '100 900', stretch: '62.5% 100%' }
+    },
+    { 
+      family: 'Monaspace Neon', 
+      url: uiRoot + '/font/MonaspaceNeon-Var.woff2',
+      descriptors: { style: 'normal', weight: '400' }
+    },
+    { 
+      family: 'Monaspace Xenon', 
+      url: uiRoot + '/font/MonaspaceXenon-Var.woff2',
+      descriptors: { style: 'italic', weight: '400' }
+    }
+  ];
+  
+  var loadPromises = fonts.map(function(f) {
+    try {
+      var face = new FontFace(f.family, 'url("' + f.url + '")', f.descriptors);
+      return face.load().then(function(loaded) {
+        document.fonts.add(loaded);
+        return loaded;
+      }).catch(function() {
+        return null;
+      });
+    } catch (e) {
+      return Promise.resolve(null);
+    }
+  });
+  
+  Promise.all(loadPromises)
+    .then(function() {
+      return document.fonts.ready;
+    })
+    .then(reveal)
+    .catch(reveal);
+})();
+</script>    <title>&lt;format&gt; Support :: std::big_int</title>
+    <link rel="prev" href="string.html">
+    <link rel="next" href="literals.html">
+  <meta name="generator" content="Antora 3.1.15">
+    <link rel="stylesheet" href="./_/css/boostlook.css">
+    <link rel="stylesheet" href="./_/css/site.css">
+    <link rel="stylesheet" href="./_/css/vendor/tabs.css">
+    <script>
+    (function() {
+      if (window.self !== window.top) return;
+      var theme = localStorage.getItem('antora-theme');
+      if (!theme && window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
+        theme = 'dark';
+      }
+      if (theme === 'dark') document.documentElement.classList.add('dark');
+    })();
+    </script>
+    <script>var uiRootPath = './_'</script>
+<link rel="icon" href="./_/img/favicons/favicon.ico" type="image/x-icon">
+    <!-- Favicon configuration -->
+    <link rel="apple-touch-icon" sizes="180x180" href="./_/img/favicons/apple-touch-icon.png">
+    <link rel="icon" type="image/png" sizes="32x32" href="./_/img/favicons/favicon-32x32.png">
+    <link rel="icon" type="image/png" sizes="16x16" href="./_/img/favicons/favicon-16x16.png">
+    <link rel="manifest" href="./_/img/favicons/site.webmanifest">
+    <link rel="shortcut icon" href="./_/img/favicons/favicon.ico">
+  </head>
+  <body class="article toc2 toc-left">
+    <div class="boostlook">
+   <div id="header">
+      <div id="toc" class="nav-container toc2" data-component="ROOT" data-version="">
+  <aside class="nav">
+    <button class="nav-close"></button>
+    <div class="panels">
+      <div class="nav-panel-menu is-active" data-panel="menu">
+  <nav class="nav-menu">
+      <div class="title-row">
+        <h3 class="title"><a href="overview.html">std::big_int</a></h3>
+        <button class="theme-toggle" aria-label="Toggle dark mode" title="Toggle theme" style="display:none">
+  <i class="fas fa-sun theme-icon-light"></i>
+  <i class="fas fa-moon theme-icon-dark"></i>
+</button>      </div>
+      <ul class="nav-list">
+        <ul class="nav-list">
+        <li class="" data-depth="1">
+            <a class="nav-link" href="overview.html">Overview</a>
+        </li>
+        <ul class="nav-list">
+        <li class="" data-depth="2">
+            <a class="nav-link" href="overview.html#overview_introduction">Introduction</a>
+        </li>
+              <li class="" data-depth="2">
+            <a class="nav-link" href="overview.html#overview_motivation">Motivation</a>
+        </li>
+              <li class="" data-depth="2">
+            <a class="nav-link" href="overview.html#overview_supported_compilers">Supported Compilers</a>
+        </li>
+        </ul>
+        <li class="" data-depth="1">
+            <a class="nav-link" href="build_and_usage.html">Build and Usage</a>
+        </li>
+        <ul class="nav-list">
+        <li class="" data-depth="2">
+            <a class="nav-link" href="build_and_usage.html#build_and_usage_dependencies">Dependencies</a>
+        </li>
+              <li class="" data-depth="2">
+            <a class="nav-link" href="build_and_usage.html#build_and_usage_build">Building</a>
+        </li>
+              <li class="" data-depth="2">
+            <a class="nav-link" href="build_and_usage.html#build_and_usage_modules">Optional: the C++ named module</a>
+        </li>
+              <li class="" data-depth="2">
+            <a class="nav-link" href="build_and_usage.html#build_and_usage_install">Installation</a>
+        </li>
+              <li class="" data-depth="2">
+            <a class="nav-link" href="build_and_usage.html#build_and_usage_cmake">CMake configuration</a>
+        </li>
+              <li class="" data-depth="2">
+            <a class="nav-link" href="build_and_usage.html#build_and_usage_using">Using <code>beman.big_int</code></a>
+        </li>
+        </ul>
+        <li class="" data-depth="1">
+            <a class="nav-link" href="modules.html">C++ Named Modules</a>
+        </li>
+        <ul class="nav-list">
+        <li class="" data-depth="2">
+            <a class="nav-link" href="modules.html#modules_exports">What the module exports</a>
+        </li>
+              <li class="" data-depth="2">
+            <a class="nav-link" href="modules.html#modules_build">Building the module</a>
+        </li>
+              <li class="" data-depth="2">
+            <a class="nav-link" href="modules.html#modules_consume">Consuming the module</a>
+        </li>
+              <li class="" data-depth="2">
+            <a class="nav-link" href="modules.html#modules_import_std">The <code>import std</code> variant</a>
+        </li>
+              <li class="" data-depth="2">
+            <a class="nav-link" href="modules.html#modules_tests">Tests</a>
+        </li>
+              <li class="" data-depth="2">
+            <a class="nav-link" href="modules.html#modules_limitations">Limitations</a>
+        </li>
+        </ul>
+        <li class="" data-depth="1">
+            <a class="nav-link" href="debugging.html">Debugger Visualizers</a>
+        </li>
+        <ul class="nav-list">
+        <li class="" data-depth="2">
+            <a class="nav-link" href="debugging.html#debugging_natvis">MSVC and Visual Studio: Natvis</a>
+        </li>
+        <ul class="nav-list">
+        <li class="" data-depth="3">
+            <a class="nav-link" href="debugging.html#debugging_natvis_plain">The self-contained visualizer</a>
+        </li>
+              <li class="" data-depth="3">
+            <a class="nav-link" href="debugging.html#debugging_natvis_addin">The add-in DLL, for full decimal</a>
+        </li>
+              <li class="" data-depth="3">
+            <a class="nav-link" href="debugging.html#debugging_natvis_expand">Expanding a value</a>
+        </li>
+              <li class="" data-depth="3">
+            <a class="nav-link" href="debugging.html#debugging_natvis_limits">Limitations</a>
+        </li>
+        </ul>
+        <li class="" data-depth="2">
+            <a class="nav-link" href="debugging.html#debugging_printers">LLDB and GDB: Python pretty printers</a>
+        </li>
+        </ul>
+        <li class="" data-depth="1">
+            <a class="nav-link" href="examples.html">Examples</a>
+        </li>
+        <ul class="nav-list">
+        <li class="" data-depth="2">
+            <a class="nav-link" href="examples.html#examples_foundational">Foundational Examples</a>
+        </li>
+        <ul class="nav-list">
+        <li class="" data-depth="3">
+            <a class="nav-link" href="examples.html#examples_construction">Construction</a>
+        </li>
+              <li class="" data-depth="3">
+            <a class="nav-link" href="examples.html#examples_operators">Fundamental operators</a>
+        </li>
+              <li class="" data-depth="3">
+            <a class="nav-link" href="examples.html#examples_factorial">Factorial</a>
+        </li>
+              <li class="" data-depth="3">
+            <a class="nav-link" href="examples.html#examples_literals">User-defined literals</a>
+        </li>
+              <li class="" data-depth="3">
+            <a class="nav-link" href="examples.html#examples_charconv">Numeric conversions</a>
+        </li>
+              <li class="" data-depth="3">
+            <a class="nav-link" href="examples.html#examples_string">String conversions</a>
+        </li>
+              <li class="" data-depth="3">
+            <a class="nav-link" href="examples.html#examples_numeric">Numeric functions</a>
+        </li>
+              <li class="" data-depth="3">
+            <a class="nav-link" href="examples.html#examples_limits">Numeric limits</a>
+        </li>
+              <li class="" data-depth="3">
+            <a class="nav-link" href="examples.html#examples_division">Integer division</a>
+        </li>
+              <li class="" data-depth="3">
+            <a class="nav-link" href="examples.html#examples_io">Formatting and output</a>
+        </li>
+        </ul>
+        <li class="" data-depth="2">
+            <a class="nav-link" href="examples.html#examples_advanced">Advanced Examples</a>
+        </li>
+        <ul class="nav-list">
+        <li class="" data-depth="3">
+            <a class="nav-link" href="examples.html#examples_fibonacci">Fibonacci</a>
+        </li>
+              <li class="" data-depth="3">
+            <a class="nav-link" href="examples.html#examples_roots">Roots</a>
+        </li>
+              <li class="" data-depth="3">
+            <a class="nav-link" href="examples.html#examples_primes">Primes</a>
+        </li>
+              <li class="" data-depth="3">
+            <a class="nav-link" href="examples.html#examples_rsa">RSA</a>
+        </li>
+        </ul>
+  </ul>
+        <li class="" data-depth="1">
+            <a class="nav-link" href="api_reference.html">API Reference</a>
+        </li>
+        <ul class="nav-list">
+        <li class="" data-depth="2">
+            <a class="nav-link" href="api_reference.html#api_namespaces">Namespaces</a>
+        </li>
+              <li class="" data-depth="2">
+            <a class="nav-link" href="api_reference.html#api_types">Types</a>
+        </li>
+              <li class="" data-depth="2">
+            <a class="nav-link" href="api_reference.html#api_functions">Functions</a>
+        </li>
+        </ul>
+        <li class="" data-depth="1">
+            <a class="nav-link" href="big_int_type.html">The big_int Type</a>
+        </li>
+        <ul class="nav-list">
+        <li class="" data-depth="2">
+            <a class="nav-link" href="big_int_type.html#big_int_type_design">Design</a>
+        </li>
+              <li class="" data-depth="2">
+            <a class="nav-link" href="big_int_type.html#big_int_type_synopsis">Synopsis</a>
+        </li>
+              <li class="" data-depth="2">
+            <a class="nav-link" href="big_int_type.html#big_int_type_members">Member types and constants</a>
+        </li>
+              <li class="" data-depth="2">
+            <a class="nav-link" href="big_int_type.html#big_int_type_construct">Constructors and destructor</a>
+        </li>
+              <li class="" data-depth="2">
+            <a class="nav-link" href="big_int_type.html#big_int_type_assign">Assignment</a>
+        </li>
+              <li class="" data-depth="2">
+            <a class="nav-link" href="big_int_type.html#big_int_type_compound">Compound assignment operators</a>
+        </li>
+              <li class="" data-depth="2">
+            <a class="nav-link" href="big_int_type.html#big_int_type_swap">Swap</a>
+        </li>
+        <ul class="nav-list">
+        <li class="" data-depth="3">
+            <a class="nav-link" href="big_int_type.html#big_int_type_swap_non_member">Non-member swap</a>
+        </li>
+        </ul>
+        <li class="" data-depth="2">
+            <a class="nav-link" href="big_int_type.html#big_int_type_observers">Observers</a>
+        </li>
+              <li class="" data-depth="2">
+            <a class="nav-link" href="big_int_type.html#big_int_type_unary">Unary operators</a>
+        </li>
+              <li class="" data-depth="2">
+            <a class="nav-link" href="big_int_type.html#big_int_type_conv">Conversion operator</a>
+        </li>
+              <li class="" data-depth="2">
+            <a class="nav-link" href="big_int_type.html#big_int_type_cmp">Comparison operators</a>
+        </li>
+              <li class="" data-depth="2">
+            <a class="nav-link" href="big_int_type.html#big_int_type_binary">Binary operators</a>
+        </li>
+        </ul>
+        <li class="" data-depth="1">
+            <a class="nav-link" href="charconv.html"><code>&lt;charconv&gt;</code> Conversions</a>
+        </li>
+        <ul class="nav-list">
+        <li class="" data-depth="2">
+            <a class="nav-link" href="charconv.html#charconv_synopsis">Synopsis</a>
+        </li>
+              <li class="" data-depth="2">
+            <a class="nav-link" href="charconv.html#charconv_to_chars">to_chars</a>
+        </li>
+              <li class="" data-depth="2">
+            <a class="nav-link" href="charconv.html#charconv_from_chars">from_chars</a>
+        </li>
+        </ul>
+        <li class="" data-depth="1">
+            <a class="nav-link" href="string.html">String Conversions</a>
+        </li>
+        <ul class="nav-list">
+        <li class="" data-depth="2">
+            <a class="nav-link" href="string.html#string_synopsis">Synopsis</a>
+        </li>
+              <li class="" data-depth="2">
+            <a class="nav-link" href="string.html#string_to_string">to_string</a>
+        </li>
+              <li class="" data-depth="2">
+            <a class="nav-link" href="string.html#string_to_wstring">to_wstring</a>
+        </li>
+        </ul>
+        <li class=" is-current-page" data-depth="1">
+            <a class="nav-link" href="format.html"><code>&lt;format&gt;</code> Support</a>
+        </li>
+        <ul class="nav-list">
+        <li class="" data-depth="2">
+            <a class="nav-link" href="#format_synopsis">Synopsis</a>
+        </li>
+              <li class="" data-depth="2">
+            <a class="nav-link" href="#format_spec">Format specification</a>
+        </li>
+              <li class="" data-depth="2">
+            <a class="nav-link" href="#format_members">parse and format</a>
+        </li>
+              <li class="" data-depth="2">
+            <a class="nav-link" href="#format_errors">Errors</a>
+        </li>
+              <li class="" data-depth="2">
+            <a class="nav-link" href="#format_examples">Examples</a>
+        </li>
+              <li class="" data-depth="2">
+            <a class="nav-link" href="#format_wide">Wide characters</a>
+        </li>
+        </ul>
+        <li class="" data-depth="1">
+            <a class="nav-link" href="literals.html">User-Defined Literals</a>
+        </li>
+        <ul class="nav-list">
+        <li class="" data-depth="2">
+            <a class="nav-link" href="literals.html#literals_synopsis">Synopsis</a>
+        </li>
+              <li class="" data-depth="2">
+            <a class="nav-link" href="literals.html#literals_scope">Bringing the literals into scope</a>
+        </li>
+              <li class="" data-depth="2">
+            <a class="nav-link" href="literals.html#literals_suffix">The n, N, _n, and _N suffixes</a>
+        </li>
+              <li class="" data-depth="2">
+            <a class="nav-link" href="literals.html#literals_bases">Bases, separators, and sign</a>
+        </li>
+              <li class="" data-depth="2">
+            <a class="nav-link" href="literals.html#literals_constexpr">Compile-time evaluation</a>
+        </li>
+        </ul>
+        <li class="" data-depth="1">
+            <a class="nav-link" href="limits.html"><code>std::numeric_limits</code> Support</a>
+        </li>
+        <ul class="nav-list">
+        <li class="" data-depth="2">
+            <a class="nav-link" href="limits.html#limits_synopsis">Synopsis</a>
+        </li>
+              <li class="" data-depth="2">
+            <a class="nav-link" href="limits.html#limits_values">What each member reports</a>
+        </li>
+              <li class="" data-depth="2">
+            <a class="nav-link" href="limits.html#limits_noexcept">The <code>noexcept</code> specifications</a>
+        </li>
+              <li class="" data-depth="2">
+            <a class="nav-link" href="limits.html#limits_bounded">Why <code>is_bounded</code> is <code>false</code></a>
+        </li>
+              <li class="" data-depth="2">
+            <a class="nav-link" href="limits.html#limits_generic">Using it in generic code</a>
+        </li>
+        </ul>
+        <li class="" data-depth="1">
+            <a class="nav-link" href="numeric.html">Numeric Functions</a>
+        </li>
+        <ul class="nav-list">
+        <li class="" data-depth="2">
+            <a class="nav-link" href="numeric.html#numeric_synopsis">Synopsis</a>
+        </li>
+              <li class="" data-depth="2">
+            <a class="nav-link" href="numeric.html#numeric_abs">abs</a>
+        </li>
+              <li class="" data-depth="2">
+            <a class="nav-link" href="numeric.html#numeric_saturating_cast">saturating_cast</a>
+        </li>
+              <li class="" data-depth="2">
+            <a class="nav-link" href="numeric.html#numeric_in_range">in_range</a>
+        </li>
+              <li class="" data-depth="2">
+            <a class="nav-link" href="numeric.html#numeric_gcd">gcd</a>
+        </li>
+              <li class="" data-depth="2">
+            <a class="nav-link" href="numeric.html#numeric_lcm">lcm</a>
+        </li>
+              <li class="" data-depth="2">
+            <a class="nav-link" href="numeric.html#numeric_midpoint">midpoint</a>
+        </li>
+        </ul>
+        <li class="" data-depth="1">
+            <a class="nav-link" href="benchmarks.html">Benchmarks</a>
+        </li>
+        <ul class="nav-list">
+        <li class="" data-depth="2">
+            <a class="nav-link" href="benchmarks.html#benchmarks_small_value">Small-value optimization</a>
+        </li>
+              <li class="" data-depth="2">
+            <a class="nav-link" href="benchmarks.html#benchmarks_libraries">big_int vs Boost.Multiprecision and GMP</a>
+        </li>
+              <li class="" data-depth="2">
+            <a class="nav-link" href="benchmarks.html#benchmarks_base_conversion">Base conversion and string representations</a>
+        </li>
+              <li class="" data-depth="2">
+            <a class="nav-link" href="benchmarks.html#benchmarks_order_n">Order-N operations</a>
+        </li>
+              <li class="" data-depth="2">
+            <a class="nav-link" href="benchmarks.html#benchmarks_arch_opts">Architecture-specific optimizations</a>
+        </li>
+              <li class="" data-depth="2">
+            <a class="nav-link" href="benchmarks.html#benchmarks_sources">Source programs</a>
+        </li>
+        </ul>
+        <li class="" data-depth="1">
+            <a class="nav-link" href="references.html">References</a>
+        </li>
+        </ul>
+  </ul>
+  </nav>
+</div>
+    </div>
+  </aside>
+</div>
+  </div>  <div id="content">
+    <article class="doc max-width-reset">
+  <div class="toolbar" role="navigation">
+<button class="nav-toggle"></button>
+<nav class="breadcrumbs" aria-label="breadcrumbs">
+  <ul>
+    <li>
+      <a href="overview.html" aria-label="Home: std::big_int">
+        <svg xmlns="http://www.w3.org/2000/svg" width="1rem" height="1rem" viewBox="0 -960 960 960" fill="#000000" aria-hidden="true"><path d="M160-120v-480l320-240 320 240v480H560v-280H400v280H160Z"/></svg>
+      </a>
+    </li>
+    <li><a href="format.html"><code>&lt;format&gt;</code> Support</a></li>
+  </ul>
+</nav>
+  <div class="search-container">
+    <div id="search-field" class="field has-filter">
+      <input id="search-input" type="text" placeholder="Search the docs" >
+    </div>
+  </div>
+<div class="spirit-nav">
+    <a accesskey="p" href="string.html">
+      <span class="material-symbols-outlined" title="Previous: String Conversions">arrow_back</span>
+    </a>
+    <a class="disabled" accesskey="u" aria-disabled="true" tabindex="-1">
+      <span class="material-symbols-outlined" title="Up:">arrow_upward</span>
+    </a>
+    <a accesskey="n" href="literals.html">
+      <span class="material-symbols-outlined" title="Next: User-Defined Literals">arrow_forward</span>
+    </a>
+</div></div>
+    <h1 class="page"><code>&lt;format&gt;</code> Support</h1>
+  <div id="preamble">
+<div class="sectionbody">
+<div class="paragraph">
+<p><code>beman::big_int</code> specializes <code>std::formatter</code> for every <code>basic_big_int</code>
+specialization, for both <code>char</code> and <code>wchar_t</code>, so a big integer formats
+wherever a built-in integer does: <code>std::format</code>, <code>std::format_to</code>,
+<code>std::format_to_n</code>, <code>std::formatted_size</code>, <code>std::vformat</code>, and anything else
+built on <code>std::formatter</code>. The format specification is the standard integer
+one, with the same fields, the same defaults, and the same errors, so a spec
+that formats an <code>int</code> formats a <code>basic_big_int</code> the same way, only without a
+fixed-width ceiling on the value.</p>
+</div>
+<div class="paragraph">
+<p>Include the formatter with <code>&lt;beman/big_int/format.hpp&gt;</code>, or transitively
+through the umbrella <code>&lt;beman/big_int.hpp&gt;</code>. The header is self-guarding: its
+entire contents are conditioned on</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlightjs highlight"><code class="language-c++ hljs" data-lang="c++">#if __has_include(&lt;format&gt;) &amp;&amp; defined(__cpp_lib_format) &amp;&amp; __cpp_lib_format &gt;= 201907L</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>so on a standard library that does not provide <code>&lt;format&gt;</code> the header is empty
+and including it is harmless. <code>basic_big_int</code> has no stream inserter of its
+own; to write a value to a <code>std::ostream</code>, format it or convert it with
+<a href="string.html#string_to_string" class="xref page"><code>to_string</code></a>.</p>
+</div>
+</div>
+</div>
+<div class="sect1">
+<h2 id="format_synopsis"><a class="anchor" href="#format_synopsis"></a>Synopsis</h2>
+<div class="sectionbody">
+<div class="listingblock">
+<div class="content">
+<pre class="highlightjs highlight"><code class="language-c++ hljs" data-lang="c++">namespace std {
+
+template &lt;std::size_t b, class L, class A, class charT&gt;
+struct formatter&lt;beman::big_int::basic_big_int&lt;b, L, A&gt;, charT&gt; {
+    template &lt;class ParseContext&gt;
+    constexpr typename ParseContext::iterator parse(ParseContext&amp; ctx);
+
+    template &lt;class FormatContext&gt;
+    typename FormatContext::iterator format(const beman::big_int::basic_big_int&lt;b, L, A&gt;&amp; value,
+                                            FormatContext&amp; ctx) const;
+};
+
+} // namespace std</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>The specialization is written in terms of <code>basic_big_int</code>, so it covers
+<code>big_int</code>, <code>pmr::big_int</code>, and every other specialization, whatever the
+in-place bit count, limb type, and allocator. <code>charT</code> may be <code>char</code> or
+<code>wchar_t</code>.</p>
+</div>
+</div>
+</div>
+<div class="sect1">
+<h2 id="format_spec"><a class="anchor" href="#format_spec"></a>Format specification</h2>
+<div class="sectionbody">
+<div class="paragraph">
+<p>The grammar is the standard integer one:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlightjs highlight"><code class="language-text hljs" data-lang="text">format-spec ::= [[fill]align][sign]["#"]["0"][width]["L"][type]
+
+fill        ::= any single character other than '{' or '}'
+align       ::= '&lt;' | '&gt;' | '^'
+sign        ::= '+' | '-' | ' '
+width       ::= positive-integer | '{' [arg-id] '}'
+type        ::= 'b' | 'B' | 'd' | 'o' | 'x' | 'X' | 'c'</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>Every field is optional, and an empty specification (<code>{}</code> or <code>{:}</code>) formats the
+value in decimal with no padding.</p>
+</div>
+<div class="sect2">
+<h3 id="format_spec_fill"><a class="anchor" href="#format_spec_fill"></a>Fill and alignment</h3>
+<div class="paragraph">
+<p><code>align</code> is <code>&lt;</code> for left, <code>&gt;</code> for right, and <code>^</code> for centered, and is preceded
+by an optional <code>fill</code> character that defaults to a space. A field wider than
+the formatted value is padded with <code>fill</code> on the side or sides the alignment
+selects; a value at least as wide as the field is written in full and is never
+truncated.</p>
+</div>
+<div class="paragraph">
+<p>Without an explicit alignment the default is right for every numeric
+presentation type and left for the <code>c</code> type, matching the standard formatters.</p>
+</div>
+<div class="paragraph">
+<p>The fill is a character, not a code unit: a UTF-8 format string may spell it in
+up to four bytes, and a UTF-16 one may spell it as a surrogate pair. Each
+padding position takes one whole fill character, and a byte sequence that does
+not spell a character, such as a truncated or overlong UTF-8 sequence, is
+rejected with <code>std::format_error</code>. As with the standard formatters, the fill is
+one character and not one grapheme cluster, so a letter followed by a combining
+mark is not a valid fill.</p>
+</div>
+</div>
+<div class="sect2">
+<h3 id="format_spec_sign"><a class="anchor" href="#format_spec_sign"></a>Sign</h3>
+<div class="paragraph">
+<p><code>-</code> (the default) writes a sign only for a negative value, <code>` writes a sign
+for every value, and a space writes a space in place of the `</code>. Zero is
+non-negative, so <code>{:+}</code> renders it as <code>+0</code>. The sign option is ill-formed with
+the <code>c</code> type.</p>
+</div>
+</div>
+<div class="sect2">
+<h3 id="format_spec_alt"><a class="anchor" href="#format_spec_alt"></a>Alternate form</h3>
+<div class="paragraph">
+<p><code>#</code> prepends the base prefix: <code>0b</code> for <code>b</code>, <code>0B</code> for <code>B</code>, <code>0x</code> for <code>x</code>, <code>0X</code>
+for <code>X</code>, and a single <code>0</code> for <code>o</code>, except that a value of zero takes no octal
+prefix. It has no effect on <code>d</code> or on the default type, and is ill-formed with
+the <code>c</code> type.</p>
+</div>
+</div>
+<div class="sect2">
+<h3 id="format_spec_zero"><a class="anchor" href="#format_spec_zero"></a>Zero padding</h3>
+<div class="paragraph">
+<p><code>0</code> selects sign-aware zero padding: the field is filled with <code>0</code> characters
+placed after the sign and after any base prefix, so <code>{:#06x}</code> renders 255 as
+<code>0x00ff</code>. An explicit alignment overrides it, in which case the fill character
+and alignment are used as written. <code>0</code> is ill-formed with the <code>c</code> type.</p>
+</div>
+</div>
+<div class="sect2">
+<h3 id="format_spec_width"><a class="anchor" href="#format_spec_width"></a>Width</h3>
+<div class="paragraph">
+<p>The minimum field width is either a positive decimal integer written in the
+spec, or a nested replacement field. A leading <code>0</code> is always consumed as the
+zero-padding flag, so a static width never begins with <code>0</code>. A nested <code>{}</code> takes
+the next argument in sequence, and a nested <code>{n}</code> takes argument <code>n</code>; the
+width argument must be of a non-bool integral type and hold a non-negative
+value.</p>
+</div>
+<div class="paragraph">
+<p>A width, or an argument index, too large to represent in a <code>std::size_t</code> is
+ill-formed.</p>
+</div>
+</div>
+<div class="sect2">
+<h3 id="format_spec_locale"><a class="anchor" href="#format_spec_locale"></a>Locale</h3>
+<div class="paragraph">
+<p><code>L</code> inserts the locale&#8217;s digit group separators into the digits, using
+<code>std::numpunct&lt;charT&gt;::grouping()</code> and <code>std::numpunct&lt;charT&gt;::thousands_sep()</code>
+of the locale passed to the formatting function, or of the global locale where
+the call passes none. The classic locale has empty grouping, so <code>L</code> is a no-op
+there.</p>
+</div>
+<div class="paragraph">
+<p>Grouping applies to the digits alone, not to the sign or the base prefix, and,
+as with the standard integer formatters, applies in every base rather than in
+decimal only. Where <code>L</code> is combined with <code>0</code>, the separators count toward the
+field width and the padding zeros themselves are not grouped, so a width of 12
+renders 1234 as <code>00000001,234</code> under a locale that groups in threes with a
+comma. <code>L</code> is accepted with the <code>c</code> type, where it has no effect.</p>
+</div>
+</div>
+<div class="sect2">
+<h3 id="format_spec_type"><a class="anchor" href="#format_spec_type"></a>Presentation type</h3>
+<table class="tableblock frame-all grid-all stretch">
+<colgroup>
+<col style="width: 25%;">
+<col style="width: 75%;">
+</colgroup>
+<thead>
+<tr>
+<th class="tableblock halign-left valign-top">Type</th>
+<th class="tableblock halign-left valign-top">Meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock">none, <code>d</code></p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Decimal.</p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><code>b</code></p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Binary. With <code>#</code>, the prefix is <code>0b</code>.</p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><code>B</code></p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Binary. With <code>#</code>, the prefix is <code>0B</code>.</p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><code>o</code></p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Octal. With <code>#</code>, a leading <code>0</code> is written unless the value is zero.</p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><code>x</code></p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Hexadecimal with the lowercase digits <code>a</code>-<code>f</code>. With <code>#</code>, the prefix is <code>0x</code>.</p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><code>X</code></p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Hexadecimal with the uppercase digits <code>A</code>-<code>F</code>. With <code>#</code>, the prefix is <code>0X</code>.</p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><code>c</code></p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">The value as a single character of type <code>charT</code>.</p></td>
+</tr>
+</tbody>
+</table>
+<div class="paragraph">
+<p>The <code>c</code> type requires the value to lie in
+<code>[std::numeric_limits&lt;charT&gt;::min(), std::numeric_limits&lt;charT&gt;::max()]</code>, so a
+value that needs more than one limb is always out of range. Following the resolution of LWG 3644, <code>c</code> is not an integer presentation type,
+so combining it with the sign option, <code>#</code>, or <code>0</code> is ill-formed even though
+some standard libraries still accept those combinations on the built-in types.</p>
+</div>
+</div>
+<div class="sect2">
+<h3 id="format_spec_precision"><a class="anchor" href="#format_spec_precision"></a>Precision</h3>
+<div class="paragraph">
+<p>A precision is never valid for an integer or for the <code>c</code> type, so a spec
+containing a <code>.</code> is ill-formed.</p>
+</div>
+</div>
+</div>
+</div>
+<div class="sect1">
+<h2 id="format_members"><a class="anchor" href="#format_members"></a><code>parse</code> and <code>format</code></h2>
+<div class="sectionbody">
+<div class="sect2">
+<h3 id="format_parse"><a class="anchor" href="#format_parse"></a><code>parse</code></h3>
+<div class="listingblock">
+<div class="content">
+<pre class="highlightjs highlight"><code class="language-c++ hljs" data-lang="c++">template &lt;class ParseContext&gt;
+constexpr typename ParseContext::iterator parse(ParseContext&amp; ctx);</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>Parses the format specification from <code>[ctx.begin(), ctx.end())</code> and stores it
+in the formatter.</p>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p><strong>Preconditions:</strong> None.</p>
+</li>
+<li>
+<p><strong>Returns:</strong> An iterator past the end of the parsed specification, that is, one pointing at the terminating <code>}</code> or at <code>ctx.end()</code>.</p>
+</li>
+<li>
+<p><strong>Throws:</strong> <code>std::format_error</code> if the specification is not valid; see <a href="#format_errors">Errors</a>.</p>
+</li>
+<li>
+<p><strong>Remarks:</strong> The function is usable in a constant expression, so an invalid specification in a call with a compile-time-checked format string is a compile-time error rather than a runtime one. Only a specification that is not known until runtime, such as one passed to <code>std::vformat</code>, reaches the throwing path.</p>
+</li>
+</ul>
+</div>
+</div>
+<div class="sect2">
+<h3 id="format_format"><a class="anchor" href="#format_format"></a><code>format</code></h3>
+<div class="listingblock">
+<div class="content">
+<pre class="highlightjs highlight"><code class="language-c++ hljs" data-lang="c++">template &lt;class FormatContext&gt;
+typename FormatContext::iterator format(const beman::big_int::basic_big_int&lt;b, L, A&gt;&amp; value,
+                                        FormatContext&amp; ctx) const;</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>Writes <code>value</code>, formatted according to the parsed specification, to
+<code>ctx.out()</code>.</p>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p><strong>Preconditions:</strong> None.</p>
+</li>
+<li>
+<p><strong>Returns:</strong> An iterator past the end of the output.</p>
+</li>
+<li>
+<p><strong>Throws:</strong> <code>std::format_error</code> if a dynamic width argument is invalid, or if the <code>c</code> type is used with a value that is out of range for <code>charT</code>; otherwise, any exception thrown while allocating the intermediate digit string (for example, <code>std::bad_alloc</code>) or thrown by the output iterator.</p>
+</li>
+<li>
+<p><strong>Remarks:</strong> The digits come from <a href="string.html#string_to_string" class="xref page"><code>to_string</code></a>, so a multi-limb value is converted with the same sub-quadratic base conversion the rest of the library uses, and the conversion cost, rather than the padding, dominates a large format.</p>
+</li>
+</ul>
+</div>
+</div>
+</div>
+</div>
+<div class="sect1">
+<h2 id="format_errors"><a class="anchor" href="#format_errors"></a>Errors</h2>
+<div class="sectionbody">
+<div class="paragraph">
+<p>The formatter reports these conditions. Apart from the <code>c</code> combinations that
+LWG 3644 made ill-formed, which some standard libraries still accept on the
+built-in types, each is reported exactly where a standard integer formatter
+reports it. The messages are listed without the `big_int format: ` prefix that
+each of them carries:</p>
+</div>
+<table class="tableblock frame-all grid-all stretch">
+<colgroup>
+<col style="width: 40%;">
+<col style="width: 20%;">
+<col style="width: 40%;">
+</colgroup>
+<thead>
+<tr>
+<th class="tableblock halign-left valign-top">Condition</th>
+<th class="tableblock halign-left valign-top">Reported by</th>
+<th class="tableblock halign-left valign-top">Message</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock">An unknown presentation type</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><code>parse</code></p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><code>invalid type</code></p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock">A precision (a <code>.</code> in the specification)</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><code>parse</code></p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><code>precision is not allowed</code></p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Characters left over before the closing <code>}</code></p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><code>parse</code></p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><code>unmatched characters in format spec</code></p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock">A nested width field with no closing <code>}</code></p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><code>parse</code></p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><code>invalid dynamic width</code></p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock">A width or argument index too large for <code>std::size_t</code></p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><code>parse</code></p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><code>width or argument index is too large</code></p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock">The sign option combined with <code>c</code></p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><code>parse</code></p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><code>the sign option is invalid with the 'c' type</code></p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><code>#</code> combined with <code>c</code></p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><code>parse</code></p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><code>the '#' option is invalid with the 'c' type</code></p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><code>0</code> combined with <code>c</code></p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><code>parse</code></p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><code>the '0' option is invalid with the 'c' type</code></p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock">A width argument that is not of a non-bool integral type</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><code>format</code></p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><code>width argument is not a non-bool integer</code></p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock">A negative width argument</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><code>format</code></p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><code>width argument is negative</code></p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock">A <code>c</code> value outside the range of <code>charT</code></p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><code>format</code></p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><code>value is out of range for the target character type</code></p></td>
+</tr>
+</tbody>
+</table>
+<div class="paragraph">
+<p>Where the format string is checked at compile time, the <code>parse</code> conditions are
+compile-time errors and never produce an exception. The remaining conditions
+depend on the argument values, so they are reported when the value is
+formatted.</p>
+</div>
+<div class="sect2">
+<h3 id="format_errors_no_exceptions"><a class="anchor" href="#format_errors_no_exceptions"></a>Exception-free builds</h3>
+<div class="paragraph">
+<p>Where the library is built with exceptions disabled, there is nothing to throw:
+each of the conditions above calls <code>std::abort()</code> instead. The mode is deduced
+in <code>&lt;beman/big_int/detail/config.hpp&gt;</code> from <code>__EXCEPTIONS</code> and, on MSVC,
+<code>_CPPUNWIND</code>, and is recorded as <code>BEMAN_BIG_INT_ALLOW_EXCEPTIONS</code> or
+<code>BEMAN_BIG_INT_NO_EXCEPTIONS</code>; a CMake build deduces it once, from the flags the
+library is built with (see <a href="build_and_usage.html#build_and_usage_config" class="xref page">Build configuration</a>). This matches how the rest of the library
+reports a length limit; see
+<a href="big_int_type.html#big_int_type_length_limit" class="xref page">the length limit</a>.</p>
+</div>
+</div>
+</div>
+</div>
+<div class="sect1">
+<h2 id="format_examples"><a class="anchor" href="#format_examples"></a>Examples</h2>
+<div class="sectionbody">
+<div class="listingblock">
+<div class="content">
+<pre class="highlightjs highlight"><code class="language-c++ hljs" data-lang="c++">using beman::big_int::big_int;
+
+std::format("{}", big_int{-7});        // "-7"
+std::format("{:5}", big_int{42});      // "   42", numbers align right by default
+std::format("{:&lt;5}", big_int{42});     // "42   "
+std::format("{:^7}", big_int{42});     // "  42   "
+std::format("{:*&gt;6}", big_int{42});    // "****42"
+
+std::format("{:+}", big_int{42});      // "+42"
+std::format("{: }", big_int{42});      // " 42"
+std::format("{:06d}", big_int{-42});   // "-00042", zeros follow the sign
+std::format("{:#06x}", big_int{255});  // "0x00ff", zeros follow the prefix
+std::format("{:&lt;06d}", big_int{42});   // "42    ", an explicit align disables zero padding
+
+std::format("{:#b}", big_int{5});      // "0b101"
+std::format("{:#B}", big_int{5});      // "0B101"
+std::format("{:#o}", big_int{64});     // "0100"
+std::format("{:#o}", big_int{0});      // "0", zero takes no octal prefix
+std::format("{:X}", big_int{255});     // "FF"
+
+std::format("{:c}", big_int{65});      // "A"
+std::format("{:5c}", big_int{65});     // "A    ", the c type aligns left by default
+
+std::format("{:{}}", big_int{42}, 6);     // "    42", width from an argument
+std::format("{:0{}x}", big_int{255}, 6);  // "0000ff"</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>The value is arbitrary-precision throughout, so the same specifications hold
+for magnitudes no built-in type can express:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlightjs highlight"><code class="language-c++ hljs" data-lang="c++">using namespace beman::big_int::literals;
+
+const big_int value = 1_n &lt;&lt; 128;
+
+std::format("{}", value);              // "340282366920938463463374607431768211456"
+std::format("{:#x}", value);           // "0x100000000000000000000000000000000"</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>With a locale whose <code>numpunct</code> groups digits in threes with a comma:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlightjs highlight"><code class="language-c++ hljs" data-lang="c++">std::format(loc, "{:L}", big_int{1234567});   // "1,234,567"
+std::format(loc, "{:012L}", big_int{1234});   // "00000001,234"</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>For a complete program, see <a href="examples.html#examples_io" class="xref page">the formatting and
+output example</a>.</p>
+</div>
+</div>
+</div>
+<div class="sect1">
+<h2 id="format_wide"><a class="anchor" href="#format_wide"></a>Wide characters</h2>
+<div class="sectionbody">
+<div class="paragraph">
+<p>Everything above holds for <code>wchar_t</code> with a wide format string. The digits and
+the base prefixes belong to the basic execution character set, so each
+character has the same value in the wide result as in the narrow one; <code>L</code> reads
+the <code>std::numpunct&lt;wchar_t&gt;</code> facet; and the <code>c</code> type accepts the range of
+<code>wchar_t</code> rather than that of <code>char</code>.</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlightjs highlight"><code class="language-c++ hljs" data-lang="c++">std::format(L"{:#06X}", big_int{255});  // L"0X00FF"
+std::format(L"{:*^8}", big_int{42});    // L"***42***"
+std::format(L"{:c}", big_int{0x41});    // L"A"</code></pre>
+</div>
+</div>
+</div>
+</div>
+  <div class="edit-this-page">
+      <a href="https://github.com/bemanproject/big_int/edit/develop/docs/modules/ROOT/pages/format.adoc">Edit this Page</a>
+      </div>
+      <nav class="pagination">
+        <span class="prev"><a href="string.html">String Conversions</a></span>
+        <span class="next"><a href="literals.html">User-Defined Literals</a></span>
+    </nav>
+</article>
+</div>
+  <div id="footer">
+  <script id="site-script" src="./_/js/site.js" data-ui-root-path="./_"></script>
+<script async src="./_/js/vendor/highlight.js"></script>
+<script async src="./_/js/vendor/tabs.js" data-sync-storage-key="preferred-tab"></script>
+<script async src="./_/js/vendor/lunr.js"></script>
+<script async src="./_/js/search-ui.js" id="search-ui-script" data-site-root-path="."
+  data-ui-root-path="./_"></script>
+<script async src="./search-index.js"></script>
+</div>
+</div>
+  </body>
+</html>
