@@ -1169,7 +1169,7 @@ struct subsystem_signs {
     const std::size_t total  = a.size();
     bool              carry  = false;
     std::size_t       i      = 0;
-#if !defined(__GNUC__) || defined(__clang__)
+#ifndef BEMAN_BIG_INT_GCC
     // GCC re-materializes the carry flag per limb in an unrolled chain and runs the one-limb loop below faster.
     for (; i + 4 <= common; i += 4) {
         const auto [v0, c0] = carrying_add(a[i + 0], b[i + 0], carry);
@@ -1212,7 +1212,7 @@ struct subsystem_signs {
     const std::size_t total  = a.size();
     bool              borrow = false;
     std::size_t       i      = 0;
-#if !defined(__GNUC__) || defined(__clang__)
+#ifndef BEMAN_BIG_INT_GCC
     for (; i + 4 <= common; i += 4) {
         const auto [v0, b0] = borrowing_sub(a[i + 0], b[i + 0], borrow);
         const auto [v1, b1] = borrowing_sub(a[i + 1], b[i + 1], b0);
@@ -1257,7 +1257,7 @@ constexpr uint_multiprecision_t lshift_copy(uint_multiprecision_t* const       d
         return 0;
     }
     const unsigned back = limb_bits - bits;
-#if defined(__GNUC__) && !defined(__clang__)
+#ifdef BEMAN_BIG_INT_GCC
     // GCC reloads src[i - 1] each iteration when dst may alias src; carry it in a register.
     // Clang compiles the two-load form below better.
     uint_multiprecision_t       hi  = src[n - 1];
@@ -1291,7 +1291,7 @@ constexpr uint_multiprecision_t rshift_copy(uint_multiprecision_t* const       d
         return 0;
     }
     const unsigned back = limb_bits - bits;
-#if defined(__GNUC__) && !defined(__clang__)
+#ifdef BEMAN_BIG_INT_GCC
     // See lshift_copy.
     uint_multiprecision_t       lo  = src[0];
     const uint_multiprecision_t out = lo << back;

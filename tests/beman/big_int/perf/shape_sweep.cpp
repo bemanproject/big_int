@@ -2015,7 +2015,7 @@ void run_vecsort(const options& opt, const std::size_t n, const std::size_t valu
     const auto             sh    = shape_str(n, 1);
     const double           scale = 1.0 / static_cast<double>(n);
 
-#if defined(__SIZEOF_INT128__)
+#ifdef BEMAN_BIG_INT_HAS_INT128_EXTENSION
     __int128 ref_sum = 0;
     for (const auto x : raw) {
         ref_sum += x;
@@ -2055,7 +2055,7 @@ void run_vecsort(const options& opt, const std::size_t n, const std::size_t valu
                             fail("vecsort auto: element " + std::to_string(i) + " out of order at " + sh);
                         }
                     }
-#if defined(__SIZEOF_INT128__)
+#ifdef BEMAN_BIG_INT_HAS_INT128_EXTENSION
                     if (!(total == want_total)) {
                         fail("vecsort auto: wrong sum at " + sh);
                     }

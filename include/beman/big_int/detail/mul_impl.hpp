@@ -1371,10 +1371,9 @@ std::size_t multiply_runtime_any(std::span<uint_multiprecision_t>       result,
 inline constexpr bool mul_header_basecase_enabled = true;
 
 // Operand length below which multiply_dispatch calls multiply_basecase_runtime
-// instead of building the scratch hooks and entering the ladder. A fixed
-// constant, deliberately not an arch cutoff: AUTO-mode ISA macros can differ
-// between a user TU and the library. src/mul_dispatch.cpp static_asserts that
-// it is at most every Karatsuba cutoff of the compiled configuration.
+// instead of building the scratch hooks and entering the ladder. One constant
+// for every configuration; src/mul_dispatch.cpp static_asserts that it is at
+// most every Karatsuba cutoff of the compiled configuration.
 inline constexpr std::size_t mul_header_basecase_limbs = 32;
 
 // Product (or square, when a and b are the same span) of trimmed operands with

@@ -3478,7 +3478,7 @@ constexpr auto basic_big_int<b, L, A>::storage_for_overwrite(const size_type n) 
         const size_type    new_cap    = std::min(std::max(n, 2 * current_cap), max_limbs);
         const alloc_result allocation = alloc_limbs(new_cap);
         if BEMAN_BIG_INT_IS_NOT_CONSTEVAL {
-#ifndef NDEBUG
+#ifdef BEMAN_BIG_INT_DEBUG
             std::uninitialized_fill_n(allocation.ptr, allocation.count, limb_type{~limb_type{0} / 0xFF * 0xA5});
 #endif
         } else {
