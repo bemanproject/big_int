@@ -4,15 +4,25 @@
 .intel_syntax noprefix
 
 # Empty, but present, GNU-stack section
+.ifndef BEMAN_BIG_INT_MACHO
 .section .note.GNU-stack,"",%progbits
+.endif
 
 # Enter the text section for code/symbols
+.ifdef BEMAN_BIG_INT_MACHO
+.text
+.else
 .section .text
+.endif
 
 # Schoolbook long multiplication, baseline x86-64 only (no SSE/AVX, no BMI2/ADX).
 
+.ifdef BEMAN_BIG_INT_MACHO
+.globl _beman_big_int_multiply_long_runtime_generic
+.else
 .globl beman_big_int_multiply_long_runtime_generic
 .type beman_big_int_multiply_long_runtime_generic, @function
+.endif
 
 #   rdi -> p_result
 #   rsi -> p_a
@@ -74,6 +84,9 @@
 
 .endm
 
+.ifdef BEMAN_BIG_INT_MACHO
+_beman_big_int_multiply_long_runtime_generic:
+.endif
 beman_big_int_multiply_long_runtime_generic:
 .cfi_startproc
 
@@ -85,21 +98,21 @@ beman_big_int_multiply_long_runtime_generic:
 .cfi_adjust_cfa_offset 8
 .cfi_rel_offset r12, 0
 
-.Lgeneric_x64_start:
+Lgeneric_x64_start:
 
     # a * b is symmetric, so run the inner loop over the longer operand: that
     # makes the number of rows, and with it all per-row overhead, min(len_a, len_b).
 
     cmp     rdx, r8
-    jae     .Lgeneric_x64_sizes_ordered
+    jae     Lgeneric_x64_sizes_ordered
 
     xchg    rsi, rcx
     xchg    rdx, r8
 
-.Lgeneric_x64_sizes_ordered:
+Lgeneric_x64_sizes_ordered:
 
     test    r8, r8      # an empty operand leaves nothing to do
-    jz      .Lgeneric_x64_end
+    jz      Lgeneric_x64_end
 
     mov     r9, rdx     # free up rdx for the mul instruction
 
@@ -122,23 +135,23 @@ beman_big_int_multiply_long_runtime_generic:
     xor     r11d, r11d              # temp = 0
 
     cmp     rbx, r12
-    je      .Lgeneric_x64_mul_row_4x
+    je      Lgeneric_x64_mul_row_4x
 
-.Lgeneric_x64_mul_row_rmdr:
+Lgeneric_x64_mul_row_rmdr:
 
     GENERIC_X64_MUL_LIMB 0
 
     add     rbx, 1                          # i++
     cmp     rbx, r12
-    jne     .Lgeneric_x64_mul_row_rmdr      # if (i != -(len_a & ~3)) { goto rmdr_loop_start; }
+    jne     Lgeneric_x64_mul_row_rmdr      # if (i != -(len_a & ~3)) { goto rmdr_loop_start; }
 
-.Lgeneric_x64_mul_row_4x:
+Lgeneric_x64_mul_row_4x:
 
     test    rbx, rbx
-    jz      .Lgeneric_x64_mul_row_end
+    jz      Lgeneric_x64_mul_row_end
 
 .p2align 4
-.Lgeneric_x64_mul_row_4x_unroll:
+Lgeneric_x64_mul_row_4x_unroll:
 
     GENERIC_X64_MUL_LIMB 0
     GENERIC_X64_MUL_LIMB 8
@@ -146,42 +159,42 @@ beman_big_int_multiply_long_runtime_generic:
     GENERIC_X64_MUL_LIMB 24
 
     add     rbx, 4                              # i += 4
-    jnz     .Lgeneric_x64_mul_row_4x_unroll     # if (i != 0) { goto unroll_loop_start; }
+    jnz     Lgeneric_x64_mul_row_4x_unroll     # if (i != 0) { goto unroll_loop_start; }
 
-.Lgeneric_x64_mul_row_end:
+Lgeneric_x64_mul_row_end:
 
     mov     QWORD PTR [rdi], r11    # result[len_a] = temp
 
     add     rdi, 8                  # increment the result ptr for next iter
     add     rcx, 8                  # increment the b ptr for next iter
     sub     r8, 1                   # len_b--
-    jz      .Lgeneric_x64_end
+    jz      Lgeneric_x64_end
 
 .p2align 4
-.Lgeneric_x64_outer_loop_start:
+Lgeneric_x64_outer_loop_start:
 
     mov     r10, QWORD PTR [rcx]    # r10 = b[j]
     mov     rbx, r9                 # i = -len_a
     xor     r11d, r11d              # temp = 0
 
     cmp     rbx, r12
-    je      .Lgeneric_x64_inner_loop_4x
+    je      Lgeneric_x64_inner_loop_4x
 
-.Lgeneric_x64_inner_loop_rmdr:
+Lgeneric_x64_inner_loop_rmdr:
 
     GENERIC_X64_ADDMUL_LIMB 0
 
     add     rbx, 1                          # i++
     cmp     rbx, r12
-    jne     .Lgeneric_x64_inner_loop_rmdr   # if (i != -(len_a & ~3)) { goto rmdr_loop_start; }
+    jne     Lgeneric_x64_inner_loop_rmdr   # if (i != -(len_a & ~3)) { goto rmdr_loop_start; }
 
-.Lgeneric_x64_inner_loop_4x:
+Lgeneric_x64_inner_loop_4x:
 
     test    rbx, rbx
-    jz      .Lgeneric_x64_outer_loop_end
+    jz      Lgeneric_x64_outer_loop_end
 
 .p2align 4
-.Lgeneric_x64_inner_loop_4x_unroll:
+Lgeneric_x64_inner_loop_4x_unroll:
 
     GENERIC_X64_ADDMUL_LIMB 0
     GENERIC_X64_ADDMUL_LIMB 8
@@ -189,18 +202,18 @@ beman_big_int_multiply_long_runtime_generic:
     GENERIC_X64_ADDMUL_LIMB 24
 
     add     rbx, 4                              # i += 4
-    jnz     .Lgeneric_x64_inner_loop_4x_unroll  # if (i != 0) { goto unroll_loop_start; }
+    jnz     Lgeneric_x64_inner_loop_4x_unroll  # if (i != 0) { goto unroll_loop_start; }
 
-.Lgeneric_x64_outer_loop_end:
+Lgeneric_x64_outer_loop_end:
 
     mov     QWORD PTR [rdi], r11    # result[len_a + j] = temp
 
     add     rdi, 8                          # increment the result ptr for next iter
     add     rcx, 8                          # increment the b ptr for next iter
     sub     r8, 1                           # len_b--
-    jnz     .Lgeneric_x64_outer_loop_start  # if (len_b != 0) { goto outer_loop_start; }
+    jnz     Lgeneric_x64_outer_loop_start  # if (len_b != 0) { goto outer_loop_start; }
 
-.Lgeneric_x64_end:
+Lgeneric_x64_end:
 
     pop     r12
 .cfi_adjust_cfa_offset -8
@@ -210,4 +223,6 @@ beman_big_int_multiply_long_runtime_generic:
     ret
 
 .cfi_endproc
+.ifndef BEMAN_BIG_INT_MACHO
 .size beman_big_int_multiply_long_runtime_generic, .-beman_big_int_multiply_long_runtime_generic
+.endif

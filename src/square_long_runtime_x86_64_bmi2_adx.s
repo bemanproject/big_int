@@ -4,15 +4,25 @@
 .intel_syntax noprefix
 
 # Empty, but present, GNU-stack section
+.ifndef BEMAN_BIG_INT_MACHO
 .section .note.GNU-stack,"",%progbits
+.endif
 
 # Enter the text section for code/symbols
+.ifdef BEMAN_BIG_INT_MACHO
+.text
+.else
 .section .text
+.endif
 
 # Schoolbook squaring, x86-64 with BMI2 (mulx) and ADX (adcx/adox).
 
+.ifdef BEMAN_BIG_INT_MACHO
+.globl _beman_big_int_square_long_runtime_bmi2_adx
+.else
 .globl beman_big_int_square_long_runtime_bmi2_adx
 .type beman_big_int_square_long_runtime_bmi2_adx, @function
+.endif
 
 #   rdi -> p_result
 #   rsi -> p_a
@@ -91,7 +101,7 @@
     lea     rcx, [r8 + BLOCK - 1]
     shr     rcx, LOG2_BLOCK              # rcx = trip_count = ceil(row_len / BLOCK)
 
-    lea     r10, [rip + .Lentry_table_\tag]
+    lea     r10, [rip + Lentry_table_\tag]
     movsxd  rax, DWORD PTR [r10 + rax * 4]
     add     r10, rax                     # r10 = jump target address
 
@@ -143,6 +153,9 @@
 .set BLOCK, 16
 .set LOG2_BLOCK, 4
 
+.ifdef BEMAN_BIG_INT_MACHO
+_beman_big_int_square_long_runtime_bmi2_adx:
+.endif
 beman_big_int_square_long_runtime_bmi2_adx:
 .cfi_startproc
 
@@ -167,7 +180,7 @@ beman_big_int_square_long_runtime_bmi2_adx:
 .cfi_rel_offset r15, 0
 
     cmp     rdx, 1
-    jbe     .Lbmi2_sqr_tiny  # with at most one limb there is no triangle
+    jbe     Lbmi2_sqr_tiny  # with at most one limb there is no triangle
 
     mov     r9, rdx                 # rdx currently = len_a
 
@@ -187,11 +200,11 @@ beman_big_int_square_long_runtime_bmi2_adx:
     DIAG_ROW0
 
     cmp     r8, 1
-    je      .Lrow0_len1
+    je      Lrow0_len1
     cmp     r8, 2
-    je      .Lrow0_len2
+    je      Lrow0_len2
     cmp     r8, 3
-    je      .Lrow0_len3
+    je      Lrow0_len3
 
     ROW_SETUP row0
 
@@ -200,23 +213,23 @@ beman_big_int_square_long_runtime_bmi2_adx:
     mov     r11, r15                # carry-in seed = prev_seed (read by an odd entry slot)
     jmp     r10                     # Duff's-device entry
 
-.Lrow0_len1:
+Lrow0_len1:
     ROW_SETUP_SIMPLE
     xor     eax, eax
     mov     r13, r15
     MSLOT   0, r10, r11, r13
     mov     r13, r11                # the row-end code below expects the carry in r13
-    jmp     .Lrow0_done
+    jmp     Lrow0_done
 
-.Lrow0_len2:
+Lrow0_len2:
     ROW_SETUP_SIMPLE
     xor     eax, eax
     mov     r13, r15
     MSLOT   0, r10, r11, r13
     MSLOT   8, r12, r13, r11
-    jmp     .Lrow0_done
+    jmp     Lrow0_done
 
-.Lrow0_len3:
+Lrow0_len3:
     ROW_SETUP_SIMPLE
     xor     eax, eax
     mov     r13, r15
@@ -224,67 +237,67 @@ beman_big_int_square_long_runtime_bmi2_adx:
     MSLOT   8, r12, r13, r11
     MSLOT   16, r10, r11, r13
     mov     r13, r11
-    jmp     .Lrow0_done
+    jmp     Lrow0_done
 
-.Lentry_table_row0:
-    .long   .Lrow0_slot0 - .Lentry_table_row0
-    .long   .Lrow0_slot1 - .Lentry_table_row0
-    .long   .Lrow0_slot2 - .Lentry_table_row0
-    .long   .Lrow0_slot3 - .Lentry_table_row0
-    .long   .Lrow0_slot4 - .Lentry_table_row0
-    .long   .Lrow0_slot5 - .Lentry_table_row0
-    .long   .Lrow0_slot6 - .Lentry_table_row0
-    .long   .Lrow0_slot7 - .Lentry_table_row0
-    .long   .Lrow0_slot8 - .Lentry_table_row0
-    .long   .Lrow0_slot9 - .Lentry_table_row0
-    .long   .Lrow0_slot10 - .Lentry_table_row0
-    .long   .Lrow0_slot11 - .Lentry_table_row0
-    .long   .Lrow0_slot12 - .Lentry_table_row0
-    .long   .Lrow0_slot13 - .Lentry_table_row0
-    .long   .Lrow0_slot14 - .Lentry_table_row0
-    .long   .Lrow0_slot15 - .Lentry_table_row0
+Lentry_table_row0:
+    .long   Lrow0_slot0 - Lentry_table_row0
+    .long   Lrow0_slot1 - Lentry_table_row0
+    .long   Lrow0_slot2 - Lentry_table_row0
+    .long   Lrow0_slot3 - Lentry_table_row0
+    .long   Lrow0_slot4 - Lentry_table_row0
+    .long   Lrow0_slot5 - Lentry_table_row0
+    .long   Lrow0_slot6 - Lentry_table_row0
+    .long   Lrow0_slot7 - Lentry_table_row0
+    .long   Lrow0_slot8 - Lentry_table_row0
+    .long   Lrow0_slot9 - Lentry_table_row0
+    .long   Lrow0_slot10 - Lentry_table_row0
+    .long   Lrow0_slot11 - Lentry_table_row0
+    .long   Lrow0_slot12 - Lentry_table_row0
+    .long   Lrow0_slot13 - Lentry_table_row0
+    .long   Lrow0_slot14 - Lentry_table_row0
+    .long   Lrow0_slot15 - Lentry_table_row0
 
 .p2align 4
-.Lrow0_body:
-.Lrow0_slot0:
+Lrow0_body:
+Lrow0_slot0:
     MSLOT 0, r10, r11, r13
-.Lrow0_slot1:
+Lrow0_slot1:
     MSLOT 8, r12, r13, r11
-.Lrow0_slot2:
+Lrow0_slot2:
     MSLOT 16, r10, r11, r13
-.Lrow0_slot3:
+Lrow0_slot3:
     MSLOT 24, r12, r13, r11
-.Lrow0_slot4:
+Lrow0_slot4:
     MSLOT 32, r10, r11, r13
-.Lrow0_slot5:
+Lrow0_slot5:
     MSLOT 40, r12, r13, r11
-.Lrow0_slot6:
+Lrow0_slot6:
     MSLOT 48, r10, r11, r13
-.Lrow0_slot7:
+Lrow0_slot7:
     MSLOT 56, r12, r13, r11
-.Lrow0_slot8:
+Lrow0_slot8:
     MSLOT 64, r10, r11, r13
-.Lrow0_slot9:
+Lrow0_slot9:
     MSLOT 72, r12, r13, r11
-.Lrow0_slot10:
+Lrow0_slot10:
     MSLOT 80, r10, r11, r13
-.Lrow0_slot11:
+Lrow0_slot11:
     MSLOT 88, r12, r13, r11
-.Lrow0_slot12:
+Lrow0_slot12:
     MSLOT 96, r10, r11, r13
-.Lrow0_slot13:
+Lrow0_slot13:
     MSLOT 104, r12, r13, r11
-.Lrow0_slot14:
+Lrow0_slot14:
     MSLOT 112, r10, r11, r13
-.Lrow0_slot15:
+Lrow0_slot15:
     MSLOT 120, r12, r13, r11
 
     lea     rbx, [rbx + BLOCK * 8]
     lea     r14, [r14 + BLOCK * 8]
     lea     rcx, [rcx - 1]
-    jrcxz   .Lrow0_done
-    jmp     .Lrow0_body
-.Lrow0_done:
+    jrcxz   Lrow0_done
+    jmp     Lrow0_body
+Lrow0_done:
 
     adcx    r13, rax                                # r13 += CF
     adox    r13, rax                                # r13 += OF (r13 + CF + OF <= 2^64 - 1)
@@ -292,10 +305,10 @@ beman_big_int_square_long_runtime_bmi2_adx:
 
     add     rdi, 8                  # increment the result ptr for next iter
     sub     r8, 1                   # row_len--
-    jz      .Lbmi2_sqr_diag         # len_a == 2: the triangle is a single limb
+    jz      Lbmi2_sqr_diag         # len_a == 2: the triangle is a single limb
 
 .p2align 4
-.Lbmi2_sqr_outer_loop_start:
+Lbmi2_sqr_outer_loop_start:
 
     mov     r10, r8
     neg     r10                              # r10 = true_index = -row_len
@@ -303,11 +316,11 @@ beman_big_int_square_long_runtime_bmi2_adx:
     DIAG_OUTER
 
     cmp     r8, 1
-    je      .Louter_len1
+    je      Louter_len1
     cmp     r8, 2
-    je      .Louter_len2
+    je      Louter_len2
     cmp     r8, 3
-    je      .Louter_len3
+    je      Louter_len3
 
     ROW_SETUP outer
 
@@ -316,23 +329,23 @@ beman_big_int_square_long_runtime_bmi2_adx:
     mov     r11, r15
     jmp     r10
 
-.Louter_len1:
+Louter_len1:
     ROW_SETUP_SIMPLE
     xor     eax, eax
     mov     r13, r15
     ASLOT   0, r10, r11, r13, r12
     mov     r13, r11                # the row-end code below expects the carry in r13
-    jmp     .Louter_done
+    jmp     Louter_done
 
-.Louter_len2:
+Louter_len2:
     ROW_SETUP_SIMPLE
     xor     eax, eax
     mov     r13, r15
     ASLOT   0, r10, r11, r13, r12
     ASLOT   8, r12, r13, r11, r10
-    jmp     .Louter_done
+    jmp     Louter_done
 
-.Louter_len3:
+Louter_len3:
     ROW_SETUP_SIMPLE
     xor     eax, eax
     mov     r13, r15
@@ -340,67 +353,67 @@ beman_big_int_square_long_runtime_bmi2_adx:
     ASLOT   8, r12, r13, r11, r10
     ASLOT   16, r10, r11, r13, r12
     mov     r13, r11
-    jmp     .Louter_done
+    jmp     Louter_done
 
-.Lentry_table_outer:
-    .long   .Louter_slot0 - .Lentry_table_outer
-    .long   .Louter_slot1 - .Lentry_table_outer
-    .long   .Louter_slot2 - .Lentry_table_outer
-    .long   .Louter_slot3 - .Lentry_table_outer
-    .long   .Louter_slot4 - .Lentry_table_outer
-    .long   .Louter_slot5 - .Lentry_table_outer
-    .long   .Louter_slot6 - .Lentry_table_outer
-    .long   .Louter_slot7 - .Lentry_table_outer
-    .long   .Louter_slot8 - .Lentry_table_outer
-    .long   .Louter_slot9 - .Lentry_table_outer
-    .long   .Louter_slot10 - .Lentry_table_outer
-    .long   .Louter_slot11 - .Lentry_table_outer
-    .long   .Louter_slot12 - .Lentry_table_outer
-    .long   .Louter_slot13 - .Lentry_table_outer
-    .long   .Louter_slot14 - .Lentry_table_outer
-    .long   .Louter_slot15 - .Lentry_table_outer
+Lentry_table_outer:
+    .long   Louter_slot0 - Lentry_table_outer
+    .long   Louter_slot1 - Lentry_table_outer
+    .long   Louter_slot2 - Lentry_table_outer
+    .long   Louter_slot3 - Lentry_table_outer
+    .long   Louter_slot4 - Lentry_table_outer
+    .long   Louter_slot5 - Lentry_table_outer
+    .long   Louter_slot6 - Lentry_table_outer
+    .long   Louter_slot7 - Lentry_table_outer
+    .long   Louter_slot8 - Lentry_table_outer
+    .long   Louter_slot9 - Lentry_table_outer
+    .long   Louter_slot10 - Lentry_table_outer
+    .long   Louter_slot11 - Lentry_table_outer
+    .long   Louter_slot12 - Lentry_table_outer
+    .long   Louter_slot13 - Lentry_table_outer
+    .long   Louter_slot14 - Lentry_table_outer
+    .long   Louter_slot15 - Lentry_table_outer
 
 .p2align 4
-.Louter_body:
-.Louter_slot0:
+Louter_body:
+Louter_slot0:
     ASLOT 0, r10, r11, r13, r12
-.Louter_slot1:
+Louter_slot1:
     ASLOT 8, r12, r13, r11, r10
-.Louter_slot2:
+Louter_slot2:
     ASLOT 16, r10, r11, r13, r12
-.Louter_slot3:
+Louter_slot3:
     ASLOT 24, r12, r13, r11, r10
-.Louter_slot4:
+Louter_slot4:
     ASLOT 32, r10, r11, r13, r12
-.Louter_slot5:
+Louter_slot5:
     ASLOT 40, r12, r13, r11, r10
-.Louter_slot6:
+Louter_slot6:
     ASLOT 48, r10, r11, r13, r12
-.Louter_slot7:
+Louter_slot7:
     ASLOT 56, r12, r13, r11, r10
-.Louter_slot8:
+Louter_slot8:
     ASLOT 64, r10, r11, r13, r12
-.Louter_slot9:
+Louter_slot9:
     ASLOT 72, r12, r13, r11, r10
-.Louter_slot10:
+Louter_slot10:
     ASLOT 80, r10, r11, r13, r12
-.Louter_slot11:
+Louter_slot11:
     ASLOT 88, r12, r13, r11, r10
-.Louter_slot12:
+Louter_slot12:
     ASLOT 96, r10, r11, r13, r12
-.Louter_slot13:
+Louter_slot13:
     ASLOT 104, r12, r13, r11, r10
-.Louter_slot14:
+Louter_slot14:
     ASLOT 112, r10, r11, r13, r12
-.Louter_slot15:
+Louter_slot15:
     ASLOT 120, r12, r13, r11, r10
 
     lea     rbx, [rbx + BLOCK * 8]
     lea     r14, [r14 + BLOCK * 8]
     lea     rcx, [rcx - 1]
-    jrcxz   .Louter_done
-    jmp     .Louter_body
-.Louter_done:
+    jrcxz   Louter_done
+    jmp     Louter_body
+Louter_done:
 
     adcx    r13, rax
     adox    r13, rax
@@ -408,9 +421,9 @@ beman_big_int_square_long_runtime_bmi2_adx:
 
     add     rdi, 8                              # increment the result ptr for next iter
     sub     r8, 1                               # row_len--
-    jnz     .Lbmi2_sqr_outer_loop_start         # if (row_len != 0) { goto outer_loop_start; }
+    jnz     Lbmi2_sqr_outer_loop_start         # if (row_len != 0) { goto outer_loop_start; }
 
-.Lbmi2_sqr_diag:
+Lbmi2_sqr_diag:
 
     # Every row's own diagonal term was folded in at its own start
     # (DIAG_ROW0/DIAG_OUTER); only the last row's remains, landing on
@@ -438,19 +451,19 @@ beman_big_int_square_long_runtime_bmi2_adx:
     adc     r13, 0                        # result[2n - 1] (no further carry: a^2 < B^(2 * len_a))
     mov     QWORD PTR [rdi], r13
 
-    jmp     .Lbmi2_sqr_end
+    jmp     Lbmi2_sqr_end
 
-.Lbmi2_sqr_tiny:
+Lbmi2_sqr_tiny:
 
     test    rdx, rdx                # an empty operand leaves nothing to do
-    jz      .Lbmi2_sqr_end
+    jz      Lbmi2_sqr_end
 
     mov     rdx, QWORD PTR [rsi]    # rdx = a[0]
     mulx    rcx, rax, rdx           # rcx : rax = a[0]^2 (hi : lo)
     mov     QWORD PTR [rdi], rax    # result[0] = low64
     mov     QWORD PTR [rdi + 8], rcx    # result[1] = high64
 
-.Lbmi2_sqr_end:
+Lbmi2_sqr_end:
 
     pop     r15
 .cfi_adjust_cfa_offset -8
@@ -465,4 +478,6 @@ beman_big_int_square_long_runtime_bmi2_adx:
     ret
 
 .cfi_endproc
+.ifndef BEMAN_BIG_INT_MACHO
 .size beman_big_int_square_long_runtime_bmi2_adx, .-beman_big_int_square_long_runtime_bmi2_adx
+.endif

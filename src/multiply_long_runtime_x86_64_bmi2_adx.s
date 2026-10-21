@@ -9,10 +9,16 @@
 # as "x - (x/2)*2" throughout instead.
 
 # Empty, but present, GNU-stack section
+.ifndef BEMAN_BIG_INT_MACHO
 .section .note.GNU-stack,"",%progbits
+.endif
 
 # Enter the text section for code/symbols
+.ifdef BEMAN_BIG_INT_MACHO
+.text
+.else
 .section .text
+.endif
 
 # Schoolbook long multiplication, x86-64 with BMI2 (mulx) and ADX (adcx/adox).
 # Contract matches beman_big_int_multiply_long_runtime (see
@@ -49,35 +55,39 @@
 .set BLOCK, 16
 .set LOG2_BLOCK, 4
 
+.ifdef BEMAN_BIG_INT_MACHO
+.globl _beman_big_int_multiply_long_runtime_bmi2_adx
+.else
 .globl beman_big_int_multiply_long_runtime_bmi2_adx
 .type beman_big_int_multiply_long_runtime_bmi2_adx, @function
+.endif
 
 # Core per-limb macros, shared by both tiers.
 
 .macro MULSLOT off, hi, lo, hiprev
-    mulx    hi, lo, QWORD PTR [rsi + off]
-    adcx    lo, hiprev
-    mov     QWORD PTR [rdi + off], lo
+    mulx    \hi, \lo, QWORD PTR [rsi + \off]
+    adcx    \lo, \hiprev
+    mov     QWORD PTR [rdi + \off], \lo
 .endm
 
 .macro ADDMULSLOT off, hi, lo, hiprev, scratch
-    mulx    hi, lo, QWORD PTR [rsi + off]
-    mov     scratch, QWORD PTR [rdi + off]
-    adcx    lo, hiprev
-    adox    lo, scratch
-    mov     QWORD PTR [rdi + off], lo
+    mulx    \hi, \lo, QWORD PTR [rsi + \off]
+    mov     \scratch, QWORD PTR [rdi + \off]
+    adcx    \lo, \hiprev
+    adox    \lo, \scratch
+    mov     QWORD PTR [rdi + \off], \lo
 .endm
 
 .macro MULSLOT0 off, hi, lo
-    mulx    hi, lo, QWORD PTR [rsi + off]
-    mov     QWORD PTR [rdi + off], lo
+    mulx    \hi, \lo, QWORD PTR [rsi + \off]
+    mov     QWORD PTR [rdi + \off], \lo
 .endm
 
 .macro ADDMULSLOT0 off, hi, lo, scratch
-    mulx    hi, lo, QWORD PTR [rsi + off]
-    mov     scratch, QWORD PTR [rdi + off]
-    adox    lo, scratch
-    mov     QWORD PTR [rdi + off], lo
+    mulx    \hi, \lo, QWORD PTR [rsi + \off]
+    mov     \scratch, QWORD PTR [rdi + \off]
+    adox    \lo, \scratch
+    mov     QWORD PTR [rdi + \off], \lo
 .endm
 
 # Exact-length tier: len_a in [1, LA_EXACT_MAX].
@@ -292,6 +302,9 @@ Lgen_rem_addmul\r:
     .long   Lgen_rem_addmul\r - Lgen_addmul_table
 .endm
 
+.ifdef BEMAN_BIG_INT_MACHO
+_beman_big_int_multiply_long_runtime_bmi2_adx:
+.endif
 beman_big_int_multiply_long_runtime_bmi2_adx:
 .cfi_startproc
 
@@ -468,4 +481,6 @@ Lend_short:
     ret
 
 .cfi_endproc
+.ifndef BEMAN_BIG_INT_MACHO
 .size beman_big_int_multiply_long_runtime_bmi2_adx, .-beman_big_int_multiply_long_runtime_bmi2_adx
+.endif
