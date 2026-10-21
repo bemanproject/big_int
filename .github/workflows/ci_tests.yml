@@ -30,6 +30,8 @@ jobs:
           {"preset": "llvm-release", "image": "ghcr.io/bemanproject/infra-containers-clang:latest"},
           {"preset": "appleclang-debug", "runner": "macos-latest"},
           {"preset": "appleclang-release", "runner": "macos-latest"},
+          {"preset": "appleclang-debug", "runner": "macos-15-intel"},
+          {"preset": "appleclang-release", "runner": "macos-15-intel"},
           {"preset": "msvc-debug", "runner": "windows-latest"},
           {"preset": "msvc-release", "runner": "windows-latest"},
           {"preset": "llvm-debug-simd", "image": "ghcr.io/bemanproject/infra-containers-clang:latest"},
