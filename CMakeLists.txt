@@ -209,7 +209,8 @@ if(
     if(APPLE)
         target_compile_options(
             beman.big_int
-            PRIVATE $<$<COMPILE_LANGUAGE:ASM>:-Wa,--defsym,BEMAN_BIG_INT_MACHO=1>
+            PRIVATE
+                $<$<COMPILE_LANGUAGE:ASM>:-Wa,--defsym,BEMAN_BIG_INT_MACHO=1>
         )
     endif()
 elseif(
