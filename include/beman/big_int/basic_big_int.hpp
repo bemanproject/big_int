@@ -455,9 +455,9 @@ class BEMAN_BIG_INT_TRIVIAL_ABI basic_big_int {
 
     // [big.int.modifiers]
     constexpr basic_big_int& operator=(const basic_big_int& x);
-    constexpr basic_big_int& operator=(basic_big_int&& x) noexcept(
-        alloc_traits::propagate_on_container_move_assignment::value ||
-        alloc_traits::is_always_equal::value);
+    constexpr basic_big_int&
+    operator=(basic_big_int&& x) noexcept(alloc_traits::propagate_on_container_move_assignment::value ||
+                                          alloc_traits::is_always_equal::value);
 
     // Defined inline: see note above
     template <detail::arbitrary_integer T>
@@ -1164,8 +1164,7 @@ constexpr basic_big_int<b, L, A>& basic_big_int<b, L, A>::operator=(const basic_
 // containers, the operator is `noexcept` only when the allocator propagates or is always-equal.
 template <std::size_t b, class L, class A>
 constexpr basic_big_int<b, L, A>& basic_big_int<b, L, A>::operator=(basic_big_int&& x) noexcept(
-    alloc_traits::propagate_on_container_move_assignment::value ||
-    alloc_traits::is_always_equal::value) {
+    alloc_traits::propagate_on_container_move_assignment::value || alloc_traits::is_always_equal::value) {
     assign_value(std::move(x));
     return *this;
 }
