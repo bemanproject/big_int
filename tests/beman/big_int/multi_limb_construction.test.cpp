@@ -15,7 +15,6 @@
 // `__int128` and `_BitInt` are guarded individually since each is only
 // conditionally available.
 
-
 #if defined(__APPLE__) && defined(__x86_64__)
 
 TEST(MultiLimbConstruction, SkippedUnderAppleX64) {
