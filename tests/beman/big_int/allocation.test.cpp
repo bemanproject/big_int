@@ -273,6 +273,13 @@ using pocca_big_int =
                                            BEMAN_BIG_INT_NAMESPACE::uint_multiprecision_t,
                                            pocca_alloc<BEMAN_BIG_INT_NAMESPACE::uint_multiprecision_t>>;
 
+// Move assignment is noexcept exactly when the source's buffer can always be taken over: the
+// allocator is always-equal (std::allocator) or propagates on move assignment (pocca_alloc, even
+// though it is stateful). Otherwise (pmr, see pmr.test.cpp) it may have to copy and allocate.
+static_assert(std::is_nothrow_move_assignable_v<BEMAN_BIG_INT_NAMESPACE::big_int>);
+static_assert(std::is_nothrow_move_assignable_v<BEMAN_BIG_INT_NAMESPACE::basic_big_int<256>>);
+static_assert(std::is_nothrow_move_assignable_v<pocca_big_int>);
+
 TEST(Allocation, PropagatingAssignmentAllocatesThroughSourceAllocator) {
     pocca_big_int dst{7, pocca_alloc<BEMAN_BIG_INT_NAMESPACE::uint_multiprecision_t>{1U}};
     pocca_big_int src{1, pocca_alloc<BEMAN_BIG_INT_NAMESPACE::uint_multiprecision_t>{2U}};

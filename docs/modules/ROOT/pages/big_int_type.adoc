@@ -133,7 +133,9 @@ class basic_big_int {
 
     // [big.int.modifiers], assignment
     constexpr basic_big_int& operator=(const basic_big_int& x);
-    constexpr basic_big_int& operator=(basic_big_int&& x) noexcept;
+    constexpr basic_big_int& operator=(basic_big_int&& x) noexcept(
+        std::allocator_traits<allocator_type>::propagate_on_container_move_assignment::value ||
+        std::allocator_traits<allocator_type>::is_always_equal::value);
     template <_arbitrary-integer_ T>
         requires(!std::same_as<std::remove_cvref_t<T>, basic_big_int>)
     constexpr basic_big_int& operator=(T&& x) noexcept(/* see below */);
@@ -444,13 +446,23 @@ Sets the integer value to that of `x` and returns `*this`.
 
 [source,c++]
 ----
-constexpr basic_big_int& operator=(basic_big_int&& x) noexcept;
+constexpr basic_big_int& operator=(basic_big_int&& x) noexcept(
+    std::allocator_traits<allocator_type>::propagate_on_container_move_assignment::value ||
+    std::allocator_traits<allocator_type>::is_always_equal::value);
 ----
 
-Sets the integer value to that of `x` and returns `*this`.
+Sets the integer value to that of `x` and returns `*this`. If
+`std::allocator_traits<allocator_type>::propagate_on_container_move_assignment::value`
+is `true`, the allocator of `x` is also move-assigned to the allocator of `*this`.
+When the allocator neither propagates nor compares equal to `x.get_allocator()`,
+the storage of `x` cannot be taken over, so its value is copied into storage
+obtained from the allocator of `*this`; that copy may allocate and throw. As for
+the standard containers, the operator is therefore `noexcept` only when the
+allocator propagates on move assignment or is always-equal.
 
 * *Preconditions:* None.
 * *Postconditions:* `x` is left in a valid state with an unspecified value.
+* *Throws:* Any exception thrown by the allocator, in which case `*this` and `x` are unchanged.
 
 === Assignment from an integer type
 

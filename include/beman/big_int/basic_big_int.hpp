@@ -455,7 +455,9 @@ class BEMAN_BIG_INT_TRIVIAL_ABI basic_big_int {
 
     // [big.int.modifiers]
     constexpr basic_big_int& operator=(const basic_big_int& x);
-    constexpr basic_big_int& operator=(basic_big_int&& x) noexcept;
+    constexpr basic_big_int&
+    operator=(basic_big_int&& x) noexcept(alloc_traits::propagate_on_container_move_assignment::value ||
+                                          alloc_traits::is_always_equal::value);
 
     // Defined inline: see note above
     template <detail::arbitrary_integer T>
@@ -1155,13 +1157,14 @@ constexpr basic_big_int<b, L, A>& basic_big_int<b, L, A>::operator=(const basic_
     return *this;
 }
 
+// A heap `x` whose buffer our allocator can free (propagating, always-equal, or equal) is
+// stolen whatever our capacity, leaving `x` as inline zero. Otherwise `x` is copied into the
+// existing storage, which allocates only if it does not fit. That copy needs an unequal,
+// non-propagating allocator (e.g. a different pmr resource), which is why, as for the standard
+// containers, the operator is `noexcept` only when the allocator propagates or is always-equal.
 template <std::size_t b, class L, class A>
-constexpr basic_big_int<b, L, A>& basic_big_int<b, L, A>::operator=(basic_big_int&& x) noexcept {
-    // A heap `x` whose buffer our allocator can free (propagating, always-equal, or equal) is
-    // stolen whatever our capacity, leaving `x` as inline zero. Otherwise `x` is copied into the
-    // existing storage, which allocates only if it does not fit. That copy needs an unequal,
-    // non-propagating allocator (e.g. a different pmr resource); it is the one case in which this
-    // `noexcept` operator can throw, which terminates.
+constexpr basic_big_int<b, L, A>& basic_big_int<b, L, A>::operator=(basic_big_int&& x) noexcept(
+    alloc_traits::propagate_on_container_move_assignment::value || alloc_traits::is_always_equal::value) {
     assign_value(std::move(x));
     return *this;
 }
