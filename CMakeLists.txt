@@ -205,6 +205,14 @@ if(
             src/square_long_runtime_x86_64_avx512_ifma.s
     )
     set(_bigint_x86_64_kernels TRUE)
+    # The .s kernels select their Mach-O directives with .ifdef on this symbol
+    if(APPLE)
+        target_compile_options(
+            beman.big_int
+            PRIVATE
+                $<$<COMPILE_LANGUAGE:ASM>:-Wa,--defsym,BEMAN_BIG_INT_MACHO=1>
+        )
+    endif()
 elseif(
     (
         CMAKE_CXX_COMPILER_ID STREQUAL "GNU"

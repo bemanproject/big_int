@@ -17,6 +17,13 @@
 
 #include "testing.hpp"
 
+// ICE with Apple Clang on x64
+#if defined(__APPLE__) && defined(__x86_64__)
+
+TEST(Numeric, SkippedUnderAppleX64) { GTEST_SKIP() << "Skipped: Apple Clang on x64 crashes compiling these tests."; }
+
+#else
+
 namespace {
 
 using BEMAN_BIG_INT_NAMESPACE::abs;
@@ -554,7 +561,7 @@ TEST(Gcd, CallableFullyQualified) {
     EXPECT_EQ(BEMAN_BIG_INT_NAMESPACE::gcd(big_int{270}, 192), 6);
 }
 
-#ifdef BEMAN_BIG_INT_HAS_BITINT
+    #ifdef BEMAN_BIG_INT_HAS_BITINT
 TEST(Gcd, BitPreciseIntegers) {
     // Bit-precise operands go through the same path as the standard integer types.
     using u12 = bit_uint<12>;
@@ -563,14 +570,14 @@ TEST(Gcd, BitPreciseIntegers) {
     EXPECT_EQ(gcd(static_cast<u12>(1071), big_int{462}), 21);
     EXPECT_EQ(gcd((big_int{1} << 300) * 15, static_cast<u12>(35)), 5);
 
-    #if BEMAN_BIG_INT_BITINT_MAXWIDTH >= 96
+        #if BEMAN_BIG_INT_BITINT_MAXWIDTH >= 96
     // An operand wider than a limb is spelled out into limbs before the reduction.
     using s96 = bit_int<96>;
     EXPECT_EQ(gcd((big_int{1} << 300) * 15, static_cast<s96>(-35)), 5);
     EXPECT_EQ(gcd(big_int{1} << 300, static_cast<s96>(1) << 80), big_int{1} << 80);
-    #endif
+        #endif
 }
-#endif
+    #endif
 
 // ============================================================================
 // lcm
@@ -915,7 +922,7 @@ TEST(Lcm, CallableFullyQualified) {
     EXPECT_EQ(BEMAN_BIG_INT_NAMESPACE::lcm(big_int{270}, 192), 8640);
 }
 
-#ifdef BEMAN_BIG_INT_HAS_BITINT
+    #ifdef BEMAN_BIG_INT_HAS_BITINT
 TEST(Lcm, BitPreciseIntegers) {
     // Bit-precise operands go through the same path as the standard integer types.
     using u12 = bit_uint<12>;
@@ -924,16 +931,16 @@ TEST(Lcm, BitPreciseIntegers) {
     EXPECT_EQ(lcm(static_cast<u12>(1071), big_int{462}), 23562);
     EXPECT_EQ(lcm((big_int{1} << 300) * 15, static_cast<u12>(35)), (big_int{1} << 300) * 105);
 
-    #if BEMAN_BIG_INT_BITINT_MAXWIDTH >= 96
+        #if BEMAN_BIG_INT_BITINT_MAXWIDTH >= 96
     // An operand wider than a limb is spelled out into limbs first.
     using s96 = bit_int<96>;
     EXPECT_EQ(lcm((big_int{1} << 300) * 15, static_cast<s96>(-35)), (big_int{1} << 300) * 105);
     EXPECT_EQ(lcm(big_int{1} << 300, static_cast<s96>(1) << 80), big_int{1} << 300);
-    #endif
+        #endif
 }
-#endif
+    #endif
 
-#ifdef BEMAN_BIG_INT_HAS_BITINT
+    #ifdef BEMAN_BIG_INT_HAS_BITINT
 TEST(SaturatingCast, BitPreciseIntegers) {
     // Extended/bit-precise integers (no std::numeric_limits specialization) use
     // the width-derived bounds. Results are widened to standard types so the
@@ -950,6 +957,8 @@ TEST(SaturatingCast, BitPreciseIntegers) {
     EXPECT_EQ(static_cast<int>(saturating_cast<s12>(big_int{-2048})), -2048); // -2^11
     EXPECT_EQ(static_cast<int>(saturating_cast<s12>(big_int{-2049})), -2048); // clamps to min
 }
-#endif
+    #endif
 
 } // namespace
+
+#endif

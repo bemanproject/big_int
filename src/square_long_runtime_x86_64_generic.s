@@ -4,15 +4,25 @@
 .intel_syntax noprefix
 
 # Empty, but present, GNU-stack section
+.ifndef BEMAN_BIG_INT_MACHO
 .section .note.GNU-stack,"",%progbits
+.endif
 
 # Enter the text section for code/symbols
+.ifdef BEMAN_BIG_INT_MACHO
+.text
+.else
 .section .text
+.endif
 
 # Schoolbook squaring, baseline x86-64 only (no SSE/AVX, no BMI2/ADX).
 
+.ifdef BEMAN_BIG_INT_MACHO
+.globl _beman_big_int_square_long_runtime_generic
+.else
 .globl beman_big_int_square_long_runtime_generic
 .type beman_big_int_square_long_runtime_generic, @function
+.endif
 
 #   rdi -> p_result
 #   rsi -> p_a
@@ -93,6 +103,9 @@
 
 .endm
 
+.ifdef BEMAN_BIG_INT_MACHO
+_beman_big_int_square_long_runtime_generic:
+.endif
 beman_big_int_square_long_runtime_generic:
 .cfi_startproc
 
@@ -101,7 +114,7 @@ beman_big_int_square_long_runtime_generic:
 .cfi_rel_offset rbx, 0
 
     cmp     rdx, 1
-    jbe     .Lgeneric_x64_sqr_tiny  # with at most one limb there is no triangle
+    jbe     Lgeneric_x64_sqr_tiny  # with at most one limb there is no triangle
 
     mov     r9, rdx                 # free up rdx for the mul instruction
 
@@ -117,23 +130,23 @@ beman_big_int_square_long_runtime_generic:
     GENERIC_X64_SQR_ROW_SETUP
 
     cmp     rbx, rcx
-    je      .Lgeneric_x64_sqr_mul_row_4x
+    je      Lgeneric_x64_sqr_mul_row_4x
 
-.Lgeneric_x64_sqr_mul_row_rmdr:
+Lgeneric_x64_sqr_mul_row_rmdr:
 
     GENERIC_X64_MUL_LIMB 0
 
     add     rbx, 1                              # j++
     cmp     rbx, rcx
-    jne     .Lgeneric_x64_sqr_mul_row_rmdr      # if (j != -(row_len & ~3)) { goto rmdr_loop_start; }
+    jne     Lgeneric_x64_sqr_mul_row_rmdr      # if (j != -(row_len & ~3)) { goto rmdr_loop_start; }
 
-.Lgeneric_x64_sqr_mul_row_4x:
+Lgeneric_x64_sqr_mul_row_4x:
 
     test    rbx, rbx
-    jz      .Lgeneric_x64_sqr_mul_row_end
+    jz      Lgeneric_x64_sqr_mul_row_end
 
 .p2align 4
-.Lgeneric_x64_sqr_mul_row_4x_unroll:
+Lgeneric_x64_sqr_mul_row_4x_unroll:
 
     GENERIC_X64_MUL_LIMB 0
     GENERIC_X64_MUL_LIMB 8
@@ -141,39 +154,39 @@ beman_big_int_square_long_runtime_generic:
     GENERIC_X64_MUL_LIMB 24
 
     add     rbx, 4                                  # j += 4
-    jnz     .Lgeneric_x64_sqr_mul_row_4x_unroll     # if (j != 0) { goto unroll_loop_start; }
+    jnz     Lgeneric_x64_sqr_mul_row_4x_unroll     # if (j != 0) { goto unroll_loop_start; }
 
-.Lgeneric_x64_sqr_mul_row_end:
+Lgeneric_x64_sqr_mul_row_end:
 
     mov     QWORD PTR [rdi], r11    # result[len_a] = temp
 
     add     rdi, 8                  # increment the result ptr for next iter
     sub     r8, 1                   # row_len--
-    jz      .Lgeneric_x64_sqr_diag  # len_a == 2: the triangle is a single limb
+    jz      Lgeneric_x64_sqr_diag  # len_a == 2: the triangle is a single limb
 
 .p2align 4
-.Lgeneric_x64_sqr_outer_loop_start:
+Lgeneric_x64_sqr_outer_loop_start:
 
     GENERIC_X64_SQR_ROW_SETUP
 
     cmp     rbx, rcx
-    je      .Lgeneric_x64_sqr_inner_loop_4x
+    je      Lgeneric_x64_sqr_inner_loop_4x
 
-.Lgeneric_x64_sqr_inner_loop_rmdr:
+Lgeneric_x64_sqr_inner_loop_rmdr:
 
     GENERIC_X64_ADDMUL_LIMB 0
 
     add     rbx, 1                              # j++
     cmp     rbx, rcx
-    jne     .Lgeneric_x64_sqr_inner_loop_rmdr   # if (j != -(row_len & ~3)) { goto rmdr_loop_start; }
+    jne     Lgeneric_x64_sqr_inner_loop_rmdr   # if (j != -(row_len & ~3)) { goto rmdr_loop_start; }
 
-.Lgeneric_x64_sqr_inner_loop_4x:
+Lgeneric_x64_sqr_inner_loop_4x:
 
     test    rbx, rbx
-    jz      .Lgeneric_x64_sqr_outer_loop_end
+    jz      Lgeneric_x64_sqr_outer_loop_end
 
 .p2align 4
-.Lgeneric_x64_sqr_inner_loop_4x_unroll:
+Lgeneric_x64_sqr_inner_loop_4x_unroll:
 
     GENERIC_X64_ADDMUL_LIMB 0
     GENERIC_X64_ADDMUL_LIMB 8
@@ -181,17 +194,17 @@ beman_big_int_square_long_runtime_generic:
     GENERIC_X64_ADDMUL_LIMB 24
 
     add     rbx, 4                                  # j += 4
-    jnz     .Lgeneric_x64_sqr_inner_loop_4x_unroll  # if (j != 0) { goto unroll_loop_start; }
+    jnz     Lgeneric_x64_sqr_inner_loop_4x_unroll  # if (j != 0) { goto unroll_loop_start; }
 
-.Lgeneric_x64_sqr_outer_loop_end:
+Lgeneric_x64_sqr_outer_loop_end:
 
     mov     QWORD PTR [rdi], r11    # result[len_a + i] = temp
 
     add     rdi, 8                              # increment the result ptr for next iter
     sub     r8, 1                               # row_len--
-    jnz     .Lgeneric_x64_sqr_outer_loop_start  # if (row_len != 0) { goto outer_loop_start; }
+    jnz     Lgeneric_x64_sqr_outer_loop_start  # if (row_len != 0) { goto outer_loop_start; }
 
-.Lgeneric_x64_sqr_diag:
+Lgeneric_x64_sqr_diag:
 
     # The triangle occupies result[1 .. 2 * len_a - 2]; zero its two missing
     # end limbs so the pass below can treat every limb pair alike. rdi now
@@ -213,7 +226,7 @@ beman_big_int_square_long_runtime_generic:
     # only one add/adc/adc run is loop-carried; a[i] sits at [rsi + rbx * 4].
 
 .p2align 4
-.Lgeneric_x64_sqr_diag_loop:
+Lgeneric_x64_sqr_diag_loop:
 
     mov     rax, QWORD PTR [rsi + rbx * 4]      # rax = a[i]
     mul     rax                                 # rdx : rax = a[i]^2
@@ -239,25 +252,27 @@ beman_big_int_square_long_runtime_generic:
     mov     r11, r10                            # extra = next_extra
 
     add     rbx, 2                              # i++
-    jnz     .Lgeneric_x64_sqr_diag_loop         # if (i != len_a) { goto diag_loop_start; }
+    jnz     Lgeneric_x64_sqr_diag_loop         # if (i != len_a) { goto diag_loop_start; }
 
-    jmp     .Lgeneric_x64_sqr_end
+    jmp     Lgeneric_x64_sqr_end
 
-.Lgeneric_x64_sqr_tiny:
+Lgeneric_x64_sqr_tiny:
 
     test    rdx, rdx                # an empty operand leaves nothing to do
-    jz      .Lgeneric_x64_sqr_end
+    jz      Lgeneric_x64_sqr_end
 
     mov     rax, QWORD PTR [rsi]    # rax = a[0]
     mul     rax                     # rdx : rax = a[0]^2
     mov     QWORD PTR [rdi], rax    # result[0] = low64
     mov     QWORD PTR [rdi + 8], rdx    # result[1] = high64
 
-.Lgeneric_x64_sqr_end:
+Lgeneric_x64_sqr_end:
 
     pop     rbx
 .cfi_adjust_cfa_offset -8
     ret
 
 .cfi_endproc
+.ifndef BEMAN_BIG_INT_MACHO
 .size beman_big_int_square_long_runtime_generic, .-beman_big_int_square_long_runtime_generic
+.endif
