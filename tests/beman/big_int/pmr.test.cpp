@@ -113,7 +113,10 @@ static_assert(std::is_move_constructible_v<pmr_big_int>);
 static_assert(std::is_copy_assignable_v<pmr_big_int>);
 static_assert(std::is_move_assignable_v<pmr_big_int>);
 static_assert(std::is_nothrow_move_constructible_v<pmr_big_int>);
-static_assert(std::is_nothrow_move_assignable_v<pmr_big_int>);
+// polymorphic_allocator neither propagates on move assignment nor is always-equal, so moving
+// from a value on another resource copies, which can allocate and throw.
+static_assert(!std::is_nothrow_move_assignable_v<pmr_big_int>);
+static_assert(!std::is_nothrow_move_assignable_v<pmr_basic_big_int<256>>);
 static_assert(std::is_destructible_v<pmr_big_int>);
 
 // Implicit conversion from a non-pmr big_int is disallowed (different allocator
@@ -972,6 +975,29 @@ TEST(Pmr, ThrowingAllocationDuringAssignmentLeavesValueUnchanged) {
         x = 42;
         EXPECT_EQ(x, 42);
     }
+}
+
+TEST(Pmr, ThrowingAllocationDuringMoveAssignmentPropagates) {
+    // Moving from another resource copies onto ours. When that allocation throws the
+    // exception reaches the caller, rather than terminating, and neither operand changes.
+    counting_resource cr;
+    pmr_big_int       src{1, &cr};
+    src <<= 4000;
+    const std::string src_before = to_string(src);
+
+    pmr_big_int dst{7, std::pmr::null_memory_resource()};
+    ASSERT_TRUE(is_inplace(dst));
+
+    EXPECT_THROW(dst = std::move(src), std::bad_alloc);
+
+    EXPECT_EQ(dst, 7);
+    EXPECT_EQ(dst.get_allocator().resource(), std::pmr::null_memory_resource());
+    EXPECT_EQ(to_string(src), src_before);
+    EXPECT_EQ(src.get_allocator().resource(), &cr);
+
+    // A value that fits inline still moves without allocating.
+    dst = pmr_big_int{42, &cr};
+    EXPECT_EQ(dst, 42);
 }
 
 TEST(Pmr, NullMemoryResourceForcesInlineOnly) {
