@@ -15,8 +15,15 @@
 // `__int128` and `_BitInt` are guarded individually since each is only
 // conditionally available.
 
+
+#if defined(__APPLE__) && defined(__x86_64__)
+
+TEST(MultiLimbConstruction, SkippedUnderAppleX64) {
+    GTEST_SKIP() << "Skipped: Apple Clang on x64 crashes compiling these tests.";
+}
+
 // clang-19 totally crashes running these tests
-#if defined(__clang__) && __clang_major__ == 19
+#elif defined(__clang__) && __clang_major__ == 19
 
 TEST(MultiLimbConstruction, SkippedUnderClang19) {
     GTEST_SKIP() << "Skipped: clang-19 crashes compiling these tests.";

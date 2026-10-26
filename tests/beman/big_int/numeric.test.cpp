@@ -17,6 +17,15 @@
 
 #include "testing.hpp"
 
+// ICE with Apple Clang on x64
+#if defined(__APPLE__) && defined(__x86_64__)
+
+TEST(Numeric, SkippedUnderAppleX64) {
+    GTEST_SKIP() << "Skipped: Apple Clang on x64 crashes compiling these tests.";
+}
+
+#else
+
 namespace {
 
 using BEMAN_BIG_INT_NAMESPACE::abs;
@@ -953,3 +962,5 @@ TEST(SaturatingCast, BitPreciseIntegers) {
 #endif
 
 } // namespace
+
+#endif
