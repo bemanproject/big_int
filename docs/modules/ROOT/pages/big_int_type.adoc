@@ -88,10 +88,11 @@ A request that is within the limit but cannot be served reports the allocator's 
 During constant evaluation the same condition is a compile-time error rather than an exception, since a thrown exception is not a
 constant expression.
 
-[#big_int_type_precondition_violations]
-Division or remainder by zero and a shift by a negative count violate a precondition, so the behavior is undefined.
-This implementation checks for them before any operand is modified and throws `std::domain_error`, or in an exception free
-environment traps. During constant evaluation the violation is a compile-time error.
+[#big_int_type_numeric_errors]
+Division or remainder by zero, a shift by a negative count, and the conversion of a non-finite floating-point value
+throw `std::domain_error`, or in an exception free environment trap.
+The check happens before any operand is modified.
+During constant evaluation the same condition is a compile-time error.
 
 [#big_int_type_synopsis]
 == Synopsis
@@ -368,9 +369,9 @@ integral type or a `basic_big_int` specialization, the integer value is that of
 discarding the fractional part of `value` (truncation toward zero).
 
 * *Constraints:* `std::remove_cvref_t<T>` is not `basic_big_int`, and is a built-in integer type, a floating-point type, or a `basic_big_int` specialization.
-* *Preconditions:* If `std::remove_cvref_t<T>` is a floating-point type, `value` is finite.
+* *Preconditions:* None.
 * *Postconditions:* None.
-* *Throws:* Nothing if the effective width of the resulting value is less than or equal to `inplace_bits`; otherwise, any exception thrown during allocation.
+* *Throws:* `std::domain_error` if `std::remove_cvref_t<T>` is a floating-point type and `value` is not finite (see xref:big_int_type.adoc#big_int_type_numeric_errors[numeric errors]). Otherwise, nothing if the effective width of the resulting value is less than or equal to `inplace_bits`; otherwise, any exception thrown during allocation.
 * *Remarks:* The constructor is `explicit` unless `std::remove_cvref_t<T>` is a built-in signed or unsigned integer type or the same `basic_big_int` specialization. The expression inside `noexcept` is `true` when `value` is an integral type whose width does not exceed `inplace_bits`.
 
 === Converting constructor from an arithmetic type with an allocator
@@ -384,9 +385,9 @@ constexpr basic_big_int(const T& value, const allocator_type& a) noexcept(/* see
 Equivalent to the converting constructor above, but initializes the allocator to
 `a`.
 
-* *Preconditions:* If `std::remove_cvref_t<T>` is a floating-point type, `value` is finite.
+* *Preconditions:* None.
 * *Postconditions:* None.
-* *Throws:* Nothing if the effective width of the resulting value is less than or equal to `inplace_bits`; otherwise, any exception thrown during allocation.
+* *Throws:* `std::domain_error` if `std::remove_cvref_t<T>` is a floating-point type and `value` is not finite (see xref:big_int_type.adoc#big_int_type_numeric_errors[numeric errors]). Otherwise, nothing if the effective width of the resulting value is less than or equal to `inplace_bits`; otherwise, any exception thrown during allocation.
 
 === Iterator-pair constructor
 
@@ -527,8 +528,9 @@ template <class T> constexpr basic_big_int& operator%=(T&& rhs) requires _common
 remainder of dividing `*this` by `rhs`, truncating toward zero, and returns
 `*this`.
 
-* *Preconditions:* The integer value of `rhs` is nonzero; see xref:big_int_type.adoc#big_int_type_precondition_violations[precondition violations].
+* *Preconditions:* None.
 * *Postconditions:* None.
+* *Throws:* `std::domain_error` if the integer value of `rhs` is zero (see xref:big_int_type.adoc#big_int_type_numeric_errors[numeric errors]); otherwise, any exception thrown during allocation.
 
 === Shift compound assignment
 
@@ -542,9 +544,9 @@ template <_signed-or-unsigned_ S> constexpr basic_big_int& operator>>=(S s);
 `2^s`); `operator>>=` is equivalent to `*this = std::move(*this) >> s` (division
 by `2^s`, rounded toward negative infinity). Each returns `*this`.
 
-* *Preconditions:* `s >= 0`; see xref:big_int_type.adoc#big_int_type_precondition_violations[precondition violations].
+* *Preconditions:* None.
 * *Postconditions:* None.
-* *Throws:* `std::length_error` if the result would occupy more than `max_size()` bits; otherwise, any exception thrown during allocation.
+* *Throws:* `std::domain_error` if `s < 0` (see xref:big_int_type.adoc#big_int_type_numeric_errors[numeric errors]); `std::length_error` if the result would occupy more than `max_size()` bits; otherwise, any exception thrown during allocation.
 
 [#big_int_type_swap]
 == Swap
@@ -933,8 +935,9 @@ template <class L, class R> constexpr _common-big-int-type_<L, R> operator%(L&& 
 dividing `x` by `y`, truncating toward zero (matching the behavior of the
 built-in integer types).
 
-* *Preconditions:* The integer value of `y` is nonzero; see xref:big_int_type.adoc#big_int_type_precondition_violations[precondition violations].
+* *Preconditions:* None.
 * *Postconditions:* None.
+* *Throws:* `std::domain_error` if the integer value of `y` is zero (see xref:big_int_type.adoc#big_int_type_numeric_errors[numeric errors]); otherwise, any exception thrown during allocation.
 
 === Shift operators
 
@@ -954,9 +957,9 @@ negative infinity, where `v` is the integer value of `x`. The result's allocator
 is selected as described for the binary operators above.
 
 * *Constraints:* `std::remove_cvref_t<T>` is a `basic_big_int` specialization.
-* *Preconditions:* `s >= 0`; see xref:big_int_type.adoc#big_int_type_precondition_violations[precondition violations].
+* *Preconditions:* None.
 * *Postconditions:* None.
-* *Throws:* `std::length_error` if the result would occupy more than `max_size()` bits; otherwise, any exception thrown during allocation.
+* *Throws:* `std::domain_error` if `s < 0` (see xref:big_int_type.adoc#big_int_type_numeric_errors[numeric errors]); `std::length_error` if the result would occupy more than `max_size()` bits; otherwise, any exception thrown during allocation.
 
 [#big_int_type_hash]
 == Hash support

@@ -1190,8 +1190,9 @@ BEMAN_BIG_INT_END_NAMESPACE
 BEMAN_BIG_INT_BEGIN_NAMESPACE
 namespace detail {
 
-// Called on a precondition violation the library can detect cheaply, such as division by zero or a negative shift
-// count, always as `if (violated) [[unlikely]] ub_handler();` before any operand is modified. Throws
+// Called on a numeric error the library can detect cheaply: division by zero, a negative shift count, or a
+// non-finite floating-point value converted to big_int. Always called as `if (violated) [[unlikely]] ub_handler();`
+// before any operand is modified. Throws
 // `std::domain_error`, or traps where exceptions are disabled. Not constexpr, so during constant evaluation the
 // violation is a compile-time error.
 [[noreturn]] BEMAN_BIG_INT_COLD BEMAN_BIG_INT_NOINLINE inline void ub_handler() {

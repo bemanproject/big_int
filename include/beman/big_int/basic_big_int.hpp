@@ -613,8 +613,9 @@ class BEMAN_BIG_INT_TRIVIAL_ABI basic_big_int {
   private:
     template <detail::unsigned_integer T>
     constexpr void assign_magnitude(T value) noexcept;
+    // A non-finite `value` calls `detail::ub_handler()`. Not noexcept: a large `value` also allocates.
     template <detail::cv_unqualified_floating_point F>
-    constexpr void assign_from_float(F value) noexcept;
+    constexpr void assign_from_float(F value);
 
     // Throws `std::length_error` if `limbs_needed` limbs cannot be represented
     static constexpr void                       check_length(size_type limbs_needed);
@@ -3392,12 +3393,14 @@ constexpr void basic_big_int<b, L, A>::assign_magnitude(T value) noexcept {
 
 template <std::size_t b, class L, class A>
 template <detail::cv_unqualified_floating_point F>
-constexpr void basic_big_int<b, L, A>::assign_from_float(const F value) noexcept {
+constexpr void basic_big_int<b, L, A>::assign_from_float(const F value) {
     using traits = detail::ieee_traits<F>;
 #ifdef BEMAN_BIG_INT_UNSUPPORTED_LONG_DOUBLE
     static_assert(!std::is_same_v<F, long double>, "long double is not supported on this platform");
 #endif
-    BEMAN_BIG_INT_ASSERT(detail::constexpr_isfinite(value));
+    if (!detail::constexpr_isfinite(value)) [[unlikely]] {
+        detail::ub_handler();
+    }
 
     // In the happiest case, we can use the intrinsic conversion from binary32 to uint128_t.
     // Compilers have optimized routines for this,

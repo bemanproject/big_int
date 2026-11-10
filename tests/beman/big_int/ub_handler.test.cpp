@@ -1,11 +1,14 @@
 // SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 // SPDX-License-Identifier: BSL-1.0
 //
-// Precondition violations routed through `detail::ub_handler()`: division or remainder by zero and a
-// negative shift count. With exceptions enabled the handler throws `std::domain_error`, and every check
-// runs before an operand is modified, so a throwing compound operation leaves `*this` unchanged.
+// Numeric errors routed through `detail::ub_handler()`: division or remainder by zero, a negative shift
+// count, and the conversion of a non-finite floating-point value. With exceptions enabled the handler throws
+// `std::domain_error`, and every check runs before an operand is modified, so a throwing compound operation
+// leaves `*this` unchanged.
 
 #include <climits>
+#include <cstddef>
+#include <limits>
 #include <stdexcept>
 #include <utility>
 
@@ -135,6 +138,30 @@ void expect_negative_shifts_throw(const S s) {
     expect_negative_shift_throws(heap_value(), s);
 }
 
+// Both floating-point constructors throw on infinity of either sign and on NaN, while the largest finite
+// value, which needs a heap allocation, still converts.
+template <class F>
+void expect_non_finite_conversion_throws() {
+    using limits = std::numeric_limits<F>;
+    const big_int::allocator_type alloc{};
+    big_int                       result{7U};
+
+    // The forwarding constructor is given prvalues: its constraint does not yet accept a floating-point lvalue.
+    EXPECT_THROW(result = big_int{limits::infinity()}, std::domain_error);
+    EXPECT_THROW(result = big_int{-limits::infinity()}, std::domain_error);
+    EXPECT_THROW(result = big_int{limits::quiet_NaN()}, std::domain_error);
+    EXPECT_THROW(result = big_int{-limits::quiet_NaN()}, std::domain_error);
+    for (const F v : {limits::infinity(), -limits::infinity(), limits::quiet_NaN(), -limits::quiet_NaN()}) {
+        EXPECT_THROW(result = big_int(v, alloc), std::domain_error);
+    }
+    EXPECT_EQ(result, 7U);
+
+    const big_int largest{limits::max()};
+    EXPECT_EQ(largest.size(), static_cast<std::size_t>(limits::max_exponent));
+    EXPECT_EQ(big_int{-limits::max()}, -largest);
+    EXPECT_EQ(big_int{limits::denorm_min()}, 0U);
+}
+
 } // namespace
 
 TEST(UbHandler, ThrowsDomainError) {
@@ -182,6 +209,14 @@ TEST(UbHandler, NegativeShift) {
     expect_negative_shifts_throw(LLONG_MIN);
     expect_negative_shifts_throw(static_cast<short>(-5));
     expect_negative_shifts_throw(static_cast<signed char>(-1));
+}
+
+TEST(UbHandler, NonFiniteFloatConversion) {
+    expect_non_finite_conversion_throws<float>();
+    expect_non_finite_conversion_throws<double>();
+#ifndef BEMAN_BIG_INT_UNSUPPORTED_LONG_DOUBLE
+    expect_non_finite_conversion_throws<long double>();
+#endif
 }
 
 // The checks reject only the violating values: a zero shift and a nonzero divisor still work.
