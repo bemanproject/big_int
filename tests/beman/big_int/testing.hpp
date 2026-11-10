@@ -7,6 +7,7 @@
 #include <cstddef>
 #include <ostream>
 #include <span>
+#include <utility>
 
 #include <beman/big_int.hpp>
 
@@ -58,6 +59,44 @@ template <std::size_t b, class L, class A>
 [[nodiscard]] constexpr bool is_normalized(const basic_big_int<b, L, A>& x) noexcept {
     const auto limbs = x.representation();
     return (limbs.size() <= 1 || limbs.back() != uint_multiprecision_t{0}) && limbs.size() == x.representation_size();
+}
+
+// Calls `visit(name, apply, reference)` once per binary compound assignment operator `@=`, where `apply(x, y)`
+// performs `x @= std::forward(y)` and `reference(x, y)` returns `x @ y`. `/=` and `%=` need a nonzero `y`.
+template <class Int, class Visit>
+constexpr void for_each_compound_assignment(Visit&& visit) {
+    visit(
+        "+=",
+        [](Int& x, auto&& y) { x += std::forward<decltype(y)>(y); },
+        [](const Int& x, const Int& y) { return x + y; });
+    visit(
+        "-=",
+        [](Int& x, auto&& y) { x -= std::forward<decltype(y)>(y); },
+        [](const Int& x, const Int& y) { return x - y; });
+    visit(
+        "*=",
+        [](Int& x, auto&& y) { x *= std::forward<decltype(y)>(y); },
+        [](const Int& x, const Int& y) { return x * y; });
+    visit(
+        "/=",
+        [](Int& x, auto&& y) { x /= std::forward<decltype(y)>(y); },
+        [](const Int& x, const Int& y) { return x / y; });
+    visit(
+        "%=",
+        [](Int& x, auto&& y) { x %= std::forward<decltype(y)>(y); },
+        [](const Int& x, const Int& y) { return x % y; });
+    visit(
+        "&=",
+        [](Int& x, auto&& y) { x &= std::forward<decltype(y)>(y); },
+        [](const Int& x, const Int& y) { return x & y; });
+    visit(
+        "|=",
+        [](Int& x, auto&& y) { x |= std::forward<decltype(y)>(y); },
+        [](const Int& x, const Int& y) { return x | y; });
+    visit(
+        "^=",
+        [](Int& x, auto&& y) { x ^= std::forward<decltype(y)>(y); },
+        [](const Int& x, const Int& y) { return x ^ y; });
 }
 
 // Returns the number of bytes before the trailing run of zero bytes.

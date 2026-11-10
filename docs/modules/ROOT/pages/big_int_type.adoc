@@ -484,6 +484,16 @@ converting constructor, this operator does not accept floating-point operands.
 [#big_int_type_compound]
 == Compound assignment operators
 
+Every compound assignment operator leaves `get_allocator()` unchanged. If `rhs`
+is a `basic_big_int` whose allocator compares unequal to `get_allocator()`, the
+storage of `rhs` is not taken over, even when `rhs` is an rvalue.
+
+NOTE: This is why `@=` is not specified as
+`*this = std::move(*this) @ std::forward<T>(rhs)`. With unequal allocators that
+expression could produce a result holding the storage and allocator of `rhs`,
+and a move assignment that propagates the allocator would then install them in
+`*this`.
+
 === Arithmetic and bitwise compound assignment
 
 [source,c++]
@@ -496,8 +506,8 @@ template <class T> constexpr basic_big_int& operator|=(T&& rhs) requires _common
 template <class T> constexpr basic_big_int& operator^=(T&& rhs) requires _common-big-int-type-with_<T, basic_big_int>;
 ----
 
-Each operator `@=` is equivalent to `*this = std::move(*this) @ std::forward<T>(rhs)`
-and returns `*this`, where `@` is the corresponding binary operator.
+Each operator `@=` sets the integer value of `*this` to that of `*this @ rhs` and
+returns `*this`, where `@` is the corresponding binary operator.
 
 * *Preconditions:* None.
 * *Postconditions:* None.
@@ -526,9 +536,9 @@ template <_signed-or-unsigned_ S> constexpr basic_big_int& operator<<=(S s);
 template <_signed-or-unsigned_ S> constexpr basic_big_int& operator>>=(S s);
 ----
 
-`operator<<=` is equivalent to `*this = std::move(*this) << s` (multiplication by
-`2^s`); `operator>>=` is equivalent to `*this = std::move(*this) >> s` (division
-by `2^s`, rounded toward negative infinity). Each returns `*this`.
+`operator<<=` sets the integer value of `*this` to that of `*this << s`
+(multiplication by `2^s`); `operator>>=` sets it to that of `*this >> s`
+(division by `2^s`, rounded toward negative infinity). Each returns `*this`.
 
 * *Preconditions:* `s >= 0`, and `s` does not exceed the maximum shift `max_size()`.
 * *Postconditions:* None.
