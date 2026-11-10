@@ -647,11 +647,11 @@ class BEMAN_BIG_INT_TRIVIAL_ABI basic_big_int {
         constexpr ~shrink_if_consteval_on_exit() { self.shrink_if_consteval(); }
     };
 
-    // We are limited in our shifting to what we can encode into our control block, which is 30 (or 27) bits of limbs
-    // Our max shift is then the number of bits represented in these blocks plus the theoretical 63 (or 31)
-    // that are in the same limb.
-    using shift_type                      = uint_multiprecision_t;
-    static constexpr shift_type shift_max = static_cast<shift_type>(max_limbs) * bits_per_limb;
+    // Converts a shift count of any integer type to `size_type`. A count too wide for `size_type` saturates
+    // instead of wrapping. Any count above `max_bits` behaves the same: a right shift discards every bit, and
+    // a left shift of a nonzero value throws `std::length_error`. Precondition: `s >= 0`.
+    template <detail::signed_or_unsigned S>
+    [[nodiscard]] static constexpr size_type to_shift_count(S s) noexcept;
 
     // Increases the magnitude by one, without affecting the sign bit.
     // Returns `true` on carry in the uppermost limb.
@@ -663,12 +663,12 @@ class BEMAN_BIG_INT_TRIVIAL_ABI basic_big_int {
     // meaning that the value was originally zero.
     constexpr bool unchecked_decrement_magnitude();
 
-    constexpr void shift_left(shift_type s);
-    constexpr void shift_right(shift_type s);
+    constexpr void shift_left(size_type s);
+    constexpr void shift_right(size_type s);
     // `*this = (src, neg) << s` / `>> s` (floor rounding) in a single pass. `src` must be canonical and
     // must not alias `*this`.
-    constexpr void assign_shifted_left(std::span<const uint_multiprecision_t> src, bool neg, shift_type s);
-    constexpr void assign_shifted_right(std::span<const uint_multiprecision_t> src, bool neg, shift_type s);
+    constexpr void assign_shifted_left(std::span<const uint_multiprecision_t> src, bool neg, size_type s);
+    constexpr void assign_shifted_right(std::span<const uint_multiprecision_t> src, bool neg, size_type s);
 
     template <detail::signed_or_unsigned Integer>
     [[nodiscard]] constexpr bool equals_integer(Integer x) const noexcept;
@@ -1310,15 +1310,7 @@ constexpr basic_big_int<b, L, A>::~basic_big_int() {
 template <std::size_t b, class L, class A>
 template <detail::signed_or_unsigned S>
 constexpr auto basic_big_int<b, L, A>::operator>>=(const S s) -> basic_big_int& {
-    // If this pattern comes up more often, we should consider something like a `safe_cast` utility.
-    // This would convert to another type and signal whether the result is exactly representable.
-    if constexpr (std::is_signed_v<S>) {
-        BEMAN_BIG_INT_DEBUG_ASSERT(s >= 0);
-        BEMAN_BIG_INT_DEBUG_ASSERT(static_cast<detail::make_unsigned_t<S>>(s) <= shift_max);
-    } else {
-        BEMAN_BIG_INT_DEBUG_ASSERT(s <= shift_max);
-    }
-    shift_right(static_cast<shift_type>(s));
+    shift_right(to_shift_count(s));
     shrink_if_consteval();
     return *this;
 }
@@ -1326,15 +1318,24 @@ constexpr auto basic_big_int<b, L, A>::operator>>=(const S s) -> basic_big_int& 
 template <std::size_t b, class L, class A>
 template <detail::signed_or_unsigned S>
 constexpr auto basic_big_int<b, L, A>::operator<<=(const S s) -> basic_big_int& {
-    if constexpr (std::is_signed_v<S>) {
-        BEMAN_BIG_INT_DEBUG_ASSERT(s >= 0);
-        BEMAN_BIG_INT_DEBUG_ASSERT(static_cast<detail::make_unsigned_t<S>>(s) <= shift_max);
-    } else {
-        BEMAN_BIG_INT_DEBUG_ASSERT(s <= shift_max);
-    }
-    shift_left(static_cast<shift_type>(s));
+    shift_left(to_shift_count(s));
     shrink_if_consteval();
     return *this;
+}
+
+// Every explicit cast here changes the type, and the implicit conversion only widens, so no instantiation
+// trips -Wuseless-cast or -Wtype-limits.
+template <std::size_t b, class L, class A>
+template <detail::signed_or_unsigned S>
+constexpr auto basic_big_int<b, L, A>::to_shift_count(const S s) noexcept -> size_type {
+    if constexpr (detail::signed_integer<S>) {
+        BEMAN_BIG_INT_DEBUG_ASSERT(s >= 0);
+        return to_shift_count(static_cast<detail::make_unsigned_t<S>>(s));
+    } else if constexpr (detail::width_v<S> > detail::width_v<size_type>) {
+        return s > max_bits ? max_bits + 1 : static_cast<size_type>(s);
+    } else {
+        return s;
+    }
 }
 
 template <std::size_t b, class L, class A>
@@ -1379,8 +1380,7 @@ constexpr bool basic_big_int<b, L, A>::unchecked_decrement_magnitude() {
 // Zero stays zero. The result is sized exactly: the extra top limb exists only when the top limb's
 // leading zeros cannot absorb the bit shift.
 template <std::size_t b, class L, class A>
-constexpr void basic_big_int<b, L, A>::shift_left(const shift_type s) {
-    BEMAN_BIG_INT_DEBUG_ASSERT(s <= shift_max);
+constexpr void basic_big_int<b, L, A>::shift_left(const size_type s) {
     const size_type n = limb_count();
     if (s == 0 || limb_ptr()[n - 1] == 0) {
         return;
@@ -1408,8 +1408,7 @@ constexpr void basic_big_int<b, L, A>::shift_left(const shift_type s) {
 // Floor division by `2^s`: a negative value whose discarded bits are not all zero gets its magnitude
 // incremented after the (truncating) magnitude shift.
 template <std::size_t b, class L, class A>
-constexpr void basic_big_int<b, L, A>::shift_right(const shift_type s) {
-    BEMAN_BIG_INT_DEBUG_ASSERT(s <= shift_max);
+constexpr void basic_big_int<b, L, A>::shift_right(const size_type s) {
     if (s == 0) {
         return;
     }
@@ -1460,8 +1459,7 @@ constexpr void basic_big_int<b, L, A>::shift_right(const shift_type s) {
 template <std::size_t b, class L, class A>
 constexpr void basic_big_int<b, L, A>::assign_shifted_left(const std::span<const uint_multiprecision_t> src,
                                                            const bool                                   neg,
-                                                           const shift_type                             s) {
-    BEMAN_BIG_INT_DEBUG_ASSERT(s <= shift_max);
+                                                           const size_type                              s) {
     const size_type n = src.size();
     if (src[n - 1] == 0) {
         set_zero();
@@ -1491,8 +1489,7 @@ constexpr void basic_big_int<b, L, A>::assign_shifted_left(const std::span<const
 template <std::size_t b, class L, class A>
 constexpr void basic_big_int<b, L, A>::assign_shifted_right(const std::span<const uint_multiprecision_t> src,
                                                             const bool                                   neg,
-                                                            const shift_type                             s) {
-    BEMAN_BIG_INT_DEBUG_ASSERT(s <= shift_max);
+                                                            const size_type                              s) {
     const size_type n     = src.size();
     const size_type whole = s / bits_per_limb;
     const unsigned  bits  = static_cast<unsigned>(s % bits_per_limb);
@@ -2210,17 +2207,9 @@ constexpr detail::common_big_int_type<L, R> operator^(L&& x, R&& y) {
 BEMAN_BIG_INT_EXPORT template <class T, detail::signed_or_unsigned S>
     requires detail::is_basic_big_int_v<std::remove_cvref_t<T>>
 constexpr std::remove_cvref_t<T> operator<<(T&& x, const S s) {
-    using Result        = std::remove_cvref_t<T>;
-    using shift_type    = typename Result::shift_type;
-    constexpr auto form = detail::classify_form_v<T, S>;
-
-    if constexpr (std::is_signed_v<S>) {
-        BEMAN_BIG_INT_DEBUG_ASSERT(s >= 0);
-        BEMAN_BIG_INT_DEBUG_ASSERT(static_cast<detail::make_unsigned_t<S>>(s) <= Result::shift_max);
-    } else {
-        BEMAN_BIG_INT_DEBUG_ASSERT(s <= Result::shift_max);
-    }
-    const auto shift = static_cast<shift_type>(s);
+    using Result         = std::remove_cvref_t<T>;
+    constexpr auto form  = detail::classify_form_v<T, S>;
+    const auto     shift = Result::to_shift_count(s);
 
     if constexpr (form == detail::binary_op_form::move_int) {
         // rvalue: shift in place, no copy needed.
@@ -2239,17 +2228,9 @@ constexpr std::remove_cvref_t<T> operator<<(T&& x, const S s) {
 BEMAN_BIG_INT_EXPORT template <class T, detail::signed_or_unsigned S>
     requires detail::is_basic_big_int_v<std::remove_cvref_t<T>>
 constexpr std::remove_cvref_t<T> operator>>(T&& x, const S s) {
-    using Result        = std::remove_cvref_t<T>;
-    using shift_type    = typename Result::shift_type;
-    constexpr auto form = detail::classify_form_v<T, S>;
-
-    if constexpr (std::is_signed_v<S>) {
-        BEMAN_BIG_INT_DEBUG_ASSERT(s >= 0);
-        BEMAN_BIG_INT_DEBUG_ASSERT(static_cast<detail::make_unsigned_t<S>>(s) <= Result::shift_max);
-    } else {
-        BEMAN_BIG_INT_DEBUG_ASSERT(s <= Result::shift_max);
-    }
-    const auto shift = static_cast<shift_type>(s);
+    using Result         = std::remove_cvref_t<T>;
+    constexpr auto form  = detail::classify_form_v<T, S>;
+    const auto     shift = Result::to_shift_count(s);
 
     if constexpr (form == detail::binary_op_form::move_int) {
         // rvalue: shift in place, no copy needed.
@@ -2261,7 +2242,7 @@ constexpr std::remove_cvref_t<T> operator>>(T&& x, const S s) {
         // lvalue: shift straight from the source into a fresh result, one pass.
         // Shifting out every bit leaves just the sign (-1 or 0), without touching the limbs.
         const auto alloc = detail::result_allocator<Result>(x, s);
-        if (shift >= static_cast<shift_type>(x.size())) {
+        if (shift >= x.size()) {
             if (x.is_negative()) {
                 return Result{-1, alloc};
             }
@@ -3435,7 +3416,7 @@ constexpr void basic_big_int<b, L, A>::assign_from_float(const F value) noexcept
     }
 
     assign_magnitude(mantissa);
-    shift_left(static_cast<shift_type>(exponent));
+    shift_left(static_cast<size_type>(exponent));
     unchecked_set_sign(sign);
 }
 
