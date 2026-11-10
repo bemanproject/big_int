@@ -217,6 +217,7 @@ template <class M, class N>
             break;
         }
         if (detail::is_span_zero(b.representation())) {
+            a.shrink_if_consteval();
             return a; // `a` divides the other operand exactly.
         }
     }
@@ -253,6 +254,7 @@ template <class M, class N>
             limbs[i] = 0;
         }
     }
+    a.shrink_if_consteval();
     return a;
 }
 

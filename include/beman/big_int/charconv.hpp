@@ -405,6 +405,7 @@ from_chars(const char* const begin, const char* const end, basic_big_int<b, L, A
         if (*begin == '-') {
             out.negate();
         }
+        out.shrink_if_consteval();
         return {returned_end, std::errc{}};
     }
 
@@ -453,6 +454,7 @@ from_chars(const char* const begin, const char* const end, basic_big_int<b, L, A
         if (*begin == '-') {
             out.negate();
         }
+        out.shrink_if_consteval();
         return {returned_end, std::errc{}};
     }
 
