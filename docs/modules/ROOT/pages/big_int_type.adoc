@@ -65,6 +65,13 @@ together with a separate sign. Values whose magnitude fits within
 `inplace_bits` bits are stored directly inside the object; larger values are
 stored in allocator-provided dynamic storage.
 
+During constant evaluation, a value whose magnitude fits within `inplace_bits`
+bits holds no allocation after an arithmetic, shift, bitwise, assignment, or
+parsing operation, or construction from a range of limbs, as if `shrink_to_fit()` were called on the result. Such a value can
+therefore initialize a `constexpr` variable however it was computed. At run time
+an operation may keep a dynamic allocation for a small value, so that a later
+operation can reuse it.
+
 The limb type is named by the `Limb` template parameter rather than being fixed by the
 class, so that a future revision can change it without changing the signature of
 `basic_big_int`. `Limb` shall be `uint_multiprecision_t`, and

@@ -487,6 +487,7 @@ class BEMAN_BIG_INT_TRIVIAL_ABI basic_big_int {
             }
             unchecked_set_sign(neg);
         }
+        shrink_if_consteval();
         return *this;
     }
 
@@ -633,6 +634,18 @@ class BEMAN_BIG_INT_TRIVIAL_ABI basic_big_int {
     // Copies the limbs of `x` into a freshly constructed `*this` whose control word already matches `x`.
     constexpr void copy_limbs_from(const basic_big_int& x);
     constexpr void push_back_limb(limb_type limb);
+    // Moves a heap value into the in-place storage and frees the buffer.
+    // Precondition: the representation is on the heap and `limb_count() <= inplace_capacity`.
+    constexpr void move_to_inplace() noexcept;
+    // [big.int.require]: during constant evaluation, a value that fits in place holds no allocation after
+    // an operation, as if by `shrink_to_fit()`. Every operation that may allocate ends with this call.
+    // At run time it does nothing, so the buffer stays available to the next operation.
+    constexpr void shrink_if_consteval() noexcept;
+    // Calls `shrink_if_consteval()` on every exit of an operation with several return paths.
+    struct shrink_if_consteval_on_exit {
+        basic_big_int& self;
+        constexpr ~shrink_if_consteval_on_exit() { self.shrink_if_consteval(); }
+    };
 
     // We are limited in our shifting to what we can encode into our control block, which is 30 (or 27) bits of limbs
     // Our max shift is then the number of bits represented in these blocks plus the theoretical 63 (or 31)
@@ -1154,6 +1167,7 @@ constexpr basic_big_int<b, L, A>::basic_big_int(basic_big_int&& x, const std::ty
 template <std::size_t b, class L, class A>
 constexpr basic_big_int<b, L, A>& basic_big_int<b, L, A>::operator=(const basic_big_int& x) {
     assign_value(x);
+    shrink_if_consteval();
     return *this;
 }
 
@@ -1166,6 +1180,7 @@ template <std::size_t b, class L, class A>
 constexpr basic_big_int<b, L, A>& basic_big_int<b, L, A>::operator=(basic_big_int&& x) noexcept(
     alloc_traits::propagate_on_container_move_assignment::value || alloc_traits::is_always_equal::value) {
     assign_value(std::move(x));
+    shrink_if_consteval();
     return *this;
 }
 
@@ -1282,6 +1297,7 @@ constexpr basic_big_int<b, L, A>::basic_big_int(I begin, S end, const allocator_
         }
         unchecked_trim_magnitude();
     }
+    shrink_if_consteval();
 }
 
 template <std::size_t b, class L, class A>
@@ -1303,6 +1319,7 @@ constexpr auto basic_big_int<b, L, A>::operator>>=(const S s) -> basic_big_int& 
         BEMAN_BIG_INT_DEBUG_ASSERT(s <= shift_max);
     }
     shift_right(static_cast<shift_type>(s));
+    shrink_if_consteval();
     return *this;
 }
 
@@ -1316,6 +1333,7 @@ constexpr auto basic_big_int<b, L, A>::operator<<=(const S s) -> basic_big_int& 
         BEMAN_BIG_INT_DEBUG_ASSERT(s <= shift_max);
     }
     shift_left(static_cast<shift_type>(s));
+    shrink_if_consteval();
     return *this;
 }
 
@@ -1601,19 +1619,7 @@ constexpr void basic_big_int<b, L, A>::shrink_to_fit() {
     }
 
     if (count <= inplace_capacity) {
-        // Move back to inline storage
-        // We need a manual loop to switch the active union member in consteval context
-        // At runtime this should become equivalent to std::uninitialized_copy_n
-        pointer    old_data = m_storage.data;
-        const auto old_cap  = m_capacity;
-        m_capacity          = 0;
-        for (std::uint32_t i = 0; i < count; ++i) {
-            m_storage.limbs[i] = old_data[i];
-        }
-        for (size_type i = count; i < inplace_capacity; ++i) {
-            m_storage.limbs[i] = 0;
-        }
-        free_limbs(old_data, old_cap);
+        move_to_inplace();
     } else {
         // Reallocate to a smaller heap buffer
         const alloc_result allocation = alloc_limbs(count);
@@ -1621,6 +1627,32 @@ constexpr void basic_big_int<b, L, A>::shrink_to_fit() {
         free_limbs(m_storage.data, m_capacity);
         m_storage.data = allocation.ptr;
         m_capacity     = static_cast<std::uint32_t>(allocation.count);
+    }
+}
+
+template <std::size_t b, class L, class A>
+constexpr void basic_big_int<b, L, A>::move_to_inplace() noexcept {
+    // We need a manual loop to switch the active union member in consteval context
+    // At runtime this should become equivalent to std::uninitialized_copy_n
+    const auto count    = limb_count();
+    pointer    old_data = m_storage.data;
+    const auto old_cap  = m_capacity;
+    m_capacity          = 0;
+    for (std::uint32_t i = 0; i < count; ++i) {
+        m_storage.limbs[i] = old_data[i];
+    }
+    for (size_type i = count; i < inplace_capacity; ++i) {
+        m_storage.limbs[i] = 0;
+    }
+    free_limbs(old_data, old_cap);
+}
+
+template <std::size_t b, class L, class A>
+constexpr void basic_big_int<b, L, A>::shrink_if_consteval() noexcept {
+    if BEMAN_BIG_INT_IS_CONSTEVAL {
+        if (!is_representation_inplace() && limb_count() <= inplace_capacity) {
+            move_to_inplace();
+        }
     }
 }
 
@@ -1681,6 +1713,7 @@ constexpr auto basic_big_int<b, L, A>::operator++() -> basic_big_int& {
     } else {
         unchecked_increment_magnitude();
     }
+    shrink_if_consteval();
     return *this;
 }
 
@@ -1700,6 +1733,7 @@ constexpr auto basic_big_int<b, L, A>::operator--() -> basic_big_int& {
             unchecked_set_sign(true);
         }
     }
+    shrink_if_consteval();
     return *this;
 }
 
@@ -1935,6 +1969,7 @@ template <detail::bitwise_op op, class T>
 constexpr auto basic_big_int<b, L, A>::bitwise_assign_impl(T&& rhs) -> basic_big_int&
     requires detail::common_big_int_type_with<T, basic_big_int>
 {
+    const shrink_if_consteval_on_exit shrink_guard{*this};
     if constexpr (detail::is_basic_big_int_v<std::remove_cvref_t<T>>) {
         if constexpr (std::is_same_v<std::remove_cvref_t<T>, basic_big_int>) {
             if (std::addressof(rhs) == this) {
@@ -2191,6 +2226,7 @@ constexpr std::remove_cvref_t<T> operator<<(T&& x, const S s) {
         // rvalue: shift in place, no copy needed.
         Result r = std::move(x);
         r.shift_left(shift);
+        r.shrink_if_consteval();
         return r;
     } else if constexpr (form == detail::binary_op_form::copy_int) {
         // lvalue: build the shifted value straight into a fresh result, one pass.
@@ -2219,6 +2255,7 @@ constexpr std::remove_cvref_t<T> operator>>(T&& x, const S s) {
         // rvalue: shift in place, no copy needed.
         Result r = std::move(x);
         r.shift_right(shift);
+        r.shrink_if_consteval();
         return r;
     } else if constexpr (form == detail::binary_op_form::copy_int) {
         // lvalue: shift straight from the source into a fresh result, one pass.
@@ -2370,6 +2407,7 @@ template <std::size_t extent_other>
 constexpr void
 basic_big_int<b, L, A>::add_in_place(const std::span<const uint_multiprecision_t, extent_other> other_in,
                                      const bool                                                 other_neg) {
+    const shrink_if_consteval_on_exit shrink_guard{*this};
     using limb_view              = std::span<const uint_multiprecision_t>;
     const limb_view     other    = other_in.first(detail::trimmed_size_span(other_in));
     const bool          this_neg = is_negative();
@@ -2467,6 +2505,7 @@ constexpr void basic_big_int<b, L, A>::add_into(const std::span<const uint_multi
                                                 bool                                                   a_neg,
                                                 const std::span<const uint_multiprecision_t, extent_b> b_in,
                                                 bool                                                   b_neg) {
+    const shrink_if_consteval_on_exit shrink_guard{*this};
     using limb_view = std::span<const uint_multiprecision_t>;
     limb_view a     = a_in.first(detail::trimmed_size_span(a_in));
     limb_view bs    = b_in.first(detail::trimmed_size_span(b_in));
@@ -2550,6 +2589,8 @@ constexpr void basic_big_int<b, L, A>::multiply_into(const std::span<const uint_
                                                      const bool                                             a_neg,
                                                      const std::span<const uint_multiprecision_t, extent_b> b_span,
                                                      const bool                                             b_neg) {
+    const shrink_if_consteval_on_exit shrink_guard{*this};
+
     const auto a_trimmed = a.first(detail::trimmed_size_span(a));
     const auto b_trimmed = b_span.first(detail::trimmed_size_span(b_span));
 
@@ -2619,6 +2660,7 @@ basic_big_int<b, L, A>::make_bitwise_of_limbs(const std::span<const uint_multipr
     result.unchecked_set_limb_count(static_cast<std::uint32_t>(extra ? n + 1 : n));
     result.unchecked_trim_magnitude();
     result.unchecked_set_sign(res_neg && !result.unchecked_is_magnitude_zero());
+    result.shrink_if_consteval();
     return result;
 }
 
@@ -2723,6 +2765,7 @@ constexpr auto basic_big_int<b, L, A>::operator-=(T&& rhs) -> basic_big_int&
     if constexpr (detail::is_basic_big_int_v<std::remove_cvref_t<T>>) {
         if (std::addressof(rhs) == this) {
             set_zero();
+            shrink_if_consteval();
         } else {
             add_in_place(rhs.representation(), !rhs.is_negative());
         }
@@ -2808,6 +2851,7 @@ constexpr auto basic_big_int<b, L, A>::operator*=(T&& rhs) -> basic_big_int&
         const auto rhs_limbs = detail::to_limbs(detail::uabs(rhs));
         multiply_in_place(detail::to_fixed_span(rhs_limbs), detail::integer_signbit(rhs));
     }
+    shrink_if_consteval();
     return *this;
 }
 
@@ -3122,6 +3166,7 @@ BEMAN_BIG_INT_EXPORT template <class L, class R>
         rem                = quo.divmod_into(
             detail::to_fixed_span(x_limbs), detail::integer_signbit(x), y.representation(), y.is_negative(), op);
     }
+    quo.shrink_if_consteval(); // `rem` was shrunk by its assignment.
     return {std::move(quo), std::move(rem)};
 }
 
@@ -3160,6 +3205,7 @@ constexpr detail::common_big_int_type<L, R> operator/(L&& x, R&& y) {
                       y.is_negative(),
                       detail::division_op::div);
     }
+    r.shrink_if_consteval();
     return r;
 }
 
@@ -3198,6 +3244,7 @@ constexpr detail::common_big_int_type<L, R> operator%(L&& x, R&& y) {
                       y.is_negative(),
                       detail::division_op::rem);
     }
+    r.shrink_if_consteval();
     return r;
 }
 
@@ -3207,6 +3254,7 @@ template <class T>
 constexpr auto basic_big_int<b, L, A>::operator/=(T&& rhs) -> basic_big_int&
     requires detail::common_big_int_type_with<T, basic_big_int>
 {
+    const shrink_if_consteval_on_exit shrink_guard{*this};
     if constexpr (detail::is_basic_big_int_v<std::remove_cvref_t<T>>) {
         if constexpr (std::is_same_v<std::remove_cvref_t<T>, basic_big_int>) {
             // Self-division: the multi-limb slow path below would zero `rhs`'s
@@ -3253,6 +3301,7 @@ template <class T>
 constexpr auto basic_big_int<b, L, A>::operator%=(T&& rhs) -> basic_big_int&
     requires detail::common_big_int_type_with<T, basic_big_int>
 {
+    const shrink_if_consteval_on_exit shrink_guard{*this};
     if constexpr (detail::is_basic_big_int_v<std::remove_cvref_t<T>>) {
         if constexpr (std::is_same_v<std::remove_cvref_t<T>, basic_big_int>) {
             // Self-modulus: `std::move(*this)` below would zero `rhs` when &rhs == this.
