@@ -84,7 +84,7 @@ template <class T>
 concept arbitrary_integer = signed_or_unsigned<std::remove_cvref_t<T>> || detail::is_basic_big_int_v<T>;
 
 template <class T>
-concept arbitrary_arithmetic = std::is_floating_point_v<T> || arbitrary_integer<T>;
+concept arbitrary_arithmetic = std::is_floating_point_v<std::remove_cvref_t<T>> || arbitrary_integer<T>;
 
 template <class LT, class RT>
 auto common_big_int_type_impl() {

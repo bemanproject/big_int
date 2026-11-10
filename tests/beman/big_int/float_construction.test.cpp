@@ -5,7 +5,11 @@
 #include <bit>
 #include <cmath>
 #include <cstdint>
+#include <limits>
 #include <random>
+#include <type_traits>
+#include <utility>
+#include <vector>
 #include <beman/big_int.hpp>
 #include <gtest/gtest.h>
 
@@ -248,6 +252,71 @@ TEST(FloatConstruction, FloatMinusMax) {
 TEST(FloatConstruction, DoubleSubnormal) {
     BEMAN_BIG_INT_NAMESPACE::big_int x(5e-324);
     EXPECT_EQ(x, 0);
+}
+
+// ----- construction from a floating-point glvalue -----
+
+// The forwarding constructor accepts a floating-point argument of every value category and cv-qualification,
+// stays explicit, and is never noexcept.
+template <class F>
+consteval bool constructible_from_every_float_category() {
+    using big_int = BEMAN_BIG_INT_NAMESPACE::big_int;
+    return std::is_constructible_v<big_int, F> && std::is_constructible_v<big_int, F&> &&
+           std::is_constructible_v<big_int, const F&> && std::is_constructible_v<big_int, F&&> &&
+           std::is_constructible_v<big_int, const F&&> && std::is_constructible_v<big_int, volatile F&> &&
+           !std::is_convertible_v<F&, big_int> && !std::is_convertible_v<const F&, big_int> &&
+           !std::is_nothrow_constructible_v<big_int, F&>;
+}
+static_assert(constructible_from_every_float_category<float>());
+static_assert(constructible_from_every_float_category<double>());
+#ifndef BEMAN_BIG_INT_UNSUPPORTED_LONG_DOUBLE
+static_assert(constructible_from_every_float_category<long double>());
+#endif
+
+consteval bool ce_construct_from_float_lvalue() {
+    double                                 d = 3.5;
+    const float                            f = -2.75f;
+    const BEMAN_BIG_INT_NAMESPACE::big_int x{d};
+    const BEMAN_BIG_INT_NAMESPACE::big_int y{f};
+    return x == 3 && y == -2;
+}
+static_assert(ce_construct_from_float_lvalue());
+
+TEST(FloatConstruction, FromLvalue) {
+    double                           d = 3.5;
+    BEMAN_BIG_INT_NAMESPACE::big_int x{d};
+    EXPECT_EQ(x, 3);
+}
+
+TEST(FloatConstruction, FromConstAndVolatileLvalue) {
+    const double                           cd = -42.9;
+    const BEMAN_BIG_INT_NAMESPACE::big_int x{cd};
+    EXPECT_EQ(x, -42);
+
+    volatile float                         vf = 123.9f;
+    const BEMAN_BIG_INT_NAMESPACE::big_int y{vf};
+    EXPECT_EQ(y, 123);
+}
+
+TEST(FloatConstruction, FromXvalue) {
+    double                                 d = 0x1p65;
+    const BEMAN_BIG_INT_NAMESPACE::big_int x{std::move(d)};
+    EXPECT_EQ(x, 0x2'0000'0000'0000'0000_n);
+}
+
+TEST(FloatConstruction, FromLvalueNeedingAllocation) {
+    const float                            f = std::numeric_limits<float>::max();
+    const BEMAN_BIG_INT_NAMESPACE::big_int x{f};
+    EXPECT_EQ(x, 340282346638528859811704183484516925440_n);
+}
+
+// Generic code forwards an lvalue, as emplace_back does here.
+TEST(FloatConstruction, FromForwardedLvalue) {
+    std::vector<BEMAN_BIG_INT_NAMESPACE::big_int> v;
+    const double                                  d = 1e15;
+    v.emplace_back(d);
+    ASSERT_EQ(v.size(), 1U);
+    EXPECT_EQ(v.front(), 1000000000000000);
 }
 
 } // namespace
