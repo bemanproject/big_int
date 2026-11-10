@@ -88,6 +88,11 @@ A request that is within the limit but cannot be served reports the allocator's 
 During constant evaluation the same condition is a compile-time error rather than an exception, since a thrown exception is not a
 constant expression.
 
+[#big_int_type_precondition_violations]
+Division or remainder by zero and a shift by a negative count violate a precondition, so the behavior is undefined.
+This implementation checks for them before any operand is modified and throws `std::domain_error`, or in an exception free
+environment traps. During constant evaluation the violation is a compile-time error.
+
 [#big_int_type_synopsis]
 == Synopsis
 
@@ -522,7 +527,7 @@ template <class T> constexpr basic_big_int& operator%=(T&& rhs) requires _common
 remainder of dividing `*this` by `rhs`, truncating toward zero, and returns
 `*this`.
 
-* *Preconditions:* The integer value of `rhs` is nonzero.
+* *Preconditions:* The integer value of `rhs` is nonzero; see xref:big_int_type.adoc#big_int_type_precondition_violations[precondition violations].
 * *Postconditions:* None.
 
 === Shift compound assignment
@@ -537,7 +542,7 @@ template <_signed-or-unsigned_ S> constexpr basic_big_int& operator>>=(S s);
 `2^s`); `operator>>=` is equivalent to `*this = std::move(*this) >> s` (division
 by `2^s`, rounded toward negative infinity). Each returns `*this`.
 
-* *Preconditions:* `s >= 0`.
+* *Preconditions:* `s >= 0`; see xref:big_int_type.adoc#big_int_type_precondition_violations[precondition violations].
 * *Postconditions:* None.
 * *Throws:* `std::length_error` if the result would occupy more than `max_size()` bits; otherwise, any exception thrown during allocation.
 
@@ -928,7 +933,7 @@ template <class L, class R> constexpr _common-big-int-type_<L, R> operator%(L&& 
 dividing `x` by `y`, truncating toward zero (matching the behavior of the
 built-in integer types).
 
-* *Preconditions:* The integer value of `y` is nonzero.
+* *Preconditions:* The integer value of `y` is nonzero; see xref:big_int_type.adoc#big_int_type_precondition_violations[precondition violations].
 * *Postconditions:* None.
 
 === Shift operators
@@ -949,7 +954,7 @@ negative infinity, where `v` is the integer value of `x`. The result's allocator
 is selected as described for the binary operators above.
 
 * *Constraints:* `std::remove_cvref_t<T>` is a `basic_big_int` specialization.
-* *Preconditions:* `s >= 0`.
+* *Preconditions:* `s >= 0`; see xref:big_int_type.adoc#big_int_type_precondition_violations[precondition violations].
 * *Postconditions:* None.
 * *Throws:* `std::length_error` if the result would occupy more than `max_size()` bits; otherwise, any exception thrown during allocation.
 

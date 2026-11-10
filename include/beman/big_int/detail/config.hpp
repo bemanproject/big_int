@@ -1042,6 +1042,14 @@ BEMAN_BIG_INT_END_NAMESPACE
     #define BEMAN_BIG_INT_NOINLINE
 #endif
 
+// Cold ========================================================================
+
+#if defined(BEMAN_BIG_INT_GNUC)
+    #define BEMAN_BIG_INT_COLD [[gnu::cold]]
+#else
+    #define BEMAN_BIG_INT_COLD
+#endif
+
 // assert ======================================================================
 
 #ifndef BEMAN_BIG_INT_BUILD_MODULE
@@ -1178,6 +1186,26 @@ BEMAN_BIG_INT_END_NAMESPACE
         #include <cstdlib>
     #endif
 #endif
+
+BEMAN_BIG_INT_BEGIN_NAMESPACE
+namespace detail {
+
+// Called on a precondition violation the library can detect cheaply, such as division by zero or a negative shift
+// count, always as `if (violated) [[unlikely]] ub_handler();` before any operand is modified. Throws
+// `std::domain_error`, or traps where exceptions are disabled. Not constexpr, so during constant evaluation the
+// violation is a compile-time error.
+[[noreturn]] BEMAN_BIG_INT_COLD BEMAN_BIG_INT_NOINLINE inline void ub_handler() {
+#ifdef BEMAN_BIG_INT_ALLOW_EXCEPTIONS
+    throw std::domain_error("beman::big_int: precondition violated (undefined behavior)");
+#elif defined(BEMAN_BIG_INT_BUILTIN_TRAP)
+    BEMAN_BIG_INT_BUILTIN_TRAP();
+#else
+    std::abort();
+#endif
+}
+
+} // namespace detail
+BEMAN_BIG_INT_END_NAMESPACE
 
 // =============================================================================
 
