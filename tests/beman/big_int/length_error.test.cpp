@@ -45,11 +45,33 @@ struct never_alloc {
 
 using starved_big_int = BEMAN_BIG_INT_NAMESPACE::basic_big_int<64, uint_t, never_alloc<uint_t>>;
 
-// A shift amount is carried in a limb-wide type, so a shift large enough to
-// overflow the representation is only expressible when one limb can hold the
-// whole bit count. That holds for 64-bit limbs, but not for 32-bit ones, where
-// such a shift violates the precondition of the shift operators instead.
-constexpr bool shift_reaches_max_size = max_bits <= std::numeric_limits<uint_t>::max();
+// Left-shifting one by `s` through `<<=` and the lvalue and rvalue operators throws and leaves the
+// operand unchanged. A heap operand also keeps its storage.
+template <class S>
+void expect_left_shift_of_one_throws(const S s) {
+    big_int x{1U};
+    big_int result;
+
+    EXPECT_THROW(x <<= s, std::length_error);
+    EXPECT_EQ(x, 1U);
+    EXPECT_THROW(result = x << s, std::length_error);
+    EXPECT_EQ(x, 1U);
+    EXPECT_EQ(result, 0U);
+    EXPECT_THROW(result = big_int{1U} << s, std::length_error);
+    EXPECT_EQ(result, 0U);
+
+    big_int       heap   = -(big_int{1U} << 1000);
+    const big_int before = heap;
+    const auto    cap    = heap.representation_capacity();
+    EXPECT_THROW(heap <<= s, std::length_error);
+    EXPECT_EQ(heap, before);
+    EXPECT_EQ(heap.representation_capacity(), cap);
+    EXPECT_TRUE(BEMAN_BIG_INT_NAMESPACE::is_normalized(heap));
+    EXPECT_THROW(result = heap << s, std::length_error);
+    EXPECT_EQ(heap, before);
+    EXPECT_THROW(result = big_int{heap} << s, std::length_error);
+    EXPECT_EQ(result, 0U);
+}
 
 } // namespace
 
@@ -108,39 +130,50 @@ TEST(LengthError, ThrownExceptionIsALogicError) {
 }
 
 TEST(LengthError, ShiftLeftBeyondMaxThrows) {
-    if constexpr (!shift_reaches_max_size) {
-        GTEST_SKIP() << "max_size() bits do not fit in a shift amount on this limb width";
-    } else {
-        // Shifting a one-limb value by the whole bit budget needs one limb more
-        // than the representation can hold.
-        big_int x{1U};
-        big_int result;
+    // Shifting a one-limb value by the whole bit budget needs one limb more
+    // than the representation can hold.
+    big_int x{1U};
+    big_int result;
 
-        // The compound operator shifts `x` itself.
-        EXPECT_THROW(x <<= max_bits, std::length_error);
-        EXPECT_EQ(x, 1U);
+    // The compound operator shifts `x` itself.
+    EXPECT_THROW(x <<= max_bits, std::length_error);
+    EXPECT_EQ(x, 1U);
 
-        // The lvalue operator allocates the result up front rather than growing it.
-        EXPECT_THROW(result = x << max_bits, std::length_error);
-        EXPECT_EQ(x, 1U);
-        EXPECT_EQ(result, 0U);
+    // The lvalue operator allocates the result up front rather than growing it.
+    EXPECT_THROW(result = x << max_bits, std::length_error);
+    EXPECT_EQ(x, 1U);
+    EXPECT_EQ(result, 0U);
 
-        // The rvalue operator shifts the temporary in place.
-        EXPECT_THROW(result = big_int{1U} << max_bits, std::length_error);
-        EXPECT_EQ(result, 0U);
-    }
+    // The rvalue operator shifts the temporary in place.
+    EXPECT_THROW(result = big_int{1U} << max_bits, std::length_error);
+    EXPECT_EQ(result, 0U);
 }
 
 TEST(LengthError, ShiftLeftWithinMaxIsNotRejected) {
-    if constexpr (!shift_reaches_max_size) {
-        GTEST_SKIP() << "max_size() bits do not fit in a shift amount on this limb width";
-    } else {
-        // One limb less than the budget: representable, so it is the allocator
-        // that fails rather than the length check.
-        starved_big_int       x{1U};
-        constexpr std::size_t digits = static_cast<std::size_t>(std::numeric_limits<uint_t>::digits);
-        EXPECT_THROW(x <<= max_bits - digits, std::bad_alloc);
-    }
+    // One limb less than the budget: representable, so it is the allocator
+    // that fails rather than the length check.
+    starved_big_int       x{1U};
+    constexpr std::size_t digits = static_cast<std::size_t>(std::numeric_limits<uint_t>::digits);
+    EXPECT_THROW(x <<= max_bits - digits, std::bad_alloc);
+}
+
+// A count past `max_size()` is still a valid shift count, so it throws instead of
+// failing an assertion, and a count wider than `size_t` saturates instead of
+// wrapping to a small shift.
+TEST(LengthError, ShiftLeftByCountPastMaxSizeThrows) {
+    expect_left_shift_of_one_throws(max_bits + 1);
+    expect_left_shift_of_one_throws(std::numeric_limits<std::size_t>::max());
+    expect_left_shift_of_one_throws(1ULL << 40);
+    expect_left_shift_of_one_throws(std::numeric_limits<unsigned long long>::max());
+    expect_left_shift_of_one_throws(std::numeric_limits<long long>::max());
+#ifdef BEMAN_BIG_INT_HAS_INT128_FUNDAMENTAL
+    using u128 = BEMAN_BIG_INT_NAMESPACE::detail::uint128_t;
+    using i128 = BEMAN_BIG_INT_NAMESPACE::detail::int128_t;
+    // Truncated to 64 bits, these would be shifts by 1 and by 0.
+    expect_left_shift_of_one_throws((u128{1} << 64) | 1U);
+    expect_left_shift_of_one_throws(u128{1} << 64);
+    expect_left_shift_of_one_throws((i128{1} << 64) | 1);
+#endif
 }
 
 TEST(LengthError, PmrReserveBeyondMaxThrows) {

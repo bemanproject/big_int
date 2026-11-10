@@ -653,4 +653,112 @@ TEST(BitShift, RightShiftSmallConsistencyWithInt) {
     }
 }
 
+// Shift counts at or past max_size(). The only precondition is s >= 0, so a right shift by any count
+// leaves 0 or -1 and a left shift of zero stays zero. A count wider than size_t must saturate rather than
+// wrap to a small shift.
+
+#ifdef BEMAN_BIG_INT_HAS_INT128_FUNDAMENTAL
+using u128 = BEMAN_BIG_INT_NAMESPACE::detail::uint128_t;
+using i128 = BEMAN_BIG_INT_NAMESPACE::detail::int128_t;
+#endif
+
+// Checks `x >> s` through `>>=` and the lvalue and rvalue operators.
+template <class S>
+void expect_right_shift(const big_int& x, const S s, const big_int& expected) {
+    big_int compound = x;
+    compound >>= s;
+    EXPECT_EQ(compound, expected);
+    EXPECT_TRUE(is_normalized(compound));
+
+    const big_int lvalue = x >> s;
+    EXPECT_EQ(lvalue, expected);
+    EXPECT_TRUE(is_normalized(lvalue));
+
+    const big_int rvalue = big_int{x} >> s;
+    EXPECT_EQ(rvalue, expected);
+    EXPECT_TRUE(is_normalized(rvalue));
+}
+
+template <class S>
+void expect_right_shift_discards_all(const S s) {
+    const big_int heap = big_int{1} << 1000;
+    expect_right_shift(big_int{5}, s, big_int{0});
+    expect_right_shift(big_int{-5}, s, big_int{-1});
+    expect_right_shift(heap, s, big_int{0});
+    expect_right_shift(-heap, s, big_int{-1});
+    expect_right_shift(big_int{0}, s, big_int{0});
+}
+
+template <class S>
+void expect_left_shift_of_zero_is_zero(const S s) {
+    big_int compound;
+    compound <<= s;
+    EXPECT_EQ(compound, 0);
+    EXPECT_TRUE(is_normalized(compound));
+
+    const big_int zero;
+    EXPECT_EQ(zero << s, 0);
+    EXPECT_EQ(big_int{} << s, 0);
+
+    // A zero that still owns a heap buffer.
+    big_int emptied = big_int{1} << 1000;
+    emptied >>= 1001;
+    ASSERT_EQ(emptied, 0);
+    emptied <<= s;
+    EXPECT_EQ(emptied, 0);
+    EXPECT_TRUE(is_normalized(emptied));
+}
+
+TEST(BitShift, RightShiftCountPastMaxSize) {
+    const std::size_t max_bits = big_int{}.max_size();
+    expect_right_shift_discards_all(max_bits);
+    expect_right_shift_discards_all(max_bits + 1);
+    expect_right_shift_discards_all(std::numeric_limits<std::size_t>::max());
+    expect_right_shift_discards_all(1ULL << 40);
+    expect_right_shift_discards_all(std::numeric_limits<unsigned long long>::max());
+    expect_right_shift_discards_all(1LL << 40);
+    expect_right_shift_discards_all(std::numeric_limits<long long>::max());
+}
+
+TEST(BitShift, RightShiftCountWiderThanSizeT) {
+#ifdef BEMAN_BIG_INT_HAS_INT128_FUNDAMENTAL
+    // Truncated to 64 bits, these would be shifts by 1 and by 0.
+    expect_right_shift_discards_all((u128{1} << 64) | 1U);
+    expect_right_shift_discards_all(u128{1} << 64);
+    expect_right_shift_discards_all(~u128{0});
+    expect_right_shift_discards_all((i128{1} << 64) | 1);
+#else
+    GTEST_SKIP() << "no 128-bit integer type";
+#endif
+}
+
+TEST(BitShift, LeftShiftZeroByCountPastMaxSize) {
+    expect_left_shift_of_zero_is_zero(big_int{}.max_size() + 1);
+    expect_left_shift_of_zero_is_zero(std::numeric_limits<std::size_t>::max());
+    expect_left_shift_of_zero_is_zero(1ULL << 40);
+    expect_left_shift_of_zero_is_zero(std::numeric_limits<long long>::max());
+#ifdef BEMAN_BIG_INT_HAS_INT128_FUNDAMENTAL
+    expect_left_shift_of_zero_is_zero((u128{1} << 64) | 1U);
+#endif
+}
+
+// With 32-bit limbs, a 64-bit count used to wrap to 32 bits.
+static_assert((big_int{5} >> ((1ULL << 32) | 1U)) == 0);
+static_assert((big_int{-5} >> (1ULL << 40)) == -1);
+static_assert((big_int{} << (1ULL << 40)) == 0);
+static_assert([] {
+    big_int x = big_int{1} << 1000;
+    x >>= std::numeric_limits<std::size_t>::max();
+    return x == 0 && is_inplace(x) && is_normalized(x);
+}());
+static_assert([] {
+    const big_int x = -(big_int{1} << 1000);
+    const big_int r = x >> (1ULL << 40);
+    return r == -1 && is_inplace(r) && is_normalized(r);
+}());
+#ifdef BEMAN_BIG_INT_HAS_INT128_FUNDAMENTAL
+static_assert((big_int{5} >> ((u128{1} << 64) | 1U)) == 0);
+static_assert((big_int{-5} >> (u128{1} << 64)) == -1);
+#endif
+
 } // namespace
