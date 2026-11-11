@@ -7,6 +7,7 @@
 #include <memory>
 #include <memory_resource>
 #include <new>
+#include <string>
 #include <type_traits>
 #include <utility>
 
@@ -1300,4 +1301,72 @@ TEST(Allocation, PmrMoveAssignFromAnotherResourceReusesLargerDstStorage) {
     EXPECT_EQ(dst.representation().data(), dst_data);
     EXPECT_EQ(dst, expected);
     EXPECT_EQ(dst.get_allocator().resource(), &dst_resource);
+}
+
+// ----- Compound assignment against an unequal right-hand allocator -----
+
+namespace {
+tracking_big_int make_signed_value(const tracking_id alloc, const std::size_t bits, const bool negative) {
+    tracking_big_int x = make_heap_value(alloc, bits);
+    x += 12345;
+    if (negative) {
+        x = -std::move(x);
+    }
+    return x;
+}
+} // namespace
+
+// `x @= y` keeps the allocator of `x`, and never takes over the storage of a `y` whose allocator compares unequal,
+// even an rvalue one (eisenwave/cpp-proposals#283). A literal `x = std::move(x) @ std::move(y)` fails this for
+// `+=` with a longer `y`: `operator+` adopts the longer operand, and the propagating move assignment then hands `x`
+// that operand's allocator.
+TEST(Allocation, CompoundAssignmentKeepsOwnAllocatorAgainstUnequalPropagatingRhs) {
+    tracker() = {};
+    {
+        // Inline, few-limb and large left operands against one-limb, few-limb, mid and longer right operands, which
+        // reach the single-limb, stack and fresh-buffer paths of `*=`, `/=` and `%=`.
+        for (const std::size_t lhs_bits : {10U, 200U, 6000U}) {
+            for (const std::size_t rhs_bits : {30U, 130U, 700U, 9000U}) {
+                for (const unsigned signs : {0U, 1U, 2U, 3U}) {
+                    const tracking_big_int x0 = make_signed_value(tracking_id{1U}, lhs_bits, (signs & 1U) != 0U);
+                    const tracking_big_int y0 = make_signed_value(tracking_id{2U}, rhs_bits, (signs & 2U) != 0U);
+
+                    BEMAN_BIG_INT_NAMESPACE::for_each_compound_assignment<tracking_big_int>(
+                        [&](const char* const name, const auto apply, const auto reference) {
+                            SCOPED_TRACE(std::string{name} + " lhs_bits=" + std::to_string(lhs_bits) +
+                                         " rhs_bits=" + std::to_string(rhs_bits) + " signs=" + std::to_string(signs));
+                            const tracking_big_int expected        = reference(x0, y0);
+                            const auto             expect_kept_lhs = [&](const tracking_big_int& x) {
+                                EXPECT_EQ(x, expected);
+                                EXPECT_EQ(x.get_allocator().id, 1U);
+                                if (!is_inplace(x)) {
+                                    EXPECT_EQ(tracker().owner.at(x.representation().data()), 1U);
+                                }
+                            };
+
+                            {
+                                tracking_big_int       x = x0;
+                                const tracking_big_int y = y0;
+                                apply(x, y);
+                                expect_kept_lhs(x);
+                                EXPECT_EQ(y, y0);
+                            }
+                            {
+                                tracking_big_int  x      = x0;
+                                tracking_big_int  y      = y0;
+                                const auto* const y_data = y.representation().data();
+                                apply(x, std::move(y));
+                                expect_kept_lhs(x);
+                                // This implementation reads an unequal-allocator rvalue `y` without modifying it.
+                                EXPECT_EQ(y, y0);
+                                EXPECT_EQ(y.representation().data(), y_data);
+                                EXPECT_EQ(y.get_allocator().id, 2U);
+                            }
+                        });
+                }
+            }
+        }
+    }
+    EXPECT_EQ(tracker().mismatched_frees, 0U);
+    EXPECT_EQ(tracker().live, 0U);
 }

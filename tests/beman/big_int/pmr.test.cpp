@@ -615,6 +615,84 @@ TEST(Pmr, CompoundBitwisePreserveAllocator) {
     EXPECT_EQ(x.get_allocator().resource(), &cr);
 }
 
+pmr_big_int make_signed_value(std::pmr::memory_resource* const resource, const std::size_t bits, const bool negative) {
+    pmr_big_int x{1, resource};
+    x <<= bits;
+    x += 12345;
+    if (negative) {
+        x = -std::move(x);
+    }
+    return x;
+}
+
+// Restores the previous default resource on scope exit.
+struct default_resource_guard {
+    explicit default_resource_guard(std::pmr::memory_resource* const r) noexcept
+        : previous{std::pmr::set_default_resource(r)} {}
+    ~default_resource_guard() { std::pmr::set_default_resource(previous); }
+    default_resource_guard(const default_resource_guard&)            = delete;
+    default_resource_guard& operator=(const default_resource_guard&) = delete;
+
+    std::pmr::memory_resource* previous;
+};
+
+// `x @= y` keeps the resource of `x`, and never takes over the storage of a `y` on another resource, even an rvalue
+// one (eisenwave/cpp-proposals#283). All of its allocation, scratch included, goes to the resource of `x`: none
+// reaches the resource of `y` or the default resource that a copy-selected binary result would use.
+TEST(Pmr, CompoundAssignmentKeepsOwnResourceAgainstRhsOnAnotherResource) {
+    counting_resource            default_res;
+    const default_resource_guard guard{&default_res};
+    counting_resource            lhs_res;
+    counting_resource            rhs_res;
+
+    for (const std::size_t lhs_bits : {10U, 200U, 6000U}) {
+        for (const std::size_t rhs_bits : {30U, 130U, 700U, 9000U}) {
+            for (const unsigned signs : {0U, 1U, 2U, 3U}) {
+                const pmr_big_int x0 = make_signed_value(&lhs_res, lhs_bits, (signs & 1U) != 0U);
+                const pmr_big_int y0 = make_signed_value(&rhs_res, rhs_bits, (signs & 2U) != 0U);
+
+                BEMAN_BIG_INT_NAMESPACE::for_each_compound_assignment<pmr_big_int>(
+                    [&](const char* const name, const auto apply, const auto reference) {
+                        SCOPED_TRACE(std::string{name} + " lhs_bits=" + std::to_string(lhs_bits) +
+                                     " rhs_bits=" + std::to_string(rhs_bits) + " signs=" + std::to_string(signs));
+                        const pmr_big_int expected = reference(x0, y0);
+
+                        // Applies `x @= y` (`y` forwarded as given) and checks that only `x`'s resource was used.
+                        const auto run = [&](pmr_big_int& x, auto&& y) {
+                            const std::size_t default_allocs = default_res.alloc_count();
+                            const std::size_t rhs_allocs     = rhs_res.alloc_count();
+                            const std::size_t rhs_deallocs   = rhs_res.dealloc_count();
+                            apply(x, std::forward<decltype(y)>(y));
+                            EXPECT_EQ(x, expected);
+                            EXPECT_EQ(x.get_allocator().resource(), &lhs_res);
+                            EXPECT_EQ(default_res.alloc_count(), default_allocs);
+                            EXPECT_EQ(rhs_res.alloc_count(), rhs_allocs);
+                            EXPECT_EQ(rhs_res.dealloc_count(), rhs_deallocs);
+                        };
+
+                        {
+                            pmr_big_int       x{x0, &lhs_res};
+                            const pmr_big_int y{y0, &rhs_res};
+                            run(x, y);
+                            EXPECT_EQ(y, y0);
+                        }
+                        {
+                            pmr_big_int       x{x0, &lhs_res};
+                            pmr_big_int       y{y0, &rhs_res};
+                            const auto* const y_data = y.representation().data();
+                            run(x, std::move(y));
+                            EXPECT_NE(x.representation().data(), y_data);
+                            // This implementation reads an unequal-allocator rvalue `y` without modifying it.
+                            EXPECT_EQ(y, y0);
+                            EXPECT_EQ(y.representation().data(), y_data);
+                            EXPECT_EQ(y.get_allocator().resource(), &rhs_res);
+                        }
+                    });
+            }
+        }
+    }
+}
+
 TEST(Pmr, ShiftLeftAllocatesOnConfiguredResource) {
     counting_resource cr;
     pmr_big_int       x{1, &cr};
