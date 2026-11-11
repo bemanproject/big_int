@@ -613,8 +613,9 @@ class BEMAN_BIG_INT_TRIVIAL_ABI basic_big_int {
   private:
     template <detail::unsigned_integer T>
     constexpr void assign_magnitude(T value) noexcept;
+    // A non-finite `value` calls `detail::ub_handler()`. Not noexcept: a large `value` also allocates.
     template <detail::cv_unqualified_floating_point F>
-    constexpr void assign_from_float(F value) noexcept;
+    constexpr void assign_from_float(F value);
 
     // Throws `std::length_error` if `limbs_needed` limbs cannot be represented
     static constexpr void                       check_length(size_type limbs_needed);
@@ -649,9 +650,9 @@ class BEMAN_BIG_INT_TRIVIAL_ABI basic_big_int {
 
     // Converts a shift count of any integer type to `size_type`. A count too wide for `size_type` saturates
     // instead of wrapping. Any count above `max_bits` behaves the same: a right shift discards every bit, and
-    // a left shift of a nonzero value throws `std::length_error`. Precondition: `s >= 0`.
+    // a left shift of a nonzero value throws `std::length_error`. A negative `s` calls `detail::ub_handler()`.
     template <detail::signed_or_unsigned S>
-    [[nodiscard]] static constexpr size_type to_shift_count(S s) noexcept;
+    [[nodiscard]] static constexpr size_type to_shift_count(S s);
 
     // Increases the magnitude by one, without affecting the sign bit.
     // Returns `true` on carry in the uppermost limb.
@@ -1327,9 +1328,11 @@ constexpr auto basic_big_int<b, L, A>::operator<<=(const S s) -> basic_big_int& 
 // trips -Wuseless-cast or -Wtype-limits.
 template <std::size_t b, class L, class A>
 template <detail::signed_or_unsigned S>
-constexpr auto basic_big_int<b, L, A>::to_shift_count(const S s) noexcept -> size_type {
+constexpr auto basic_big_int<b, L, A>::to_shift_count(const S s) -> size_type {
     if constexpr (detail::signed_integer<S>) {
-        BEMAN_BIG_INT_DEBUG_ASSERT(s >= 0);
+        if (s < 0) [[unlikely]] {
+            detail::ub_handler();
+        }
         return to_shift_count(static_cast<detail::make_unsigned_t<S>>(s));
     } else if constexpr (detail::width_v<S> > detail::width_v<size_type>) {
         return s > max_bits ? max_bits + 1 : static_cast<size_type>(s);
@@ -2978,7 +2981,9 @@ template <std::size_t b, class L, class A>
 constexpr uint_multiprecision_t basic_big_int<b, L, A>::divmod_in_place_short(const uint_multiprecision_t divisor,
                                                                               const bool                  divisor_neg,
                                                                               const detail::division_op   op) {
-    BEMAN_BIG_INT_ASSERT(divisor != 0);
+    if (divisor == 0) [[unlikely]] {
+        detail::ub_handler();
+    }
 
     const bool                  want_quotient = op != detail::division_op::rem;
     const bool                  result_neg    = want_quotient ? is_negative() != divisor_neg : is_negative();
@@ -3013,7 +3018,9 @@ constexpr auto basic_big_int<b, L, A>::divmod_into(const std::span<const uint_mu
     const auto dividend_trim = dividend.first(detail::trimmed_size_span(dividend));
     const auto divisor_trim  = divisor.first(detail::trimmed_size_span(divisor));
 
-    BEMAN_BIG_INT_ASSERT(!detail::is_span_zero(divisor_trim));
+    if (detail::is_span_zero(divisor_trim)) [[unlikely]] {
+        detail::ub_handler();
+    }
 
     const bool want_quotient          = op != detail::division_op::rem;
     const bool unrounded_quotient_neg = want_quotient ? (dividend_neg != divisor_neg) : dividend_neg;
@@ -3241,7 +3248,9 @@ constexpr auto basic_big_int<b, L, A>::operator/=(T&& rhs) -> basic_big_int&
             // Self-division: the multi-limb slow path below would zero `rhs`'s
             // storage when `&rhs == this`.
             if (&rhs == this) {
-                BEMAN_BIG_INT_ASSERT(!is_zero());
+                if (is_zero()) [[unlikely]] {
+                    detail::ub_handler();
+                }
                 set_zero();
                 limb_ptr()[0] = 1;
                 return *this;
@@ -3287,7 +3296,9 @@ constexpr auto basic_big_int<b, L, A>::operator%=(T&& rhs) -> basic_big_int&
         if constexpr (std::is_same_v<std::remove_cvref_t<T>, basic_big_int>) {
             // Self-modulus: `std::move(*this)` below would zero `rhs` when &rhs == this.
             if (&rhs == this) {
-                BEMAN_BIG_INT_ASSERT(!is_zero());
+                if (is_zero()) [[unlikely]] {
+                    detail::ub_handler();
+                }
                 set_zero();
                 return *this;
             }
@@ -3382,12 +3393,14 @@ constexpr void basic_big_int<b, L, A>::assign_magnitude(T value) noexcept {
 
 template <std::size_t b, class L, class A>
 template <detail::cv_unqualified_floating_point F>
-constexpr void basic_big_int<b, L, A>::assign_from_float(const F value) noexcept {
+constexpr void basic_big_int<b, L, A>::assign_from_float(const F value) {
     using traits = detail::ieee_traits<F>;
 #ifdef BEMAN_BIG_INT_UNSUPPORTED_LONG_DOUBLE
     static_assert(!std::is_same_v<F, long double>, "long double is not supported on this platform");
 #endif
-    BEMAN_BIG_INT_ASSERT(detail::constexpr_isfinite(value));
+    if (!detail::constexpr_isfinite(value)) [[unlikely]] {
+        detail::ub_handler();
+    }
 
     // In the happiest case, we can use the intrinsic conversion from binary32 to uint128_t.
     // Compilers have optimized routines for this,
