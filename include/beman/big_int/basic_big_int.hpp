@@ -1030,7 +1030,9 @@ template <std::size_t b, class L, class A>
 constexpr std::uint32_t basic_big_int<b, L, A>::limb_count() const noexcept {
     constexpr std::uint32_t negative_zero_size_and_sign = 0x8000'0000U;
     BEMAN_BIG_INT_DEBUG_ASSERT(m_size_and_sign != negative_zero_size_and_sign);
-    return m_size_and_sign & 0x7FFF'FFFFU;
+    const auto limb_count = m_size_and_sign & 0x7FFF'FFFFU;
+    BEMAN_BIG_INT_DEBUG_ASSERT(limb_count != 0U);
+    return limb_count;
 }
 
 template <std::size_t b, class L, class A>
