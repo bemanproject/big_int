@@ -630,6 +630,23 @@ TEST(Allocation, AllocatorExtendedCopyOfHeapHeldSmallValueStaysInPlace) {
     EXPECT_TRUE(is_inplace(dst));
 }
 
+TEST(Allocation, PropagatingAssignmentOfHeapHeldSmallValueStaysInPlace) {
+    // Unequal propagating allocators keep `dst` from reusing its buffer. A value that fits
+    // in place still lands there, so the armed source allocator is never asked for storage.
+    bool          fail = false;
+    pocca_big_int src{42, pocca_alloc_type{2U, &fail}};
+    src.reserve_representation(8);
+    pocca_big_int dst{7, pocca_alloc_type{1U}};
+    dst.reserve_representation(8);
+
+    fail = true;
+    dst  = src;
+
+    EXPECT_EQ(dst, 42);
+    EXPECT_TRUE(is_inplace(dst));
+    EXPECT_EQ(dst.get_allocator().id, 2U);
+}
+
 TEST(Allocation, AllocatorExtendedMoveWithEqualAllocatorTakesBuffer) {
     bool          fail = true; // equal allocators hand the buffer over, so nothing is allocated
     pocca_big_int src{1, pocca_alloc_type{1U}};
