@@ -841,17 +841,21 @@ class BEMAN_BIG_INT_TRIVIAL_ABI basic_big_int {
 
         // Slow path. Each branch releases our buffer with our current allocator, before any
         // propagation, and publishes the control words only once the storage they describe is in place.
-        if (src.is_representation_inplace() && needed <= inplace_capacity) {
-            // Both src and the requested headroom fit inline. No buffer to
-            // allocate; release ours (if any), propagate, and copy limbs.
+        if (needed <= inplace_capacity) {
+            // Both src and the requested headroom fit inline, even if src holds its value on the heap.
+            // No buffer to allocate; release ours (if any), propagate, and copy limbs.
             free_storage();
             if constexpr (propagate_alloc) {
                 m_alloc = std::forward<Src>(src).m_alloc;
             }
-            m_capacity      = 0;
-            m_size_and_sign = src.m_size_and_sign;
-            for (std::size_t i = 0; i < inplace_capacity; ++i) {
-                m_storage.limbs[i] = src.m_storage.limbs[i];
+            m_capacity                       = 0;
+            m_size_and_sign                  = src.m_size_and_sign;
+            const limb_type* const src_limbs = src.limb_ptr();
+            for (std::size_t i = 0; i < src_count; ++i) {
+                m_storage.limbs[i] = src_limbs[i];
+            }
+            for (std::size_t i = src_count; i < inplace_capacity; ++i) {
+                m_storage.limbs[i] = limb_type{0};
             }
             return;
         }
@@ -1032,6 +1036,10 @@ constexpr std::uint32_t basic_big_int<b, L, A>::limb_count() const noexcept {
     BEMAN_BIG_INT_DEBUG_ASSERT(m_size_and_sign != negative_zero_size_and_sign);
     const auto limb_count = m_size_and_sign & 0x7FFF'FFFFU;
     BEMAN_BIG_INT_DEBUG_ASSERT(limb_count != 0U);
+    // In-place storage holds at most inplace_capacity limbs, so exactly one when that is the capacity.
+    // A heap buffer is never one that in-place storage could have replaced.
+    BEMAN_BIG_INT_DEBUG_ASSERT(limb_count <= (is_representation_inplace() ? inplace_capacity : m_capacity));
+    BEMAN_BIG_INT_DEBUG_ASSERT(is_representation_inplace() || m_capacity > inplace_capacity);
     return limb_count;
 }
 
