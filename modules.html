@@ -1,0 +1,959 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+        <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1">
+<style>html.fonts-loading{visibility:hidden;opacity:0}</style>
+<script>document.documentElement.classList.add('fonts-loading');</script>
+
+<link rel="preload" href="./_/font/NotoSansDisplay.woff2" as="font" type="font/woff2" crossorigin="anonymous" />
+<link rel="preload" href="./_/font/NotoSansDisplay-Italic.woff2" as="font" type="font/woff2" crossorigin="anonymous" />
+<link rel="preload" href="./_/font/MonaspaceNeon-Var.woff2" as="font" type="font/woff2" crossorigin="anonymous" />
+<link rel="preload" href="./_/font/MonaspaceXenon-Var.woff2" as="font" type="font/woff2" crossorigin="anonymous" />
+
+<script>
+(function() {
+  'use strict';
+  
+  var revealed = false;
+  
+  var reveal = function() {
+    if (revealed) return;
+    revealed = true;
+    document.documentElement.classList.remove('fonts-loading');
+  };
+  
+  setTimeout(reveal, 3000);
+  
+  if (!('FontFace' in window) || !('fonts' in document)) {
+    setTimeout(reveal, 100);
+    return;
+  }
+  
+  var uiRoot = './_';
+  var fonts = [
+    { 
+      family: 'Noto Sans', 
+      url: uiRoot + '/font/NotoSansDisplay.woff2',
+      descriptors: { style: 'normal', weight: '100 900', stretch: '62.5% 100%' }
+    },
+    { 
+      family: 'Noto Sans', 
+      url: uiRoot + '/font/NotoSansDisplay-Italic.woff2',
+      descriptors: { style: 'italic', weight: '100 900', stretch: '62.5% 100%' }
+    },
+    { 
+      family: 'Monaspace Neon', 
+      url: uiRoot + '/font/MonaspaceNeon-Var.woff2',
+      descriptors: { style: 'normal', weight: '400' }
+    },
+    { 
+      family: 'Monaspace Xenon', 
+      url: uiRoot + '/font/MonaspaceXenon-Var.woff2',
+      descriptors: { style: 'italic', weight: '400' }
+    }
+  ];
+  
+  var loadPromises = fonts.map(function(f) {
+    try {
+      var face = new FontFace(f.family, 'url("' + f.url + '")', f.descriptors);
+      return face.load().then(function(loaded) {
+        document.fonts.add(loaded);
+        return loaded;
+      }).catch(function() {
+        return null;
+      });
+    } catch (e) {
+      return Promise.resolve(null);
+    }
+  });
+  
+  Promise.all(loadPromises)
+    .then(function() {
+      return document.fonts.ready;
+    })
+    .then(reveal)
+    .catch(reveal);
+})();
+</script>    <title>C++ Named Modules :: std::big_int</title>
+    <link rel="prev" href="build_and_usage.html">
+    <link rel="next" href="debugging.html">
+  <meta name="generator" content="Antora 3.1.15">
+    <link rel="stylesheet" href="./_/css/boostlook.css">
+    <link rel="stylesheet" href="./_/css/site.css">
+    <link rel="stylesheet" href="./_/css/vendor/tabs.css">
+    <script>
+    (function() {
+      if (window.self !== window.top) return;
+      var theme = localStorage.getItem('antora-theme');
+      if (!theme && window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
+        theme = 'dark';
+      }
+      if (theme === 'dark') document.documentElement.classList.add('dark');
+    })();
+    </script>
+    <script>var uiRootPath = './_'</script>
+<link rel="icon" href="./_/img/favicons/favicon.ico" type="image/x-icon">
+    <!-- Favicon configuration -->
+    <link rel="apple-touch-icon" sizes="180x180" href="./_/img/favicons/apple-touch-icon.png">
+    <link rel="icon" type="image/png" sizes="32x32" href="./_/img/favicons/favicon-32x32.png">
+    <link rel="icon" type="image/png" sizes="16x16" href="./_/img/favicons/favicon-16x16.png">
+    <link rel="manifest" href="./_/img/favicons/site.webmanifest">
+    <link rel="shortcut icon" href="./_/img/favicons/favicon.ico">
+  </head>
+  <body class="article toc2 toc-left">
+    <div class="boostlook">
+   <div id="header">
+      <div id="toc" class="nav-container toc2" data-component="ROOT" data-version="">
+  <aside class="nav">
+    <button class="nav-close"></button>
+    <div class="panels">
+      <div class="nav-panel-menu is-active" data-panel="menu">
+  <nav class="nav-menu">
+      <div class="title-row">
+        <h3 class="title"><a href="overview.html">std::big_int</a></h3>
+        <button class="theme-toggle" aria-label="Toggle dark mode" title="Toggle theme" style="display:none">
+  <i class="fas fa-sun theme-icon-light"></i>
+  <i class="fas fa-moon theme-icon-dark"></i>
+</button>      </div>
+      <ul class="nav-list">
+        <ul class="nav-list">
+        <li class="" data-depth="1">
+            <a class="nav-link" href="overview.html">Overview</a>
+        </li>
+        <ul class="nav-list">
+        <li class="" data-depth="2">
+            <a class="nav-link" href="overview.html#overview_introduction">Introduction</a>
+        </li>
+              <li class="" data-depth="2">
+            <a class="nav-link" href="overview.html#overview_motivation">Motivation</a>
+        </li>
+              <li class="" data-depth="2">
+            <a class="nav-link" href="overview.html#overview_supported_compilers">Supported Compilers</a>
+        </li>
+        </ul>
+        <li class="" data-depth="1">
+            <a class="nav-link" href="build_and_usage.html">Build and Usage</a>
+        </li>
+        <ul class="nav-list">
+        <li class="" data-depth="2">
+            <a class="nav-link" href="build_and_usage.html#build_and_usage_dependencies">Dependencies</a>
+        </li>
+              <li class="" data-depth="2">
+            <a class="nav-link" href="build_and_usage.html#build_and_usage_build">Building</a>
+        </li>
+              <li class="" data-depth="2">
+            <a class="nav-link" href="build_and_usage.html#build_and_usage_modules">Optional: the C++ named module</a>
+        </li>
+              <li class="" data-depth="2">
+            <a class="nav-link" href="build_and_usage.html#build_and_usage_install">Installation</a>
+        </li>
+              <li class="" data-depth="2">
+            <a class="nav-link" href="build_and_usage.html#build_and_usage_cmake">CMake configuration</a>
+        </li>
+              <li class="" data-depth="2">
+            <a class="nav-link" href="build_and_usage.html#build_and_usage_using">Using <code>beman.big_int</code></a>
+        </li>
+        </ul>
+        <li class=" is-current-page" data-depth="1">
+            <a class="nav-link" href="modules.html">C++ Named Modules</a>
+        </li>
+        <ul class="nav-list">
+        <li class="" data-depth="2">
+            <a class="nav-link" href="#modules_exports">What the module exports</a>
+        </li>
+              <li class="" data-depth="2">
+            <a class="nav-link" href="#modules_build">Building the module</a>
+        </li>
+              <li class="" data-depth="2">
+            <a class="nav-link" href="#modules_consume">Consuming the module</a>
+        </li>
+              <li class="" data-depth="2">
+            <a class="nav-link" href="#modules_import_std">The <code>import std</code> variant</a>
+        </li>
+              <li class="" data-depth="2">
+            <a class="nav-link" href="#modules_tests">Tests</a>
+        </li>
+              <li class="" data-depth="2">
+            <a class="nav-link" href="#modules_limitations">Limitations</a>
+        </li>
+        </ul>
+        <li class="" data-depth="1">
+            <a class="nav-link" href="debugging.html">Debugger Visualizers</a>
+        </li>
+        <ul class="nav-list">
+        <li class="" data-depth="2">
+            <a class="nav-link" href="debugging.html#debugging_natvis">MSVC and Visual Studio: Natvis</a>
+        </li>
+        <ul class="nav-list">
+        <li class="" data-depth="3">
+            <a class="nav-link" href="debugging.html#debugging_natvis_plain">The self-contained visualizer</a>
+        </li>
+              <li class="" data-depth="3">
+            <a class="nav-link" href="debugging.html#debugging_natvis_addin">The add-in DLL, for full decimal</a>
+        </li>
+              <li class="" data-depth="3">
+            <a class="nav-link" href="debugging.html#debugging_natvis_expand">Expanding a value</a>
+        </li>
+              <li class="" data-depth="3">
+            <a class="nav-link" href="debugging.html#debugging_natvis_limits">Limitations</a>
+        </li>
+        </ul>
+        <li class="" data-depth="2">
+            <a class="nav-link" href="debugging.html#debugging_printers">LLDB and GDB: Python pretty printers</a>
+        </li>
+        </ul>
+        <li class="" data-depth="1">
+            <a class="nav-link" href="examples.html">Examples</a>
+        </li>
+        <ul class="nav-list">
+        <li class="" data-depth="2">
+            <a class="nav-link" href="examples.html#examples_foundational">Foundational Examples</a>
+        </li>
+        <ul class="nav-list">
+        <li class="" data-depth="3">
+            <a class="nav-link" href="examples.html#examples_construction">Construction</a>
+        </li>
+              <li class="" data-depth="3">
+            <a class="nav-link" href="examples.html#examples_operators">Fundamental operators</a>
+        </li>
+              <li class="" data-depth="3">
+            <a class="nav-link" href="examples.html#examples_factorial">Factorial</a>
+        </li>
+              <li class="" data-depth="3">
+            <a class="nav-link" href="examples.html#examples_literals">User-defined literals</a>
+        </li>
+              <li class="" data-depth="3">
+            <a class="nav-link" href="examples.html#examples_charconv">Numeric conversions</a>
+        </li>
+              <li class="" data-depth="3">
+            <a class="nav-link" href="examples.html#examples_string">String conversions</a>
+        </li>
+              <li class="" data-depth="3">
+            <a class="nav-link" href="examples.html#examples_numeric">Numeric functions</a>
+        </li>
+              <li class="" data-depth="3">
+            <a class="nav-link" href="examples.html#examples_limits">Numeric limits</a>
+        </li>
+              <li class="" data-depth="3">
+            <a class="nav-link" href="examples.html#examples_division">Integer division</a>
+        </li>
+              <li class="" data-depth="3">
+            <a class="nav-link" href="examples.html#examples_io">Formatting and output</a>
+        </li>
+        </ul>
+        <li class="" data-depth="2">
+            <a class="nav-link" href="examples.html#examples_advanced">Advanced Examples</a>
+        </li>
+        <ul class="nav-list">
+        <li class="" data-depth="3">
+            <a class="nav-link" href="examples.html#examples_fibonacci">Fibonacci</a>
+        </li>
+              <li class="" data-depth="3">
+            <a class="nav-link" href="examples.html#examples_roots">Roots</a>
+        </li>
+              <li class="" data-depth="3">
+            <a class="nav-link" href="examples.html#examples_primes">Primes</a>
+        </li>
+              <li class="" data-depth="3">
+            <a class="nav-link" href="examples.html#examples_rsa">RSA</a>
+        </li>
+        </ul>
+  </ul>
+        <li class="" data-depth="1">
+            <a class="nav-link" href="api_reference.html">API Reference</a>
+        </li>
+        <ul class="nav-list">
+        <li class="" data-depth="2">
+            <a class="nav-link" href="api_reference.html#api_namespaces">Namespaces</a>
+        </li>
+              <li class="" data-depth="2">
+            <a class="nav-link" href="api_reference.html#api_types">Types</a>
+        </li>
+              <li class="" data-depth="2">
+            <a class="nav-link" href="api_reference.html#api_functions">Functions</a>
+        </li>
+        </ul>
+        <li class="" data-depth="1">
+            <a class="nav-link" href="big_int_type.html">The big_int Type</a>
+        </li>
+        <ul class="nav-list">
+        <li class="" data-depth="2">
+            <a class="nav-link" href="big_int_type.html#big_int_type_design">Design</a>
+        </li>
+              <li class="" data-depth="2">
+            <a class="nav-link" href="big_int_type.html#big_int_type_synopsis">Synopsis</a>
+        </li>
+              <li class="" data-depth="2">
+            <a class="nav-link" href="big_int_type.html#big_int_type_members">Member types and constants</a>
+        </li>
+              <li class="" data-depth="2">
+            <a class="nav-link" href="big_int_type.html#big_int_type_construct">Constructors and destructor</a>
+        </li>
+              <li class="" data-depth="2">
+            <a class="nav-link" href="big_int_type.html#big_int_type_assign">Assignment</a>
+        </li>
+              <li class="" data-depth="2">
+            <a class="nav-link" href="big_int_type.html#big_int_type_compound">Compound assignment operators</a>
+        </li>
+              <li class="" data-depth="2">
+            <a class="nav-link" href="big_int_type.html#big_int_type_swap">Swap</a>
+        </li>
+        <ul class="nav-list">
+        <li class="" data-depth="3">
+            <a class="nav-link" href="big_int_type.html#big_int_type_swap_non_member">Non-member swap</a>
+        </li>
+        </ul>
+        <li class="" data-depth="2">
+            <a class="nav-link" href="big_int_type.html#big_int_type_observers">Observers</a>
+        </li>
+              <li class="" data-depth="2">
+            <a class="nav-link" href="big_int_type.html#big_int_type_unary">Unary operators</a>
+        </li>
+              <li class="" data-depth="2">
+            <a class="nav-link" href="big_int_type.html#big_int_type_conv">Conversion operator</a>
+        </li>
+              <li class="" data-depth="2">
+            <a class="nav-link" href="big_int_type.html#big_int_type_cmp">Comparison operators</a>
+        </li>
+              <li class="" data-depth="2">
+            <a class="nav-link" href="big_int_type.html#big_int_type_binary">Binary operators</a>
+        </li>
+        </ul>
+        <li class="" data-depth="1">
+            <a class="nav-link" href="charconv.html"><code>&lt;charconv&gt;</code> Conversions</a>
+        </li>
+        <ul class="nav-list">
+        <li class="" data-depth="2">
+            <a class="nav-link" href="charconv.html#charconv_synopsis">Synopsis</a>
+        </li>
+              <li class="" data-depth="2">
+            <a class="nav-link" href="charconv.html#charconv_to_chars">to_chars</a>
+        </li>
+              <li class="" data-depth="2">
+            <a class="nav-link" href="charconv.html#charconv_from_chars">from_chars</a>
+        </li>
+        </ul>
+        <li class="" data-depth="1">
+            <a class="nav-link" href="string.html">String Conversions</a>
+        </li>
+        <ul class="nav-list">
+        <li class="" data-depth="2">
+            <a class="nav-link" href="string.html#string_synopsis">Synopsis</a>
+        </li>
+              <li class="" data-depth="2">
+            <a class="nav-link" href="string.html#string_to_string">to_string</a>
+        </li>
+              <li class="" data-depth="2">
+            <a class="nav-link" href="string.html#string_to_wstring">to_wstring</a>
+        </li>
+        </ul>
+        <li class="" data-depth="1">
+            <a class="nav-link" href="format.html"><code>&lt;format&gt;</code> Support</a>
+        </li>
+        <ul class="nav-list">
+        <li class="" data-depth="2">
+            <a class="nav-link" href="format.html#format_synopsis">Synopsis</a>
+        </li>
+              <li class="" data-depth="2">
+            <a class="nav-link" href="format.html#format_spec">Format specification</a>
+        </li>
+              <li class="" data-depth="2">
+            <a class="nav-link" href="format.html#format_members">parse and format</a>
+        </li>
+              <li class="" data-depth="2">
+            <a class="nav-link" href="format.html#format_errors">Errors</a>
+        </li>
+              <li class="" data-depth="2">
+            <a class="nav-link" href="format.html#format_examples">Examples</a>
+        </li>
+              <li class="" data-depth="2">
+            <a class="nav-link" href="format.html#format_wide">Wide characters</a>
+        </li>
+        </ul>
+        <li class="" data-depth="1">
+            <a class="nav-link" href="literals.html">User-Defined Literals</a>
+        </li>
+        <ul class="nav-list">
+        <li class="" data-depth="2">
+            <a class="nav-link" href="literals.html#literals_synopsis">Synopsis</a>
+        </li>
+              <li class="" data-depth="2">
+            <a class="nav-link" href="literals.html#literals_scope">Bringing the literals into scope</a>
+        </li>
+              <li class="" data-depth="2">
+            <a class="nav-link" href="literals.html#literals_suffix">The n, N, _n, and _N suffixes</a>
+        </li>
+              <li class="" data-depth="2">
+            <a class="nav-link" href="literals.html#literals_bases">Bases, separators, and sign</a>
+        </li>
+              <li class="" data-depth="2">
+            <a class="nav-link" href="literals.html#literals_constexpr">Compile-time evaluation</a>
+        </li>
+        </ul>
+        <li class="" data-depth="1">
+            <a class="nav-link" href="limits.html"><code>std::numeric_limits</code> Support</a>
+        </li>
+        <ul class="nav-list">
+        <li class="" data-depth="2">
+            <a class="nav-link" href="limits.html#limits_synopsis">Synopsis</a>
+        </li>
+              <li class="" data-depth="2">
+            <a class="nav-link" href="limits.html#limits_values">What each member reports</a>
+        </li>
+              <li class="" data-depth="2">
+            <a class="nav-link" href="limits.html#limits_noexcept">The <code>noexcept</code> specifications</a>
+        </li>
+              <li class="" data-depth="2">
+            <a class="nav-link" href="limits.html#limits_bounded">Why <code>is_bounded</code> is <code>false</code></a>
+        </li>
+              <li class="" data-depth="2">
+            <a class="nav-link" href="limits.html#limits_generic">Using it in generic code</a>
+        </li>
+        </ul>
+        <li class="" data-depth="1">
+            <a class="nav-link" href="numeric.html">Numeric Functions</a>
+        </li>
+        <ul class="nav-list">
+        <li class="" data-depth="2">
+            <a class="nav-link" href="numeric.html#numeric_synopsis">Synopsis</a>
+        </li>
+              <li class="" data-depth="2">
+            <a class="nav-link" href="numeric.html#numeric_abs">abs</a>
+        </li>
+              <li class="" data-depth="2">
+            <a class="nav-link" href="numeric.html#numeric_saturating_cast">saturating_cast</a>
+        </li>
+              <li class="" data-depth="2">
+            <a class="nav-link" href="numeric.html#numeric_in_range">in_range</a>
+        </li>
+              <li class="" data-depth="2">
+            <a class="nav-link" href="numeric.html#numeric_gcd">gcd</a>
+        </li>
+              <li class="" data-depth="2">
+            <a class="nav-link" href="numeric.html#numeric_lcm">lcm</a>
+        </li>
+              <li class="" data-depth="2">
+            <a class="nav-link" href="numeric.html#numeric_midpoint">midpoint</a>
+        </li>
+        </ul>
+        <li class="" data-depth="1">
+            <a class="nav-link" href="benchmarks.html">Benchmarks</a>
+        </li>
+        <ul class="nav-list">
+        <li class="" data-depth="2">
+            <a class="nav-link" href="benchmarks.html#benchmarks_small_value">Small-value optimization</a>
+        </li>
+              <li class="" data-depth="2">
+            <a class="nav-link" href="benchmarks.html#benchmarks_libraries">big_int vs Boost.Multiprecision and GMP</a>
+        </li>
+              <li class="" data-depth="2">
+            <a class="nav-link" href="benchmarks.html#benchmarks_base_conversion">Base conversion and string representations</a>
+        </li>
+              <li class="" data-depth="2">
+            <a class="nav-link" href="benchmarks.html#benchmarks_order_n">Order-N operations</a>
+        </li>
+              <li class="" data-depth="2">
+            <a class="nav-link" href="benchmarks.html#benchmarks_arch_opts">Architecture-specific optimizations</a>
+        </li>
+              <li class="" data-depth="2">
+            <a class="nav-link" href="benchmarks.html#benchmarks_sources">Source programs</a>
+        </li>
+        </ul>
+        <li class="" data-depth="1">
+            <a class="nav-link" href="references.html">References</a>
+        </li>
+        </ul>
+  </ul>
+  </nav>
+</div>
+    </div>
+  </aside>
+</div>
+  </div>  <div id="content">
+    <article class="doc max-width-reset">
+  <div class="toolbar" role="navigation">
+<button class="nav-toggle"></button>
+<nav class="breadcrumbs" aria-label="breadcrumbs">
+  <ul>
+    <li>
+      <a href="overview.html" aria-label="Home: std::big_int">
+        <svg xmlns="http://www.w3.org/2000/svg" width="1rem" height="1rem" viewBox="0 -960 960 960" fill="#000000" aria-hidden="true"><path d="M160-120v-480l320-240 320 240v480H560v-280H400v280H160Z"/></svg>
+      </a>
+    </li>
+    <li><a href="modules.html">C++ Named Modules</a></li>
+  </ul>
+</nav>
+  <div class="search-container">
+    <div id="search-field" class="field has-filter">
+      <input id="search-input" type="text" placeholder="Search the docs" >
+    </div>
+  </div>
+<div class="spirit-nav">
+    <a accesskey="p" href="build_and_usage.html">
+      <span class="material-symbols-outlined" title="Previous: Build and Usage">arrow_back</span>
+    </a>
+    <a class="disabled" accesskey="u" aria-disabled="true" tabindex="-1">
+      <span class="material-symbols-outlined" title="Up:">arrow_upward</span>
+    </a>
+    <a accesskey="n" href="debugging.html">
+      <span class="material-symbols-outlined" title="Next: Debugger Visualizers">arrow_forward</span>
+    </a>
+</div></div>
+    <h1 class="page">C++ Named Modules</h1>
+  <div id="preamble">
+<div class="sectionbody">
+<div class="paragraph">
+<p><code>beman.big_int</code> can optionally be consumed as the named module <code>beman.big_int</code>,
+instead of by including headers:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlightjs highlight"><code class="language-c++ hljs" data-lang="c++">import beman.big_int;</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>Module support is inert unless you build it and import it: nothing changes for
+the header-only consumer, and a header-based program can adopt the module one
+translation unit at a time&#8201;&#8212;&#8201;see
+<a href="#modules_limitations">Limitations</a>.</p>
+</div>
+</div>
+</div>
+<div class="sect1">
+<h2 id="modules_exports"><a class="anchor" href="#modules_exports"></a>What the module exports</h2>
+<div class="sectionbody">
+<div class="paragraph">
+<p>The module covers the entire public interface that <code>&lt;beman/big_int.hpp&gt;</code>
+provides. Importing it brings the following into scope, from the
+<code>beman::big_int</code> namespace unless noted otherwise:</p>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p>The class template <a href="big_int_type.html" class="xref page"><code>basic_big_int</code></a> and its aliases
+<code>big_int</code>, <code>pmr::basic_big_int</code>, and <code>pmr::big_int</code>, together with
+<a href="big_int_type.html#big_int_type_unit_multi_t" class="xref page"><code>uint_multiprecision_t</code></a> and
+<code>div_result</code>.</p>
+</li>
+<li>
+<p>Every namespace-scope operator: the
+<a href="big_int_type.html#big_int_type_unary" class="xref page">unary operators</a>,
+<a href="big_int_type.html#big_int_type_cmp" class="xref page"><code>==</code> and <code>&lt;&#8658;</code></a>, the
+<a href="big_int_type.html#big_int_type_binary" class="xref page">arithmetic, bitwise, and shift
+operators</a>, and the
+<a href="big_int_type.html#big_int_type_compound" class="xref page">compound assignment operators</a>&#8201;&#8212;&#8201;including the mixed overloads that take a built-in integer on either
+side.</p>
+</li>
+<li>
+<p><a href="charconv.html" class="xref page"><code>to_chars</code> and <code>from_chars</code></a>.</p>
+</li>
+<li>
+<p><a href="string.html" class="xref page"><code>to_string</code> and <code>to_wstring</code></a>.</p>
+</li>
+<li>
+<p>The <a href="numeric.html" class="xref page">numeric functions</a> <code>abs</code>, <code>saturating_cast</code>,
+<code>in_range</code>, <code>gcd</code>, <code>lcm</code>, and <code>midpoint</code>.</p>
+</li>
+<li>
+<p><a href="big_int_type.html#big_int_type_swap" class="xref page"><code>swap</code></a>, both the member and the
+non-member form.</p>
+</li>
+<li>
+<p><code>div_rem_to_zero</code> (see <a href="examples.html#examples_division" class="xref page">the division
+example</a>) and <code>copy_to_runtime</code>.</p>
+</li>
+<li>
+<p>The four user-defined literal suffixes <code>n</code>, <code>N</code>, <code>_n</code>, and <code>_N</code>, declared in
+<code>beman::big_int::literals::big_int_literals</code> and described in
+<a href="literals.html" class="xref page">User-Defined Literals</a>.</p>
+</li>
+<li>
+<p>The <code>std::hash</code> specialization
+(<a href="big_int_type.html#big_int_type_hash" class="xref page">Hash support</a>), the
+<a href="limits.html" class="xref page"><code>std::numeric_limits</code> specialization</a>, and the
+<a href="format.html" class="xref page"><code>std::formatter</code> specialization</a>.</p>
+</li>
+</ul>
+</div>
+<div class="paragraph">
+<p>Everything in <code>beman::big_int::detail</code> is compiled into the module but is
+<strong>not</strong> exported: it is reachable from the module&#8217;s own implementation but has
+no name outside it. See <a href="#modules_limitations">Limitations</a>.</p>
+</div>
+</div>
+</div>
+<div class="sect1">
+<h2 id="modules_build"><a class="anchor" href="#modules_build"></a>Building the module</h2>
+<div class="sectionbody">
+<div class="paragraph">
+<p>The module is off by default. Turn on <code>BEMAN_BIG_INT_BUILD_MODULE</code> (default
+<code>OFF</code>) to build it, alongside the ordinary headers and static library:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlightjs highlight"><code class="language-bash hljs" data-lang="bash">cmake --preset llvm-release -DBEMAN_BIG_INT_BUILD_MODULE=ON
+cmake --build build/llvm-release</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>or, in one step, use the dedicated workflow preset, which turns the option on
+and runs the module&#8217;s tests:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlightjs highlight"><code class="language-bash hljs" data-lang="bash">cmake --workflow --preset llvm-release-module</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>Building this target needs more from the toolchain than the header build
+does: CMake 3.30 or later, and a generator that can scan module dependencies
+for you&#8201;&#8212;&#8201;Ninja or Visual Studio. Unix Makefiles cannot build it.</p>
+</div>
+<div class="admonitionblock important">
+<table>
+<tr>
+<td class="icon">
+<i class="fa icon-important" title="Important"></i>
+</td>
+<td class="content">
+<div class="paragraph">
+<p><strong>AppleClang cannot build the module under CMake.</strong> CMake&#8217;s AppleClang support
+never defines the scan-dependencies variables the module build needs, and
+cmake-cxxmodules(7) does not list AppleClang among the compilers it supports.
+On macOS, either use the ordinary header build&#8201;&#8212;&#8201;which every other part of
+this library supports there&#8201;&#8212;&#8201;or install Homebrew LLVM and configure with an
+<code>llvm-*</code> preset to get a Clang that CMake&#8217;s module scanning recognizes.</p>
+</div>
+</td>
+</tr>
+</table>
+</div>
+<div class="admonitionblock note">
+<table>
+<tr>
+<td class="icon">
+<i class="fa icon-note" title="Note"></i>
+</td>
+<td class="content">
+<div class="paragraph">
+<p>The package installs the interface unit as <strong>source</strong> (<code>big_int.cppm</code>), not as
+a prebuilt binary module interface: CMake has no mechanism to consume an
+installed BMI across a package boundary. <code>find_package(beman.big_int)</code>
+followed by linking <code>beman::big_int_module</code> therefore recompiles the
+interface unit as part of building your own target, every time. This is
+expected, not a packaging omission&#8201;&#8212;&#8201;it is what lets the module adapt to
+your own compiler&#8217;s module format and flags.</p>
+</div>
+</td>
+</tr>
+</table>
+</div>
+<div class="paragraph">
+<p>See <a href="#modules_limitations">Limitations</a> for the toolchains
+this configuration is tested against.</p>
+</div>
+</div>
+</div>
+<div class="sect1">
+<h2 id="modules_consume"><a class="anchor" href="#modules_consume"></a>Consuming the module</h2>
+<div class="sectionbody">
+<div class="paragraph">
+<p>Bring in the package as usual and link the module target&#8201;&#8212;&#8201;<code>beman.big_int_module</code>,
+aliased <code>beman::big_int_module</code>. Note the underscore: this is <strong>not</strong>
+<code>beman::big_int.module</code>.</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlightjs highlight"><code class="language-cmake hljs" data-lang="cmake">find_package(beman.big_int REQUIRED)
+
+add_executable(my_program main.cpp)
+target_link_libraries(my_program PRIVATE beman::big_int_module)</code></pre>
+</div>
+</div>
+<div class="admonitionblock tip">
+<table>
+<tr>
+<td class="icon">
+<i class="fa icon-tip" title="Tip"></i>
+</td>
+<td class="content">
+<div class="paragraph">
+<p><code>beman::big_int_module</code> is a separate target from the header-only
+<code>beman::big_int</code>. Linking the latter does not make <code>import beman.big_int;</code>
+available, and a translation unit that imports the module must not also
+<code>#include</code> the library&#8217;s headers&#8201;&#8212;&#8201;see
+<a href="#modules_limitations">Limitations</a>.</p>
+</div>
+</td>
+</tr>
+</table>
+</div>
+<div class="paragraph">
+<p>A complete program, computing a product too large for any built-in integer
+type and inspecting it a few different ways:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlightjs highlight"><code class="language-c++ hljs" data-lang="c++">import beman.big_int;
+
+#include &lt;array&gt;
+#include &lt;format&gt;
+#include &lt;iostream&gt;
+#include &lt;string_view&gt;
+
+auto main() -&gt; int {
+    using namespace beman::big_int::literals;
+    using beman::big_int::big_int;
+
+    const big_int a = 123456789_n;
+    const big_int b = 987654321_n;
+
+    const big_int product = a * b;
+    const big_int mid      = midpoint(a, b);
+
+    std::array&lt;char, 32&gt; buffer{};
+    const auto            written = to_chars(buffer.data(), buffer.data() + buffer.size(), product);
+
+    std::cout &lt;&lt; "product:  " &lt;&lt; std::string_view(buffer.data(), written.ptr) &lt;&lt; '\n'
+              &lt;&lt; "midpoint: " &lt;&lt; to_string(mid) &lt;&lt; '\n'
+              &lt;&lt; std::format("hex:      {:#x}\n", product);
+
+    return 0;
+}</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p><code>a</code>, <code>b</code>, and the literal suffix come from
+<a href="literals.html" class="xref page">User-Defined Literals</a>; <code>midpoint</code> from
+<a href="numeric.html" class="xref page">Numeric Functions</a>; <code>to_chars</code> from
+<a href="charconv.html" class="xref page"><code>&lt;charconv&gt;</code> Conversions</a>; <code>to_string</code> from
+<a href="string.html" class="xref page">String Conversions</a>; and <code>std::format</code> works because of the
+<a href="format.html" class="xref page"><code>std::formatter</code> specialization</a>. Every one of them is found
+the same way whether the program imports the module or includes the headers:
+by argument-dependent lookup on the <code>basic_big_int</code> argument, or, for the
+formatter, through <code>std::format</code> itself.</p>
+</div>
+</div>
+</div>
+<div class="sect1">
+<h2 id="modules_import_std"><a class="anchor" href="#modules_import_std"></a>The <code>import std</code> variant</h2>
+<div class="sectionbody">
+<div class="paragraph">
+<p>The module&#8217;s interface unit can be compiled against <code>import std;</code> instead of
+the standard library&#8217;s headers, behind <code>BEMAN_BIG_INT_USE_STD_MODULE</code> (default
+<code>OFF</code>). This is a build-time choice about how the <strong>library&#8217;s own</strong> interface
+unit is compiled, not something an importer selects at the point of use:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlightjs highlight"><code class="language-bash hljs" data-lang="bash">cmake --preset llvm-release \
+  -DBEMAN_BIG_INT_BUILD_MODULE=ON \
+  -DBEMAN_BIG_INT_USE_STD_MODULE=ON \
+  -DCMAKE_CXX_STDLIB_MODULES_JSON=/path/to/libc++.modules.json</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>CMake gates <code>import std</code> behind <code>CMAKE_EXPERIMENTAL_CXX_IMPORT_STD</code>, whose
+required value changes between CMake releases. You do not need to set it: the
+top-level <code>CMakeLists.txt</code> sets it before <code>project()</code> from
+<code>infra/cmake/enable-experimental-import-std.cmake</code>, which tracks the value for
+each supported CMake version. <code>CMAKE_CXX_STDLIB_MODULES_JSON</code> is needed
+only on Clang, and points at the `libc.modules.json` that ships with the
+libc you are building against.</p>
+</div>
+<div class="paragraph">
+<p>Most consumers do not want this option: it changes nothing about the module&#8217;s
+exported interface, and exists so this library&#8217;s own test suite and CI can
+exercise <code>import std;</code> end to end. Leave it <code>OFF</code> unless you have a specific
+reason to build the interface unit against the standard library module.</p>
+</div>
+</div>
+</div>
+<div class="sect1">
+<h2 id="modules_tests"><a class="anchor" href="#modules_tests"></a>Tests</h2>
+<div class="sectionbody">
+<div class="paragraph">
+<p>With <code>BEMAN_BIG_INT_BUILD_MODULE=ON</code> and tests enabled, a suite under
+<code>tests/beman/big_int/module/</code> is built and registered with CTest alongside
+the rest of the test suite. Those tests consume the library only through
+<code>import beman.big_int;</code>, never through the headers, so they exercise the
+module boundary itself.</p>
+</div>
+<div class="paragraph">
+<p>Under <code>BEMAN_BIG_INT_USE_STD_MODULE</code>, only a small GoogleTest-free smoke test
+is built. GoogleTest&#8217;s own headers are textual, and mixing a textual include
+of them with <code>import std;</code> in the same translation unit does not work on
+libstdc++ or on the MSVC STL, so the fuller GoogleTest-based module suite is
+skipped in that configuration.</p>
+</div>
+</div>
+</div>
+<div class="sect1">
+<h2 id="modules_limitations"><a class="anchor" href="#modules_limitations"></a>Limitations</h2>
+<div class="sectionbody">
+<div class="sect2">
+<h3 id="modules_macros_do_not_cross_the_module_boundary"><a class="anchor" href="#modules_macros_do_not_cross_the_module_boundary"></a>Macros do not cross the module boundary</h3>
+<div class="paragraph">
+<p>None of the library&#8217;s function-like configuration macros are visible to code
+that only imports the module: a macro is a preprocessor-level construct, and
+importing a module does not textually include anything.</p>
+</div>
+<div class="paragraph">
+<p>The one public convenience macro is <code>BEMAN_BIG_INT_COPY_TO_RUNTIME</code>. It is
+still usable alongside the import, in one of two ways:</p>
+</div>
+<div class="ulist">
+<ul>
+<li>
+<p>Include the small, self-contained companion header. It declares nothing and
+includes nothing else, so it is safe to <code>#include</code> in the same translation
+unit as <code>import beman.big_int;</code>:</p>
+<div class="listingblock">
+<div class="content">
+<pre class="highlightjs highlight"><code class="language-c++ hljs" data-lang="c++">import beman.big_int;
+#include &lt;beman/big_int/copy_to_runtime.hpp&gt;
+
+constexpr auto packed = BEMAN_BIG_INT_COPY_TO_RUNTIME(beman::big_int::big_int{1} &lt;&lt; 128);</code></pre>
+</div>
+</div>
+</li>
+<li>
+<p>Or spell out what the macro expands to, without including anything:</p>
+<div class="listingblock">
+<div class="content">
+<pre class="highlightjs highlight"><code class="language-c++ hljs" data-lang="c++">constexpr auto packed =
+    beman::big_int::copy_to_runtime&lt;decltype([]() { return beman::big_int::big_int{1} &lt;&lt; 128; })&gt;();</code></pre>
+</div>
+</div>
+</li>
+</ul>
+</div>
+<div class="paragraph">
+<p>The automatic configuration macros&#8201;&#8212;&#8201;<code>BEMAN_BIG_INT_HAS_INT128</code>,
+<code>BEMAN_BIG_INT_HAS_BITINT</code>, <code>BEMAN_BIG_INT_WORD_BITS</code>, and
+<code>BEMAN_BIG_INT_ALLOW_EXCEPTIONS</code> (or <code>BEMAN_BIG_INT_NO_EXCEPTIONS</code>)&#8201;&#8212;&#8201;are
+likewise unavailable to an importer, as are the library&#8217;s internal
+diagnostic helpers and <code>BEMAN_BIG_INT_ASSERT</code>. None of these were ever part of
+the module&#8217;s exported interface; code that depends on one of them needs the
+headers, not the import.</p>
+</div>
+</div>
+<div class="sect2">
+<h3 id="modules_user_configurable_macros_are_inputs_to_the_module_build"><a class="anchor" href="#modules_user_configurable_macros_are_inputs_to_the_module_build"></a>User-configurable macros are inputs to the module build</h3>
+<div class="paragraph">
+<p><code>BEMAN_BIG_INT_FORCED_LIMB_WIDTH</code> and <code>BEMAN_BIG_INT_HASH_MAX_OBJECT_WORDS</code>
+configure the library where its headers are compiled. For the module, that
+point is when the <strong>interface unit</strong> is built, not when your own translation
+unit imports it: by the time you write <code>import beman.big_int;</code>, the headers
+are already baked into the module&#8217;s binary interface, so defining either
+macro in your own translation unit has no effect. Set them when the module
+itself is configured and built&#8201;&#8212;&#8201;for example as compile definitions on the
+<code>beman.big_int_module</code> target&#8201;&#8212;&#8201;not at the point of use.</p>
+</div>
+<div class="paragraph">
+<p><code>BEMAN_BIG_INT_SIMD_MUL</code> needs no such care: this project&#8217;s CMake records it
+in the generated <code>detail/config_generated.hpp</code>, which the interface unit
+includes when the module is built, so turning the option on when the library is
+configured reaches every consumer of the module automatically.</p>
+</div>
+</div>
+<div class="sect2">
+<h3 id="modules_detail_is_not_exported"><a class="anchor" href="#modules_detail_is_not_exported"></a><code>detail</code> is not exported</h3>
+<div class="paragraph">
+<p><code>beman::big_int::detail</code> is compiled into the module for the exported names
+to use internally, but none of its own names are exported. Code that reaches
+into <code>detail</code>&#8201;&#8212;&#8201;unsupported in the first place&#8201;&#8212;&#8201;must include the headers;
+there is no way to name it through the import.</p>
+</div>
+</div>
+<div class="sect2">
+<h3 id="modules_do_not_import_and_textually_include_in_the_same_translation_unit"><a class="anchor" href="#modules_do_not_import_and_textually_include_in_the_same_translation_unit"></a>Do not import and textually include in the same translation unit</h3>
+<div class="paragraph">
+<p>A translation unit must consume <code>beman.big_int</code> either by
+<code>import beman.big_int;</code> or by including its headers, never both. This is not
+merely a style preference: linking the module target defines
+<code>BEMAN_BIG_INT_BUILD_MODULE</code> on every translation unit that links it, and
+under that macro the library&#8217;s public declarations are marked <code>export</code>. An
+<code>export</code> declaration outside a module&#8217;s purview is ill-formed, so a
+translation unit that both imports the module and textually includes, say,
+<code>&lt;beman/big_int.hpp&gt;</code>, fails to compile&#8201;&#8212;&#8201;on every conforming compiler, not
+as a quality-of-implementation difference some toolchains happen to tolerate.</p>
+</div>
+<div class="paragraph">
+<p>What <strong>is</strong> supported, and is the more useful fact here, is mixing the two
+forms <strong>across</strong> translation units of the same program. The interface unit
+wraps its declarations in <code>extern "C++"</code>, which attaches them to the global
+module rather than to <code>beman.big_int&#8217;s own module purview. A `big_int</code>
+produced in a translation unit that imported the module and one produced in a
+translation unit that only included the headers are therefore the same type,
+with the same layout and the same mangled names, and values can be passed
+between the two freely. This is what lets an existing header-based program
+adopt the module one translation unit at a time, rather than needing an
+all-or-nothing conversion.</p>
+</div>
+</div>
+<div class="sect2">
+<h3 id="modules_tested_toolchains"><a class="anchor" href="#modules_tested_toolchains"></a>Tested toolchains</h3>
+<div class="paragraph">
+<p>The module is tested on newer toolchains than the header-only library needs:</p>
+</div>
+<table class="tableblock frame-all grid-all stretch">
+<colgroup>
+<col style="width: 33.3333%;">
+<col style="width: 33.3333%;">
+<col style="width: 33.3334%;">
+</colgroup>
+<thead>
+<tr>
+<th class="tableblock halign-left valign-top">Compiler</th>
+<th class="tableblock halign-left valign-top">Version</th>
+<th class="tableblock halign-left valign-top">Standard Library</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock">GCC</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">15 or later</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">libstdc++</p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Clang</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">20 or later</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">libc++</p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock">MSVC</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">current</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">MSVC STL</p></td>
+</tr>
+</tbody>
+</table>
+<div class="paragraph">
+<p>AppleClang is excluded; see
+<a href="#modules_build">Building the module</a>.</p>
+</div>
+</div>
+</div>
+</div>
+  <div class="edit-this-page">
+      <a href="https://github.com/bemanproject/big_int/edit/develop/docs/modules/ROOT/pages/modules.adoc">Edit this Page</a>
+      </div>
+      <nav class="pagination">
+        <span class="prev"><a href="build_and_usage.html">Build and Usage</a></span>
+        <span class="next"><a href="debugging.html">Debugger Visualizers</a></span>
+    </nav>
+</article>
+</div>
+  <div id="footer">
+  <script id="site-script" src="./_/js/site.js" data-ui-root-path="./_"></script>
+<script async src="./_/js/vendor/highlight.js"></script>
+<script async src="./_/js/vendor/tabs.js" data-sync-storage-key="preferred-tab"></script>
+<script async src="./_/js/vendor/lunr.js"></script>
+<script async src="./_/js/search-ui.js" id="search-ui-script" data-site-root-path="."
+  data-ui-root-path="./_"></script>
+<script async src="./search-index.js"></script>
+</div>
+</div>
+  </body>
+</html>

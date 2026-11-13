@@ -1,0 +1,973 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+        <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1">
+<style>html.fonts-loading{visibility:hidden;opacity:0}</style>
+<script>document.documentElement.classList.add('fonts-loading');</script>
+
+<link rel="preload" href="./_/font/NotoSansDisplay.woff2" as="font" type="font/woff2" crossorigin="anonymous" />
+<link rel="preload" href="./_/font/NotoSansDisplay-Italic.woff2" as="font" type="font/woff2" crossorigin="anonymous" />
+<link rel="preload" href="./_/font/MonaspaceNeon-Var.woff2" as="font" type="font/woff2" crossorigin="anonymous" />
+<link rel="preload" href="./_/font/MonaspaceXenon-Var.woff2" as="font" type="font/woff2" crossorigin="anonymous" />
+
+<script>
+(function() {
+  'use strict';
+  
+  var revealed = false;
+  
+  var reveal = function() {
+    if (revealed) return;
+    revealed = true;
+    document.documentElement.classList.remove('fonts-loading');
+  };
+  
+  setTimeout(reveal, 3000);
+  
+  if (!('FontFace' in window) || !('fonts' in document)) {
+    setTimeout(reveal, 100);
+    return;
+  }
+  
+  var uiRoot = './_';
+  var fonts = [
+    { 
+      family: 'Noto Sans', 
+      url: uiRoot + '/font/NotoSansDisplay.woff2',
+      descriptors: { style: 'normal', weight: '100 900', stretch: '62.5% 100%' }
+    },
+    { 
+      family: 'Noto Sans', 
+      url: uiRoot + '/font/NotoSansDisplay-Italic.woff2',
+      descriptors: { style: 'italic', weight: '100 900', stretch: '62.5% 100%' }
+    },
+    { 
+      family: 'Monaspace Neon', 
+      url: uiRoot + '/font/MonaspaceNeon-Var.woff2',
+      descriptors: { style: 'normal', weight: '400' }
+    },
+    { 
+      family: 'Monaspace Xenon', 
+      url: uiRoot + '/font/MonaspaceXenon-Var.woff2',
+      descriptors: { style: 'italic', weight: '400' }
+    }
+  ];
+  
+  var loadPromises = fonts.map(function(f) {
+    try {
+      var face = new FontFace(f.family, 'url("' + f.url + '")', f.descriptors);
+      return face.load().then(function(loaded) {
+        document.fonts.add(loaded);
+        return loaded;
+      }).catch(function() {
+        return null;
+      });
+    } catch (e) {
+      return Promise.resolve(null);
+    }
+  });
+  
+  Promise.all(loadPromises)
+    .then(function() {
+      return document.fonts.ready;
+    })
+    .then(reveal)
+    .catch(reveal);
+})();
+</script>    <title>Debugger Visualizers :: std::big_int</title>
+    <link rel="prev" href="modules.html">
+    <link rel="next" href="examples.html">
+  <meta name="generator" content="Antora 3.1.15">
+    <link rel="stylesheet" href="./_/css/boostlook.css">
+    <link rel="stylesheet" href="./_/css/site.css">
+    <link rel="stylesheet" href="./_/css/vendor/tabs.css">
+    <script>
+    (function() {
+      if (window.self !== window.top) return;
+      var theme = localStorage.getItem('antora-theme');
+      if (!theme && window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
+        theme = 'dark';
+      }
+      if (theme === 'dark') document.documentElement.classList.add('dark');
+    })();
+    </script>
+    <script>var uiRootPath = './_'</script>
+<link rel="icon" href="./_/img/favicons/favicon.ico" type="image/x-icon">
+    <!-- Favicon configuration -->
+    <link rel="apple-touch-icon" sizes="180x180" href="./_/img/favicons/apple-touch-icon.png">
+    <link rel="icon" type="image/png" sizes="32x32" href="./_/img/favicons/favicon-32x32.png">
+    <link rel="icon" type="image/png" sizes="16x16" href="./_/img/favicons/favicon-16x16.png">
+    <link rel="manifest" href="./_/img/favicons/site.webmanifest">
+    <link rel="shortcut icon" href="./_/img/favicons/favicon.ico">
+  </head>
+  <body class="article toc2 toc-left">
+    <div class="boostlook">
+   <div id="header">
+      <div id="toc" class="nav-container toc2" data-component="ROOT" data-version="">
+  <aside class="nav">
+    <button class="nav-close"></button>
+    <div class="panels">
+      <div class="nav-panel-menu is-active" data-panel="menu">
+  <nav class="nav-menu">
+      <div class="title-row">
+        <h3 class="title"><a href="overview.html">std::big_int</a></h3>
+        <button class="theme-toggle" aria-label="Toggle dark mode" title="Toggle theme" style="display:none">
+  <i class="fas fa-sun theme-icon-light"></i>
+  <i class="fas fa-moon theme-icon-dark"></i>
+</button>      </div>
+      <ul class="nav-list">
+        <ul class="nav-list">
+        <li class="" data-depth="1">
+            <a class="nav-link" href="overview.html">Overview</a>
+        </li>
+        <ul class="nav-list">
+        <li class="" data-depth="2">
+            <a class="nav-link" href="overview.html#overview_introduction">Introduction</a>
+        </li>
+              <li class="" data-depth="2">
+            <a class="nav-link" href="overview.html#overview_motivation">Motivation</a>
+        </li>
+              <li class="" data-depth="2">
+            <a class="nav-link" href="overview.html#overview_supported_compilers">Supported Compilers</a>
+        </li>
+        </ul>
+        <li class="" data-depth="1">
+            <a class="nav-link" href="build_and_usage.html">Build and Usage</a>
+        </li>
+        <ul class="nav-list">
+        <li class="" data-depth="2">
+            <a class="nav-link" href="build_and_usage.html#build_and_usage_dependencies">Dependencies</a>
+        </li>
+              <li class="" data-depth="2">
+            <a class="nav-link" href="build_and_usage.html#build_and_usage_build">Building</a>
+        </li>
+              <li class="" data-depth="2">
+            <a class="nav-link" href="build_and_usage.html#build_and_usage_modules">Optional: the C++ named module</a>
+        </li>
+              <li class="" data-depth="2">
+            <a class="nav-link" href="build_and_usage.html#build_and_usage_install">Installation</a>
+        </li>
+              <li class="" data-depth="2">
+            <a class="nav-link" href="build_and_usage.html#build_and_usage_cmake">CMake configuration</a>
+        </li>
+              <li class="" data-depth="2">
+            <a class="nav-link" href="build_and_usage.html#build_and_usage_using">Using <code>beman.big_int</code></a>
+        </li>
+        </ul>
+        <li class="" data-depth="1">
+            <a class="nav-link" href="modules.html">C++ Named Modules</a>
+        </li>
+        <ul class="nav-list">
+        <li class="" data-depth="2">
+            <a class="nav-link" href="modules.html#modules_exports">What the module exports</a>
+        </li>
+              <li class="" data-depth="2">
+            <a class="nav-link" href="modules.html#modules_build">Building the module</a>
+        </li>
+              <li class="" data-depth="2">
+            <a class="nav-link" href="modules.html#modules_consume">Consuming the module</a>
+        </li>
+              <li class="" data-depth="2">
+            <a class="nav-link" href="modules.html#modules_import_std">The <code>import std</code> variant</a>
+        </li>
+              <li class="" data-depth="2">
+            <a class="nav-link" href="modules.html#modules_tests">Tests</a>
+        </li>
+              <li class="" data-depth="2">
+            <a class="nav-link" href="modules.html#modules_limitations">Limitations</a>
+        </li>
+        </ul>
+        <li class=" is-current-page" data-depth="1">
+            <a class="nav-link" href="debugging.html">Debugger Visualizers</a>
+        </li>
+        <ul class="nav-list">
+        <li class="" data-depth="2">
+            <a class="nav-link" href="#debugging_natvis">MSVC and Visual Studio: Natvis</a>
+        </li>
+        <ul class="nav-list">
+        <li class="" data-depth="3">
+            <a class="nav-link" href="#debugging_natvis_plain">The self-contained visualizer</a>
+        </li>
+              <li class="" data-depth="3">
+            <a class="nav-link" href="#debugging_natvis_addin">The add-in DLL, for full decimal</a>
+        </li>
+              <li class="" data-depth="3">
+            <a class="nav-link" href="#debugging_natvis_expand">Expanding a value</a>
+        </li>
+              <li class="" data-depth="3">
+            <a class="nav-link" href="#debugging_natvis_limits">Limitations</a>
+        </li>
+        </ul>
+        <li class="" data-depth="2">
+            <a class="nav-link" href="#debugging_printers">LLDB and GDB: Python pretty printers</a>
+        </li>
+        </ul>
+        <li class="" data-depth="1">
+            <a class="nav-link" href="examples.html">Examples</a>
+        </li>
+        <ul class="nav-list">
+        <li class="" data-depth="2">
+            <a class="nav-link" href="examples.html#examples_foundational">Foundational Examples</a>
+        </li>
+        <ul class="nav-list">
+        <li class="" data-depth="3">
+            <a class="nav-link" href="examples.html#examples_construction">Construction</a>
+        </li>
+              <li class="" data-depth="3">
+            <a class="nav-link" href="examples.html#examples_operators">Fundamental operators</a>
+        </li>
+              <li class="" data-depth="3">
+            <a class="nav-link" href="examples.html#examples_factorial">Factorial</a>
+        </li>
+              <li class="" data-depth="3">
+            <a class="nav-link" href="examples.html#examples_literals">User-defined literals</a>
+        </li>
+              <li class="" data-depth="3">
+            <a class="nav-link" href="examples.html#examples_charconv">Numeric conversions</a>
+        </li>
+              <li class="" data-depth="3">
+            <a class="nav-link" href="examples.html#examples_string">String conversions</a>
+        </li>
+              <li class="" data-depth="3">
+            <a class="nav-link" href="examples.html#examples_numeric">Numeric functions</a>
+        </li>
+              <li class="" data-depth="3">
+            <a class="nav-link" href="examples.html#examples_limits">Numeric limits</a>
+        </li>
+              <li class="" data-depth="3">
+            <a class="nav-link" href="examples.html#examples_division">Integer division</a>
+        </li>
+              <li class="" data-depth="3">
+            <a class="nav-link" href="examples.html#examples_io">Formatting and output</a>
+        </li>
+        </ul>
+        <li class="" data-depth="2">
+            <a class="nav-link" href="examples.html#examples_advanced">Advanced Examples</a>
+        </li>
+        <ul class="nav-list">
+        <li class="" data-depth="3">
+            <a class="nav-link" href="examples.html#examples_fibonacci">Fibonacci</a>
+        </li>
+              <li class="" data-depth="3">
+            <a class="nav-link" href="examples.html#examples_roots">Roots</a>
+        </li>
+              <li class="" data-depth="3">
+            <a class="nav-link" href="examples.html#examples_primes">Primes</a>
+        </li>
+              <li class="" data-depth="3">
+            <a class="nav-link" href="examples.html#examples_rsa">RSA</a>
+        </li>
+        </ul>
+  </ul>
+        <li class="" data-depth="1">
+            <a class="nav-link" href="api_reference.html">API Reference</a>
+        </li>
+        <ul class="nav-list">
+        <li class="" data-depth="2">
+            <a class="nav-link" href="api_reference.html#api_namespaces">Namespaces</a>
+        </li>
+              <li class="" data-depth="2">
+            <a class="nav-link" href="api_reference.html#api_types">Types</a>
+        </li>
+              <li class="" data-depth="2">
+            <a class="nav-link" href="api_reference.html#api_functions">Functions</a>
+        </li>
+        </ul>
+        <li class="" data-depth="1">
+            <a class="nav-link" href="big_int_type.html">The big_int Type</a>
+        </li>
+        <ul class="nav-list">
+        <li class="" data-depth="2">
+            <a class="nav-link" href="big_int_type.html#big_int_type_design">Design</a>
+        </li>
+              <li class="" data-depth="2">
+            <a class="nav-link" href="big_int_type.html#big_int_type_synopsis">Synopsis</a>
+        </li>
+              <li class="" data-depth="2">
+            <a class="nav-link" href="big_int_type.html#big_int_type_members">Member types and constants</a>
+        </li>
+              <li class="" data-depth="2">
+            <a class="nav-link" href="big_int_type.html#big_int_type_construct">Constructors and destructor</a>
+        </li>
+              <li class="" data-depth="2">
+            <a class="nav-link" href="big_int_type.html#big_int_type_assign">Assignment</a>
+        </li>
+              <li class="" data-depth="2">
+            <a class="nav-link" href="big_int_type.html#big_int_type_compound">Compound assignment operators</a>
+        </li>
+              <li class="" data-depth="2">
+            <a class="nav-link" href="big_int_type.html#big_int_type_swap">Swap</a>
+        </li>
+        <ul class="nav-list">
+        <li class="" data-depth="3">
+            <a class="nav-link" href="big_int_type.html#big_int_type_swap_non_member">Non-member swap</a>
+        </li>
+        </ul>
+        <li class="" data-depth="2">
+            <a class="nav-link" href="big_int_type.html#big_int_type_observers">Observers</a>
+        </li>
+              <li class="" data-depth="2">
+            <a class="nav-link" href="big_int_type.html#big_int_type_unary">Unary operators</a>
+        </li>
+              <li class="" data-depth="2">
+            <a class="nav-link" href="big_int_type.html#big_int_type_conv">Conversion operator</a>
+        </li>
+              <li class="" data-depth="2">
+            <a class="nav-link" href="big_int_type.html#big_int_type_cmp">Comparison operators</a>
+        </li>
+              <li class="" data-depth="2">
+            <a class="nav-link" href="big_int_type.html#big_int_type_binary">Binary operators</a>
+        </li>
+        </ul>
+        <li class="" data-depth="1">
+            <a class="nav-link" href="charconv.html"><code>&lt;charconv&gt;</code> Conversions</a>
+        </li>
+        <ul class="nav-list">
+        <li class="" data-depth="2">
+            <a class="nav-link" href="charconv.html#charconv_synopsis">Synopsis</a>
+        </li>
+              <li class="" data-depth="2">
+            <a class="nav-link" href="charconv.html#charconv_to_chars">to_chars</a>
+        </li>
+              <li class="" data-depth="2">
+            <a class="nav-link" href="charconv.html#charconv_from_chars">from_chars</a>
+        </li>
+        </ul>
+        <li class="" data-depth="1">
+            <a class="nav-link" href="string.html">String Conversions</a>
+        </li>
+        <ul class="nav-list">
+        <li class="" data-depth="2">
+            <a class="nav-link" href="string.html#string_synopsis">Synopsis</a>
+        </li>
+              <li class="" data-depth="2">
+            <a class="nav-link" href="string.html#string_to_string">to_string</a>
+        </li>
+              <li class="" data-depth="2">
+            <a class="nav-link" href="string.html#string_to_wstring">to_wstring</a>
+        </li>
+        </ul>
+        <li class="" data-depth="1">
+            <a class="nav-link" href="format.html"><code>&lt;format&gt;</code> Support</a>
+        </li>
+        <ul class="nav-list">
+        <li class="" data-depth="2">
+            <a class="nav-link" href="format.html#format_synopsis">Synopsis</a>
+        </li>
+              <li class="" data-depth="2">
+            <a class="nav-link" href="format.html#format_spec">Format specification</a>
+        </li>
+              <li class="" data-depth="2">
+            <a class="nav-link" href="format.html#format_members">parse and format</a>
+        </li>
+              <li class="" data-depth="2">
+            <a class="nav-link" href="format.html#format_errors">Errors</a>
+        </li>
+              <li class="" data-depth="2">
+            <a class="nav-link" href="format.html#format_examples">Examples</a>
+        </li>
+              <li class="" data-depth="2">
+            <a class="nav-link" href="format.html#format_wide">Wide characters</a>
+        </li>
+        </ul>
+        <li class="" data-depth="1">
+            <a class="nav-link" href="literals.html">User-Defined Literals</a>
+        </li>
+        <ul class="nav-list">
+        <li class="" data-depth="2">
+            <a class="nav-link" href="literals.html#literals_synopsis">Synopsis</a>
+        </li>
+              <li class="" data-depth="2">
+            <a class="nav-link" href="literals.html#literals_scope">Bringing the literals into scope</a>
+        </li>
+              <li class="" data-depth="2">
+            <a class="nav-link" href="literals.html#literals_suffix">The n, N, _n, and _N suffixes</a>
+        </li>
+              <li class="" data-depth="2">
+            <a class="nav-link" href="literals.html#literals_bases">Bases, separators, and sign</a>
+        </li>
+              <li class="" data-depth="2">
+            <a class="nav-link" href="literals.html#literals_constexpr">Compile-time evaluation</a>
+        </li>
+        </ul>
+        <li class="" data-depth="1">
+            <a class="nav-link" href="limits.html"><code>std::numeric_limits</code> Support</a>
+        </li>
+        <ul class="nav-list">
+        <li class="" data-depth="2">
+            <a class="nav-link" href="limits.html#limits_synopsis">Synopsis</a>
+        </li>
+              <li class="" data-depth="2">
+            <a class="nav-link" href="limits.html#limits_values">What each member reports</a>
+        </li>
+              <li class="" data-depth="2">
+            <a class="nav-link" href="limits.html#limits_noexcept">The <code>noexcept</code> specifications</a>
+        </li>
+              <li class="" data-depth="2">
+            <a class="nav-link" href="limits.html#limits_bounded">Why <code>is_bounded</code> is <code>false</code></a>
+        </li>
+              <li class="" data-depth="2">
+            <a class="nav-link" href="limits.html#limits_generic">Using it in generic code</a>
+        </li>
+        </ul>
+        <li class="" data-depth="1">
+            <a class="nav-link" href="numeric.html">Numeric Functions</a>
+        </li>
+        <ul class="nav-list">
+        <li class="" data-depth="2">
+            <a class="nav-link" href="numeric.html#numeric_synopsis">Synopsis</a>
+        </li>
+              <li class="" data-depth="2">
+            <a class="nav-link" href="numeric.html#numeric_abs">abs</a>
+        </li>
+              <li class="" data-depth="2">
+            <a class="nav-link" href="numeric.html#numeric_saturating_cast">saturating_cast</a>
+        </li>
+              <li class="" data-depth="2">
+            <a class="nav-link" href="numeric.html#numeric_in_range">in_range</a>
+        </li>
+              <li class="" data-depth="2">
+            <a class="nav-link" href="numeric.html#numeric_gcd">gcd</a>
+        </li>
+              <li class="" data-depth="2">
+            <a class="nav-link" href="numeric.html#numeric_lcm">lcm</a>
+        </li>
+              <li class="" data-depth="2">
+            <a class="nav-link" href="numeric.html#numeric_midpoint">midpoint</a>
+        </li>
+        </ul>
+        <li class="" data-depth="1">
+            <a class="nav-link" href="benchmarks.html">Benchmarks</a>
+        </li>
+        <ul class="nav-list">
+        <li class="" data-depth="2">
+            <a class="nav-link" href="benchmarks.html#benchmarks_small_value">Small-value optimization</a>
+        </li>
+              <li class="" data-depth="2">
+            <a class="nav-link" href="benchmarks.html#benchmarks_libraries">big_int vs Boost.Multiprecision and GMP</a>
+        </li>
+              <li class="" data-depth="2">
+            <a class="nav-link" href="benchmarks.html#benchmarks_base_conversion">Base conversion and string representations</a>
+        </li>
+              <li class="" data-depth="2">
+            <a class="nav-link" href="benchmarks.html#benchmarks_order_n">Order-N operations</a>
+        </li>
+              <li class="" data-depth="2">
+            <a class="nav-link" href="benchmarks.html#benchmarks_arch_opts">Architecture-specific optimizations</a>
+        </li>
+              <li class="" data-depth="2">
+            <a class="nav-link" href="benchmarks.html#benchmarks_sources">Source programs</a>
+        </li>
+        </ul>
+        <li class="" data-depth="1">
+            <a class="nav-link" href="references.html">References</a>
+        </li>
+        </ul>
+  </ul>
+  </nav>
+</div>
+    </div>
+  </aside>
+</div>
+  </div>  <div id="content">
+    <article class="doc max-width-reset">
+  <div class="toolbar" role="navigation">
+<button class="nav-toggle"></button>
+<nav class="breadcrumbs" aria-label="breadcrumbs">
+  <ul>
+    <li>
+      <a href="overview.html" aria-label="Home: std::big_int">
+        <svg xmlns="http://www.w3.org/2000/svg" width="1rem" height="1rem" viewBox="0 -960 960 960" fill="#000000" aria-hidden="true"><path d="M160-120v-480l320-240 320 240v480H560v-280H400v280H160Z"/></svg>
+      </a>
+    </li>
+    <li><a href="debugging.html">Debugger Visualizers</a></li>
+  </ul>
+</nav>
+  <div class="search-container">
+    <div id="search-field" class="field has-filter">
+      <input id="search-input" type="text" placeholder="Search the docs" >
+    </div>
+  </div>
+<div class="spirit-nav">
+    <a accesskey="p" href="modules.html">
+      <span class="material-symbols-outlined" title="Previous: C++ Named Modules">arrow_back</span>
+    </a>
+    <a class="disabled" accesskey="u" aria-disabled="true" tabindex="-1">
+      <span class="material-symbols-outlined" title="Up:">arrow_upward</span>
+    </a>
+    <a accesskey="n" href="examples.html">
+      <span class="material-symbols-outlined" title="Next: Examples">arrow_forward</span>
+    </a>
+</div></div>
+    <h1 class="page">Debugger Visualizers</h1>
+  <div id="preamble">
+<div class="sectionbody">
+<div class="paragraph">
+<p>Raw, a <code>big_int</code> is four packed fields: a capacity, a size-and-sign word, a union
+that is either an in-place limb array or a heap pointer, and a possibly-empty
+allocator. None of that tells you the number you are looking at. This page covers
+the visualizers shipped in the <code>extra/</code> directory that render a <code>big_int</code> as its
+value instead.</p>
+</div>
+<table class="tableblock frame-all grid-all stretch">
+<colgroup>
+<col style="width: 20%;">
+<col style="width: 40%;">
+<col style="width: 40%;">
+</colgroup>
+<thead>
+<tr>
+<th class="tableblock halign-left valign-top">Debugger</th>
+<th class="tableblock halign-left valign-top">Files</th>
+<th class="tableblock halign-left valign-top">Summary format</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Visual Studio, VS Code (<code>cppvsdbg</code>)</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><code>extra/big_int.natvis</code></p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">decimal to 64 bits, hexadecimal beyond</p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock">Visual Studio, VS Code (<code>cppvsdbg</code>)</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><code>extra/big_int_printer_msvc.natvis</code> + <code>big_int_printer_msvc.dll</code></p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">full decimal or hexadecimal, any width</p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock">LLDB</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><code>extra/big_int_printer_lldb.py</code></p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">full decimal, any width</p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock">GDB</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><code>extra/big_int_printer_gdb.py</code></p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">full decimal, any width</p></td>
+</tr>
+</tbody>
+</table>
+<div class="paragraph">
+<p>All of them visualize the class template <code>basic_big_int</code>, so they cover
+<code>beman::big_int::big_int</code>, <code>beman::big_int::pmr::big_int</code>, and any other
+instantiation, whatever its limb type or in-place width.</p>
+</div>
+</div>
+</div>
+<div class="sect1">
+<h2 id="debugging_natvis"><a class="anchor" href="#debugging_natvis"></a>MSVC and Visual Studio: Natvis</h2>
+<div class="sectionbody">
+<div class="paragraph">
+<p><a href="https://learn.microsoft.com/visualstudio/debugger/create-custom-views-of-native-objects">Natvis</a>
+is the mechanism the Visual Studio native debugger uses to render types in the
+<strong>Locals</strong>, <strong>Autos</strong>, and <strong>Watch</strong> windows and in DataTips; it also drives the
+<code>cppvsdbg</code> debugger in the VS Code C++ extension.</p>
+</div>
+<div class="paragraph">
+<p>Natvis matches class templates and not alias declarations, so both visualizers
+register <code>beman::big_int::basic_big_int&lt;*,<strong>,</strong>&gt;</code>, which is what makes the
+<code>big_int</code> and <code>pmr::big_int</code> aliases display correctly as well.</p>
+</div>
+<div class="paragraph">
+<p>There are two of them because Natvis alone cannot render a big integer in
+decimal. Natvis expressions are evaluated by the debugger using the target&#8217;s own
+integer types, they cannot call functions, and there is no arbitrary-precision
+arithmetic available to them. Converting a magnitude of arbitrary width to base
+ten requires running real code.</p>
+</div>
+<div class="paragraph">
+<p>Choose between them:</p>
+</div>
+<div class="dlist">
+<dl>
+<dt class="hdlist1"><code>extra/big_int.natvis</code></dt>
+<dd>
+<p>Self-contained. No DLL, nothing to build, works the moment the file is loaded.
+Renders exact decimal while the magnitude fits in 64 bits, and zero-padded
+hexadecimal above that. Embedded automatically by this project&#8217;s CMake, so for
+most debugging sessions it is already there.</p>
+</dd>
+<dt class="hdlist1"><code>extra/big_int_printer_msvc.natvis</code></dt>
+<dd>
+<p>Delegates the summary to <code>big_int_printer_msvc.dll</code>, an expression-evaluator
+add-in built from <code>extra/big_int_printer_msvc.cpp</code>. The add-in reads the limbs
+out of the process being debugged, rebuilds the value, and runs it through
+<code>to_chars</code>. The result is exact decimal at any width. Needs the DLL to be built
+and reachable by the debugger.</p>
+</dd>
+</dl>
+</div>
+<div class="admonitionblock warning">
+<table>
+<tr>
+<td class="icon">
+<i class="fa icon-warning" title="Warning"></i>
+</td>
+<td class="content">
+<div class="paragraph">
+<p>Load one or the other, not both. Both register the same type, and when two
+visualizer entries match equally it is unspecified which one the debugger uses.</p>
+</div>
+</td>
+</tr>
+</table>
+</div>
+<div class="sect2">
+<h3 id="debugging_natvis_plain"><a class="anchor" href="#debugging_natvis_plain"></a>The self-contained visualizer</h3>
+<div class="paragraph">
+<p>Pick whichever of these fits your build; any one is sufficient.</p>
+</div>
+<div class="dlist">
+<dl>
+<dt class="hdlist1">Built from this project&#8217;s CMake (automatic)</dt>
+<dd>
+<p>When <code>beman.big_int</code> is consumed from its build tree&#8201;&#8212;&#8201;<code>add_subdirectory</code>,
+<code>FetchContent</code>, or a build directory used directly&#8201;&#8212;&#8201;and the compiler is MSVC,
+the CMake target adds <code>/NATVIS:&lt;path&gt;/extra/big_int.natvis</code> as an <code>INTERFACE</code>
+link option for the <code>Debug</code> and <code>RelWithDebInfo</code> configurations. The linker then
+embeds the visualizer in the PDB of your executable or DLL, and the debugger
+picks it up with no further setup. Only the link of a final binary can embed a
+<code>.natvis</code>, which is why the option is <code>INTERFACE</code> rather than applied to the
+static library itself. Configurations that emit no PDB are excluded because
+<code>/NATVIS:</code> needs one.</p>
+</dd>
+<dt class="hdlist1">Your own project or solution</dt>
+<dd>
+<p>Add <code>big_int.natvis</code> to a C++ project (<strong>Add</strong> &gt; <strong>Existing Item</strong>, or an
+<code>&lt;Natvis Include="big_int.natvis" /&gt;</code> item in the <code>.vcxproj</code>). Visual Studio
+loads <code>.natvis</code> files from loaded projects automatically and, by default, also
+embeds them in the built PDB.</p>
+</dd>
+<dt class="hdlist1">Your own link command</dt>
+<dd>
+<p>Pass <code>/NATVIS:path\to\big_int.natvis</code> to <code>link.exe</code> when linking an executable or
+DLL with <code>/DEBUG</code>. This is what the CMake integration above does.</p>
+</dd>
+<dt class="hdlist1">Per user, for every solution</dt>
+<dd>
+<p>Copy <code>big_int.natvis</code> into <code>%USERPROFILE%\Documents\Visual Studio 2022\Visualizers\</code>
+(substituting your Visual Studio version). Files there apply to every project you
+debug.</p>
+</dd>
+<dt class="hdlist1">Machine-wide</dt>
+<dd>
+<p>Copy it into <code>&lt;Visual Studio install folder&gt;\Common7\Packages\Debugger\Visualizers\</code>.
+This needs administrator rights.</p>
+</dd>
+</dl>
+</div>
+<div class="paragraph">
+<p>After <code>cmake --install</code>, the file is also at
+<code>&lt;prefix&gt;/share/beman.big_int/big_int.natvis</code>.</p>
+</div>
+<div class="paragraph">
+<p>Its summary is the value of the integer, signed:</p>
+</div>
+<table class="tableblock frame-all grid-all stretch">
+<colgroup>
+<col style="width: 40%;">
+<col style="width: 20%;">
+<col style="width: 40%;">
+</colgroup>
+<thead>
+<tr>
+<th class="tableblock halign-left valign-top">Value</th>
+<th class="tableblock halign-left valign-top">Storage</th>
+<th class="tableblock halign-left valign-top">Summary</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><code>big_int b{12345}</code></p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">in-place</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><code>12345</code></p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><code>big_int c{-12345}</code></p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">in-place</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><code>-12345</code></p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><code>big_int z{}</code></p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">in-place</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><code>0</code></p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><code>big_int f{7}</code> after <code>f.reserve(4096)</code></p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">heap</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><code>7</code></p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock">a four-limb value</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">heap</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><code>0x93A1&#8230;&#8203;0F2C4B71</code> (all four limbs, zero-padded)</p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock">a forty-limb value</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">heap</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><code>0x00C1&#8230;&#8203;4E20 (40 limbs)</code></p></td>
+</tr>
+</tbody>
+</table>
+<div class="paragraph">
+<p>Exact decimal covers one limb in the default configuration and two in a
+32-bit-limb build. Wider values are shown as hexadecimal: fully, limb by limb, up
+to four limbs, and abbreviated to the most and least significant limb beyond
+that. Each limb is zero-padded to its full width, so the most significant limb of
+a large value carries leading zeros that a single hexadecimal numeral would not
+have.</p>
+</div>
+</div>
+<div class="sect2">
+<h3 id="debugging_natvis_addin"><a class="anchor" href="#debugging_natvis_addin"></a>The add-in DLL, for full decimal</h3>
+<div class="paragraph">
+<p><code>extra/big_int_printer_msvc.cpp</code> builds into <code>big_int_printer_msvc.dll</code>, which
+the debugger loads and calls to produce the summary. It exports
+<code>formatter_big_int_dec</code> and <code>formatter_big_int_hex</code>; each one reads the
+representation header at the object&#8217;s address, follows the heap pointer when the
+value is not stored in place, copies the limbs out of the debugged process,
+reconstructs the value locally, and formats it with <code>to_chars</code>.</p>
+</div>
+<div class="sect3">
+<h4 id="debugging_building_it"><a class="anchor" href="#debugging_building_it"></a>Building it</h4>
+<div class="paragraph">
+<p>With CMake, turn on the option and build the target:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlightjs highlight"><code class="language-bash hljs" data-lang="bash">cmake --preset msvc-release -DBEMAN_BIG_INT_BUILD_MSVC_DEBUGGER_ADDIN=ON
+cmake --build build/msvc-release --target beman.big_int.msvc_debugger_addin</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>The option is ignored on non-MSVC compilers. Without CMake, build the library
+first and hand the resulting <code>.lib</code> to the batch script:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlightjs highlight"><code class="language-bat hljs" data-lang="bat">extra\big_int_printer_msvc.bat path\to\beman.big_int.lib amd64</code></pre>
+</div>
+</div>
+<div class="admonitionblock important">
+<table>
+<tr>
+<td class="icon">
+<i class="fa icon-important" title="Important"></i>
+</td>
+<td class="content">
+<div class="paragraph">
+<p>The add-in links this library&#8217;s compiled kernels and reads the debuggee&#8217;s memory
+layout directly, so it must be built for the <strong>same architecture</strong> and the <strong>same
+options</strong>&#8201;&#8212;&#8201;limb width, <code>BEMAN_BIG_INT_SIMD_MUL</code>&#8201;&#8212;&#8201;as the program you debug.</p>
+</div>
+</td>
+</tr>
+</table>
+</div>
+</div>
+<div class="sect3">
+<h4 id="debugging_installing_it"><a class="anchor" href="#debugging_installing_it"></a>Installing it</h4>
+<div class="paragraph">
+<p>The debugger looks for the DLL named in the <code>.natvis</code> file&#8217;s <code>LegacyAddin</code>
+attribute; put the DLL and the <code>.natvis</code> together in a Visualizers directory:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlightjs highlight"><code class="language-bash hljs" data-lang="bash">cmake --build build/msvc-release --target big_int_install_visualizers</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>That copies <code>big_int_printer_msvc.dll</code> and <code>big_int_printer_msvc.natvis</code> into
+<code>%USERPROFILE%\Documents\Visual Studio 2022\Visualizers\</code>. Point it somewhere
+else&#8201;&#8212;&#8201;another Visual Studio version, or the machine-wide directory&#8201;&#8212;&#8201;with
+<code>-DBEMAN_BIG_INT_VISUALIZERS_DIR=&lt;path&gt;</code>.</p>
+</div>
+<div class="paragraph">
+<p><code>cmake --install</code> also places both files under
+<code>&lt;prefix&gt;/share/beman.big_int/</code>, for packaging them yourself.</p>
+</div>
+<div class="paragraph">
+<p>If the debugger reports that it cannot load the add-in, either put the DLL in the
+directory containing <code>devenv.exe</code> or on <code>PATH</code>, or edit the <code>LegacyAddin</code>
+attribute in <code>big_int_printer_msvc.natvis</code> to name the DLL by absolute path.</p>
+</div>
+<div class="paragraph">
+<p>Stop any running debug session before replacing the DLL: the debugger holds it
+open while it is loaded.</p>
+</div>
+</div>
+<div class="sect3">
+<h4 id="debugging_what_it_displays"><a class="anchor" href="#debugging_what_it_displays"></a>What it displays</h4>
+<div class="paragraph">
+<p>The summary is the full value, however wide:</p>
+</div>
+<table class="tableblock frame-all grid-all stretch">
+<colgroup>
+<col style="width: 50%;">
+<col style="width: 50%;">
+</colgroup>
+<thead>
+<tr>
+<th class="tableblock halign-left valign-top">Value</th>
+<th class="tableblock halign-left valign-top">Summary</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><code>big_int b{12345}</code></p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><code>12345</code></p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><code>big_int c{-12345}</code></p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><code>-12345</code></p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock">a 300-limb factorial</p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock">its complete decimal expansion, thousands of digits</p></td>
+</tr>
+<tr>
+<td class="tableblock halign-left valign-top"><p class="tableblock">the same value with <code>,hex</code></p></td>
+<td class="tableblock halign-left valign-top"><p class="tableblock"><code>0x</code> followed by its complete hexadecimal expansion</p></td>
+</tr>
+</tbody>
+</table>
+<div class="paragraph">
+<p>Add <code>,hex</code> to a <strong>Watch</strong> expression for hexadecimal, or <code>,dec</code> to force decimal;
+the default view is decimal. Values are truncated with a trailing <code>&#8230;&#8203;</code> when they
+do not fit the buffer the debugger provides, keeping the most significant digits.</p>
+</div>
+</div>
+</div>
+<div class="sect2">
+<h3 id="debugging_natvis_expand"><a class="anchor" href="#debugging_natvis_expand"></a>Expanding a value</h3>
+<div class="paragraph">
+<p>Both visualizers expand the same way, showing the decoded representation rather
+than the packed fields:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre>b   12345
+    [negative]   false
+    [limb_count] 1
+    [limb_bits]  64
+    [storage]    in-place, capacity 1 limbs
+    [limbs]      little-endian, [0] is least significant
+        [0]      12345
+    [allocator]  {...}
+    [Raw View]   {...}</pre>
+</div>
+</div>
+<div class="paragraph">
+<p><code>[limbs]</code> reads from whichever union member is live, so it is correct for both
+in-place and heap values, and <code>[Raw View]</code> is always there when you want the
+packed fields as they are stored.</p>
+</div>
+</div>
+<div class="sect2">
+<h3 id="debugging_natvis_troubleshoot"><a class="anchor" href="#debugging_natvis_troubleshoot"></a>When nothing changes</h3>
+<div class="paragraph">
+<p>If values still display as <code>{m_capacity=0 m_size_and_sign=1 &#8230;&#8203;}</code>, turn on Natvis
+diagnostics: <strong>Tools</strong> &gt; <strong>Options</strong> &gt; <strong>Debugging</strong> &gt; <strong>Output Window</strong> &gt; <strong>Natvis
+diagnostic messages (C++ only)</strong>, set to <strong>Warning</strong> or <strong>Verbose</strong>. Parse and
+evaluation errors are then reported in the <strong>Output</strong> window.</p>
+</div>
+<div class="paragraph">
+<p>Visual Studio reloads <code>.natvis</code> files from projects and from the Visualizers
+directories while you are debugging: edit the file, save it, and the debugger
+windows update. Run <code>.natvisreload</code> in the <strong>Immediate</strong> window if you edited it
+outside Visual Studio. A <code>.natvis</code> embedded in a PDB cannot be reloaded without
+relinking.</p>
+</div>
+</div>
+<div class="sect2">
+<h3 id="debugging_natvis_limits"><a class="anchor" href="#debugging_natvis_limits"></a>Limitations</h3>
+<div class="ulist">
+<ul>
+<li>
+<p>Only allocators whose <code>std::allocator_traits&lt;Allocator&gt;::pointer</code> is a raw
+pointer are supported. With a fancy-pointer allocator the visualizer fails to
+evaluate and the debugger falls back to the raw field view.</p>
+</li>
+<li>
+<p>Natvis rules embedded in a PDB apply only to the modules that PDB describes.</p>
+</li>
+<li>
+<p>The add-in runs inside the debugger process. It returns a failure code rather
+than throwing on anything that does not look like a live <code>big_int</code>, in which
+case the debugger shows the raw field view.</p>
+</li>
+<li>
+<p>The add-in summarizes rather than converts values wider than 65536 limbs, since
+the conversion is synchronous and would otherwise stall the debugger&#8217;s UI on a
+runaway or uninitialized object.</p>
+</li>
+</ul>
+</div>
+</div>
+</div>
+</div>
+<div class="sect1">
+<h2 id="debugging_printers"><a class="anchor" href="#debugging_printers"></a>LLDB and GDB: Python pretty printers</h2>
+<div class="sectionbody">
+<div class="paragraph">
+<p><code>extra/big_int_printer_lldb.py</code> and <code>extra/big_int_printer_gdb.py</code> are Python
+pretty printers. They read the limbs out of the target and reconstruct the value
+in Python, so like the add-in DLL, and unlike a plain <code>.natvis</code>, they print full
+decimal at any width&#8201;&#8212;&#8201;with thousands separators.</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlightjs highlight"><code class="language-text hljs" data-lang="text">(lldb) command script import extra/big_int_printer_lldb.py</code></pre>
+</div>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre class="highlightjs highlight"><code class="language-text hljs" data-lang="text">(gdb) source extra/big_int_printer_gdb.py</code></pre>
+</div>
+</div>
+<div class="paragraph">
+<p>Add the same line, with an absolute path, to <code>~/.lldbinit</code> or <code>~/.gdbinit</code> to load
+it in every session. Neither script is loaded by the build automatically.</p>
+</div>
+<div class="paragraph">
+<p>A large value then prints as its full decimal expansion, with the packed fields
+still expandable underneath:</p>
+</div>
+<div class="listingblock">
+<div class="content">
+<pre>(beman::big_int::big_int) g = 30,877,890,463,284,318,779,200,455,886,624,330,043,260,257,791,495,576,751,883,077,282,378,867,085,585 {
+  m_capacity = 4
+  m_size_and_sign = 4
+  m_storage = {
+    data = 0x00000001005bdb70
+  }
+  m_alloc = {}
+}</pre>
+</div>
+</div>
+<div class="paragraph">
+<p>These printers share the restriction to allocators with raw pointers: a
+fancy-pointer allocator yields an error string instead of a value.</p>
+</div>
+</div>
+</div>
+  <div class="edit-this-page">
+      <a href="https://github.com/bemanproject/big_int/edit/develop/docs/modules/ROOT/pages/debugging.adoc">Edit this Page</a>
+      </div>
+      <nav class="pagination">
+        <span class="prev"><a href="modules.html">C++ Named Modules</a></span>
+        <span class="next"><a href="examples.html">Examples</a></span>
+    </nav>
+</article>
+</div>
+  <div id="footer">
+  <script id="site-script" src="./_/js/site.js" data-ui-root-path="./_"></script>
+<script async src="./_/js/vendor/highlight.js"></script>
+<script async src="./_/js/vendor/tabs.js" data-sync-storage-key="preferred-tab"></script>
+<script async src="./_/js/vendor/lunr.js"></script>
+<script async src="./_/js/search-ui.js" id="search-ui-script" data-site-root-path="."
+  data-ui-root-path="./_"></script>
+<script async src="./search-index.js"></script>
+</div>
+</div>
+  </body>
+</html>
